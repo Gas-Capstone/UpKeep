@@ -16,7 +16,7 @@ import { AddHabitModal } from "./AddHabitModal";
 import { ScreenView } from "../ui/ScreenView";
 import { Spacing, TopBadgeInset } from "@/constants/theme";
 import { useHabitsContext } from "../context/habitsContext";
-import { createHabit, getHabitsByUser, getCompletedHabitsByUser } from "@/lib/supabaseFunctions";
+import { createHabit, getHabitsByUser, getCompletedHabitsByUser, deleteHabit } from "@/lib/supabaseFunctions";
 import { useUserContext } from "../context/userContext";
 
 export default function HabitsScreen() {
@@ -63,7 +63,7 @@ export default function HabitsScreen() {
               visible={modalVisible}
               onDismiss={() => setModalVisible(false)}
               onSave={(habit) => {
-                createHabit(user, habit);
+                addHabit(habit);
               }}
             />
           </>
@@ -86,7 +86,6 @@ export default function HabitsScreen() {
         <VStack space="md" style={{ alignSelf: "stretch" }}>
         {habitsForDay.length !== 0 &&
           habitsForDay.map((habit) => {
-            console.log(habit)
             return ( <HabitCard
               key={habit.id}
               title={habit.title}

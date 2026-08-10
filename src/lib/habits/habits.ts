@@ -56,7 +56,7 @@ export function isHabitOnDate(habit: Habit, date: string){
     return habit.weekdays.includes(getDay(parseISO(date)) as Weekday)
 }
 
-function timeToMinutes(time: string){
+export function timeToMinutes(time: string){
     const parsed = parse(time, "h:mm aa", new Date())
     return parsed.getHours() * 60 + parsed.getMinutes()
 }

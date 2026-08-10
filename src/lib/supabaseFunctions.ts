@@ -50,6 +50,19 @@ export async function getHabitsByUser(user) {
     return data
 }
 
+export async function deleteHabit(user, habitId) {
+    const {data, error} = await supabase
+        .from("habits")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("id", habitId)
+    if (error){ 
+        console.log("Error deleting habit: ", error)
+        return false
+    }
+    return true
+}
+
 export async function getCompletedHabitsByUser(user){
     const {data, error} = await supabase
         .from("habit_completions")
@@ -66,7 +79,10 @@ export async function createHabit(user, habit){
             user_id: user.id,
             title: habit.title,
             time: habit.time,
-            weekday: habit.weekdays
+            weekdays: habit.weekdays
         })
+        .select()
+        .single()
         if (error) console.log("Error creating habit: ", error)
+        return data
 }

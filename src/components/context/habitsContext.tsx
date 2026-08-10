@@ -3,12 +3,13 @@ import {
   CompletionsByDate,
   Habit,
   Weekday,
+  timeToMinutes,
   addHabitToList,
   removeHabitFromList,
 } from "@/lib/habits/habits";
 import { getTodaysDate } from "@/lib/time_management/week";
 import { useUserContext } from "./userContext";
-import { getHabitsByUser } from "@/lib/supabaseFunctions";
+import { getHabitsByUser, createHabit, deleteHabit } from "@/lib/supabaseFunctions";
 
 // Lifted out of HabitsScreen's local useState so index.tsx can read the same data.
 
@@ -42,7 +43,7 @@ type HabitsProviderProps = {
 export const HabitsProvider = ({ children }: HabitsProviderProps) => {
   const [selectedDate, setSelectedDate] = useState(getTodaysDate());
   const { user } = useUserContext()
-  const [habitArray, setHabitArray] = useState([]);
+  const [habitArray, setHabitArray] = useState<Habit[]>([]);
   const [habitCompletions, setHabitCompletions] = useState<CompletionsByDate>(
     {},
   );
@@ -65,12 +66,32 @@ export const HabitsProvider = ({ children }: HabitsProviderProps) => {
     });
   }, []);
 
-  const addHabit = useCallback(({ title, time, weekdays }: AddHabitArgs) => {
-    setHabitArray((prev) => addHabitToList(prev, title, time, weekdays));
-  }, []);
+  const addHabit = useCallback(async ({ title, time, weekdays }: AddHabitArgs) => {
+    if (!user) return
 
-  const removeHabit = useCallback((habitId: number) => {
-    setHabitArray((prev) => removeHabitFromList(prev, habitId));
+    const created = await createHabit(user, { title, time, weekdays })
+    if (!created) return
+    
+    setHabitArray((prev) => 
+      [...prev, created].sort(
+        (a, b) => timeToMinutes(a.time) - timeToMinutes(b.time)
+      ));
+  }, [user]);
+
+  const removeHabit = useCallback(async (habitId: number) => {
+    if (!user) return
+
+    deleteHabit(user, habitId)
+      .then((res) => {
+        if (res) {
+          setHabitArray((prev) => removeHabitFromList(prev, habitId))
+        }
+      }
+      ).catch(async (err) => {
+        console.log("Error removing habit from array: ", err)
+        const habits = await getHabitsByUser(user)
+        setHabitArray(habits ?? [])
+      })
   }, []);
 
   const contextValue: HabitsContextType = {
