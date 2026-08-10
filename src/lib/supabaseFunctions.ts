@@ -2,7 +2,7 @@ import { supabase } from "./supabaseClient";
 
 export async function getWorkouts() {
     const {data, error} = await supabase
-        .from("workouts")
+        .from("workout_plans")
         .select("*")
     if (error) console.log("Error fetching workouts from database: ", error)
     return data
@@ -22,7 +22,7 @@ export async function getCompletedWorkouts(user){
             id,
             duration_min,
             completed_at,
-            workouts ( name )
+            workout_plans ( name )
         `)
         .eq("user_id", user.id)
         .order("completed_at", { ascending: false })
@@ -33,6 +33,6 @@ export async function getCompletedWorkouts(user){
         id: session.id,
         duration_min: session.duration_min,
         completed_at: session.completed_at,
-        name: session.workouts?.name
+        name: (session.workout_plans as any)?.name
     }))
 }
