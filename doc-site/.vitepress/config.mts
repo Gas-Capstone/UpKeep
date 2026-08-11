@@ -21,7 +21,8 @@ export default defineConfig({
           text: "Development blog",
           items: [
             { text: "Index", link: "/" },
-            { text: "July 27, 2026", link: "/posts/07-27-2026/"}
+            { text: "July 27, 2026", link: "/posts/07-27-2026/"},
+            { text: "August 14, 2026", link: "/posts/08-14-2026"}
           ],
         },
       ],
