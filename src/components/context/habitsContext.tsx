@@ -4,17 +4,18 @@ import {
   Habit,
   Weekday,
   timeToMinutes,
-  addHabitToList,
+  rowsToCompletionsByDate,
   removeHabitFromList,
 } from "@/lib/habits/habits";
 import { getTodaysDate } from "@/lib/time_management/week";
 import { useUserContext } from "./userContext";
-import { getHabitsByUser, createHabit, deleteHabit } from "@/lib/supabaseFunctions";
+import { getHabitsByUser, createHabit, deleteHabit, 
+  getCompletedHabitsByUser, completeHabit, uncompleteHabit } from "@/lib/supabaseFunctions";
 
 // Lifted out of HabitsScreen's local useState so index.tsx can read the same data.
 
 type ToggleHabitArgs = {
-  habitId: number;
+  habitId: string;
   habitDate: string;
 };
 
@@ -30,7 +31,7 @@ export type HabitsContextType = {
   habitArray: Habit[];
   habitCompletions: CompletionsByDate;
   addHabit: (habit: AddHabitArgs) => void;
-  removeHabit: (habitId: number) => void;
+  removeHabit: (habitId: string) => void;
   toggleHabit: (args: ToggleHabitArgs) => void;
 };
 
@@ -49,22 +50,46 @@ export const HabitsProvider = ({ children }: HabitsProviderProps) => {
   );
 
   useEffect(() => {
-    getHabitsByUser(user)
-      .then((res?) => {
-        setHabitArray(res)
-        console.log(res)
-      }).catch((err) => console.log(err))
+    if (!user) return
+
+    Promise.all([
+      getHabitsByUser(user),
+      getCompletedHabitsByUser(user),
+    ])
+      .then(([habits, completions]) => {
+        setHabitArray(habits ?? [])
+        setHabitCompletions(rowsToCompletionsByDate(completions ?? []))
+      })
+      .catch((err) => console.log(err))
   }, [user])
 
   const toggleHabit = useCallback(({ habitId, habitDate }: ToggleHabitArgs) => {
-    setHabitCompletions((prev) => {
-      const cur = prev[habitDate] ?? [];
-      const next = cur.includes(habitId)
-        ? cur.filter((id) => id !== habitId)
-        : [...cur, habitId];
-      return { ...prev, [habitDate]: next };
-    });
-  }, []);
+    if (!user) return
+
+    const isDone = habitCompletions[habitDate]?.includes(habitId) ?? false
+    
+    const request = isDone
+      ? uncompleteHabit(user, habitId, habitDate)
+      : completeHabit(user, habitId, habitDate)
+
+    request
+      .then((res) => {
+        if (res) {
+          setHabitCompletions((prev) => {
+            const cur = prev[habitDate] ?? []
+            const next = isDone
+              ? cur.filter((id) => id !== habitId)
+              : [...cur, habitId]
+            return { ...prev, [habitDate]: next }
+          })
+        }
+      })
+      .catch(async (err) => {
+        console.log("Error toggling habit completion: ", err)
+        const completions = await getCompletedHabitsByUser(user)
+        setHabitCompletions(rowsToCompletionsByDate(completions ?? []))
+      })
+  }, [user, habitCompletions]);
 
   const addHabit = useCallback(async ({ title, time, weekdays }: AddHabitArgs) => {
     if (!user) return
@@ -78,7 +103,7 @@ export const HabitsProvider = ({ children }: HabitsProviderProps) => {
       ));
   }, [user]);
 
-  const removeHabit = useCallback(async (habitId: number) => {
+  const removeHabit = useCallback(async (habitId: string) => {
     if (!user) return
 
     deleteHabit(user, habitId)
@@ -92,7 +117,7 @@ export const HabitsProvider = ({ children }: HabitsProviderProps) => {
         const habits = await getHabitsByUser(user)
         setHabitArray(habits ?? [])
       })
-  }, []);
+  }, [user]);
 
   const contextValue: HabitsContextType = {
     selectedDate,

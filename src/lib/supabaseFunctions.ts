@@ -86,3 +86,32 @@ export async function createHabit(user, habit){
         if (error) console.log("Error creating habit: ", error)
         return data
 }
+
+export async function completeHabit(user, habitId, completedOn) {
+    const { error } = await supabase
+        .from("habit_completions")
+        .insert({
+            user_id: user.id,
+            habit_id: habitId,
+            completed_on: completedOn,
+        })
+        if (error){
+            console.log("Error completing habit: ", error)
+            return false
+        }
+        return true
+}
+
+export async function uncompleteHabit(user, habitId, completedOn) {
+    const { error } = await supabase
+        .from("habit_completions")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("habit_id", habitId)
+        .eq("completed_on", completedOn)
+    if (error) {
+        console.log("Error uncompleting habit: ", error)
+        return false
+    }
+    return true
+}
