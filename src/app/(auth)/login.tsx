@@ -23,13 +23,44 @@ export default function Login() {
     setLoading(true);
     setError("");
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { error: loginError } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
-    if (error) {
-      setError(error.message);
+    if (loginError) {
+      setError(loginError.message);
+      setLoading(false);
+      return;
+    }
+
+    // After login → check profile
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      setError("Could not load user.");
+      setLoading(false);
+      return;
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("onboarding_complete")
+      .eq("id", user.id)
+      .single();
+
+    if (profileError) {
+      setError(profileError.message);
+      setLoading(false);
+      return;
+    }
+
+    // If onboarding has NOT been completed → redirect to setup screen
+    if (!profile.onboarding_complete) {
+      router.replace("/(auth)/setupProfileScreen");
     } else {
       router.replace("/");
     }
@@ -83,6 +114,7 @@ export default function Login() {
         <Button onPress={handleLogin} isDisabled={loading}>
           {loading ? "Logging in..." : "Login"}
         </Button>
+
         <ThemedText type="small" style={{ marginBottom: Spacing.four }}>
           Don't have an account?
         </ThemedText>

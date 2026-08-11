@@ -32,16 +32,42 @@ export default function Register() {
 
     setLoading(true);
 
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
+    // 1. Create user in Supabase Auth
+    const { data: signupData, error: signupError } = await supabase.auth.signUp(
+      {
+        email,
+        password,
+      },
+    );
+
+    if (signupError) {
+      setError(signupError.message);
+      setLoading(false);
+      return;
+    }
+
+    const user = signupData.user;
+
+    if (!user) {
+      setError("Registration succeeded but no user returned.");
+      setLoading(false);
+      return;
+    }
+
+    // 2. Create profile row with onboarding flag
+    const { error: profileError } = await supabase.from("profiles").insert({
+      id: user.id,
+      onboarding_complete: false,
     });
 
-    if (error) {
-      setError(error.message);
-    } else {
-      router.replace("/");
+    if (profileError) {
+      setError(profileError.message);
+      setLoading(false);
+      return;
     }
+
+    // 3. Redirect to onboarding screen
+    router.replace("/(auth)/setupProfileScreen");
 
     setLoading(false);
   }
