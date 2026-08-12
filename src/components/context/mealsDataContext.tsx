@@ -11,7 +11,6 @@ import {
   removeFavoriteRecipe
 } from "@/lib/meals/queries";
 import { userContext } from "./userContext";
-import { getFavoriteWorkouts } from "@/lib/supabaseFunctions";
 
 // Lifted out of MealsScreen's local useState so index.tsx can read the same data.
 
@@ -50,7 +49,7 @@ export const MealsDataProvider = ({ children }: MealsDataProviderProps) => {
   
   const refreshFavorites = useCallback(() => {
     if (!user?.id) return
-    getFavoriteWorkouts(user)
+    fetchFavoriteRecipes(user)
       .then((ids) => setFavoriteIds(new Set(ids)))
       .catch((err) => {
         console.log("Error fetching favorite recipes: ", err);
