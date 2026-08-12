@@ -11,12 +11,14 @@ import { Chip, Divider } from "react-native-paper";
 import { styles } from "@/constants/styles";
 import { HStack } from "../ui/hstack";
 import { WorkoutFilterChip } from "./WorkoutFilterChip";
-import { getWorkoutsWithTag } from "@/lib/workouts";
+import { getWorkoutsWithTag, sortFavoritesFirst } from "@/lib/workouts";
 import { ScrollView } from "react-native";
 import { Spacing, TopBadgeInset } from "@/constants/theme";
 import { WorkoutsAnimatedFAB } from "./WorkoutsAnimatedFAB";
 import { CompletedWorkoutsModal } from "./CompletedWorkoutsModal";
 import { StartWorkoutModal } from "./StartWorkoutModal";
+import { CreateWorkoutPlanModal } from "./CreateWorkoutPlanModal";
+import { Button } from "react-native-paper";
 import { VStack } from "../ui/vstack";
 
 export default function WorkoutsPage() {
@@ -27,14 +29,19 @@ export default function WorkoutsPage() {
   const {
     workoutList,
     completedWorkouts,
+    favoriteIds,
+    availableWorkouts,
     refreshWorkouts,
     refreshCompletedWorkouts,
+    toggleFavorite,
+    createPlan,
   } = useWorkoutsData();
   const [workoutTags, setWorkoutTags] = useState<string[]>([]);
   const [selectedTag, setSelectedTag] = useState<string>("all");
   const [fabExtended, setFabExtended] = useState(true);
   const [completedModalVisible, setCompletedModalVisible] = useState(false);
   const [startModalVisible, setStartModalVisible] = useState(false);
+  const [createModalVisible, setCreateModalVisible] = useState(false);
   // null (rather than {}) so we can check "is a workout selected" with a plain truthiness check TS can narrow on.
   const [selectedWorkout, setSelectedWorkout] = useState<Workout | null>(null);
 
@@ -80,7 +87,10 @@ export default function WorkoutsPage() {
     }, [user?.id, refreshCompletedWorkouts]),
   );
 
-  const filteredWorkouts = getWorkoutsWithTag(workoutList, selectedTag);
+  const filteredWorkouts = sortFavoritesFirst(
+    getWorkoutsWithTag(workoutList, selectedTag),
+    favoriteIds,
+  );
   return (
     <>
       {/* TODO:
@@ -113,6 +123,12 @@ export default function WorkoutsPage() {
                 onStart={(workout, mins) => handleTimer(workout, mins)}
               />
             )}
+            <CreateWorkoutPlanModal
+              visible={createModalVisible}
+              onDismiss={() => setCreateModalVisible(false)}
+              availableWorkouts={availableWorkouts}
+              onCreate={createPlan}
+            />
           </>
         }
         header={
@@ -146,11 +162,20 @@ export default function WorkoutsPage() {
         }
       >
         <VStack space="md" style={{ alignSelf: "stretch" }}>
+        <Button
+          mode="contained-tonal"
+          icon="plus"
+          onPress={() => setCreateModalVisible(true)}
+        >
+          Create Workout Plan
+        </Button>
         {filteredWorkouts.map((workout) => (
           <WorkoutCard
             key={workout.id}
             workout={workout}
             onPress={() => handleStart(workout)}
+            isFavorited={favoriteIds.has(String(workout.id))}
+            onToggleFavorite={() => toggleFavorite(String(workout.id))}
           />
         ))}
         </VStack>
