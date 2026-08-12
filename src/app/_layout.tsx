@@ -26,20 +26,40 @@ export default function RootLayout() {
   const curTheme = isDark ? MD3DarkTheme : MD3LightTheme;
   const themeProviderTheme = isDark ? DarkTheme : DefaultTheme;
 
+  // #region agent log
+  useEffect(() => {
+    fetch('http://127.0.0.1:7505/ingest/3e833bab-0eef-4ca6-b95d-13fe03afcf14',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'faabf4'},body:JSON.stringify({sessionId:'faabf4',runId:'post-fix',hypothesisId:'C',location:'src/app/_layout.tsx:mount',message:'RootLayout mounted',data:{ready:false,colorScheme},timestamp:Date.now()})}).catch(()=>{});
+  }, []);
+  // #endregion
+
   useEffect(() => {
     const init = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      // #region agent log
+      fetch('http://127.0.0.1:7505/ingest/3e833bab-0eef-4ca6-b95d-13fe03afcf14',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'faabf4'},body:JSON.stringify({sessionId:'faabf4',runId:'post-fix',hypothesisId:'C',location:'src/app/_layout.tsx:init-start',message:'RootLayout init started',data:{},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
 
-      if (session) {
-        router.replace("/(tabs)");
-      } else {
-        router.replace("/(auth)/login");
+        // #region agent log
+        fetch('http://127.0.0.1:7505/ingest/3e833bab-0eef-4ca6-b95d-13fe03afcf14',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'faabf4'},body:JSON.stringify({sessionId:'faabf4',runId:'post-fix',hypothesisId:'E',location:'src/app/_layout.tsx:session',message:'Auth session resolved',data:{hasSession:!!session},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+
+        if (session) {
+          router.replace("/(tabs)");
+        } else {
+          router.replace("/(auth)/login");
+        }
+
+        setReady(true);
+        SplashScreen.hideAsync();
+      } catch (err) {
+        // #region agent log
+        fetch('http://127.0.0.1:7505/ingest/3e833bab-0eef-4ca6-b95d-13fe03afcf14',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'faabf4'},body:JSON.stringify({sessionId:'faabf4',runId:'post-fix',hypothesisId:'C',location:'src/app/_layout.tsx:init-error',message:'RootLayout init threw',data:{error:String(err)},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+        throw err;
       }
-
-      setReady(true);
-      SplashScreen.hideAsync();
     };
 
     init();
