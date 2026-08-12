@@ -12,3 +12,17 @@ export function getWorkoutsWithTag(
       (workout) => workout.goal_tags?.includes(tag) ?? false,
     );
 }
+
+// Favorited workouts float to the top, everything else keeps its existing
+// order. Copies before sorting because getWorkoutsWithTag returns the context's
+// own array when the filter is "all" — sorting in place would mutate state.
+export function sortFavoritesFirst(
+  workouts: Workout[],
+  favoriteIds: Set<string>,
+): Workout[] {
+  return [...workouts].sort((a, b) => {
+    const aFav = favoriteIds.has(String(a.id)) ? 1 : 0;
+    const bFav = favoriteIds.has(String(b.id)) ? 1 : 0;
+    return bFav - aFav;
+  });
+}
