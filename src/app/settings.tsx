@@ -1,4 +1,4 @@
-import { View, Image, Platform } from "react-native";
+import { View } from "react-native";
 import { useColorScheme } from "react-native";
 import { router } from "expo-router";
 
@@ -9,66 +9,36 @@ import { Button } from "@/components/ui/button";
 
 import { Colors, Spacing, MaxContentWidth } from "@/constants/theme";
 import { supabase } from "@/lib/supabaseClient";
-import { useState } from "react";
-
-import * as ImagePicker from "expo-image-picker";
-import DateTimePicker from "@react-native-community/datetimepicker";
-import { useThemeMode } from "@/components/context/ThemeContext";
+import { useUserContext } from "@/components/context/userContext";
+import { useProfileData } from "@/components/context/profileDataContext";
+import { useEffect, useState } from "react";
 
 export default function SettingsScreen() {
-  const { theme, setTheme, resolvedTheme } = useThemeMode();
-  const colors = Colors[resolvedTheme];
+  const scheme = useColorScheme();
+  const colors = Colors[scheme === "dark" ? "dark" : "light"];
+  const { user } = useUserContext();
+  const {
+    profile,
+    loading: profileLoading,
+    updatePrimaryGoal,
+  } = useProfileData();
 
   const [newPassword, setNewPassword] = useState("");
-  const [newDisplayName, setNewDisplayName] = useState("");
-
-  // Birthdate picker
-  const [newBirthdate, setNewBirthdate] = useState<Date | null>(null);
-  const [showDatePicker, setShowDatePicker] = useState(false);
-
-  // Avatar picker
-  const [newAvatarUri, setNewAvatarUri] = useState("");
-
+  const [newUsername, setNewUsername] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  async function uploadAvatar(
-    uri: string,
-    userId: string,
-  ): Promise<string | null> {
-    try {
-      // Convert URI → Blob
-      const response = await fetch(uri);
-      const blob = await response.blob();
+  // Primary goal — prefilled from the shared profileDataContext once it loads.
+  const [primaryGoal, setPrimaryGoal] = useState("");
 
-      // Upload to Supabase Storage
-      const { error: uploadError } = await supabase.storage
-        .from("avatars")
-        .upload(`public/${userId}.jpg`, blob, {
-          upsert: true,
-        });
-
-      if (uploadError) {
-        console.log("Upload error:", uploadError.message);
-        return null;
-      }
-
-      // Get public URL
-      const { data: urlData } = supabase.storage
-        .from("avatars")
-        .getPublicUrl(`public/${userId}.jpg`);
-
-      return urlData.publicUrl;
-    } catch (err) {
-      console.log("Avatar upload failed:", err);
-      return null;
+  useEffect(() => {
+    if (profile) {
+      setPrimaryGoal(profile.primary_goal ?? "");
     }
-  }
+  }, [profile]);
 
-  // -----------------------------
-  // DELETE ACCOUNT
-  // -----------------------------
   async function handleDeleteAccount() {
     setLoading(true);
     setError("");
@@ -84,9 +54,6 @@ export default function SettingsScreen() {
     setLoading(false);
   }
 
-  // -----------------------------
-  // CHANGE PASSWORD
-  // -----------------------------
   async function handleChangePassword() {
     setLoading(true);
     setError("");
@@ -104,142 +71,19 @@ export default function SettingsScreen() {
     setLoading(false);
   }
 
-  // -----------------------------
-  // CHANGE DISPLAY NAME
-  // -----------------------------
-  async function handleChangeDisplayName() {
+  async function handleChangePrimaryGoal() {
     setLoading(true);
     setError("");
-
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError || !user) {
-      setError("You must be logged in to perform this action.");
-      setLoading(false);
-      return;
-    }
-
-    const { error } = await supabase
-      .from("profiles")
-      .update({ display_name: newDisplayName })
-      .eq("id", user.id);
-
-    if (error) {
-      setError(error.message);
-    } else {
-      setNewDisplayName("");
-    }
-
-    setLoading(false);
-  }
-
-  // -----------------------------
-  // CHANGE BIRTHDATE
-  // -----------------------------
-  async function handleChangeBirthdate() {
-    setLoading(true);
-    setError("");
-
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError || !user) {
-      setError("You must be logged in to perform this action.");
-      setLoading(false);
-      return;
-    }
-
-    const formatted = newBirthdate
-      ? newBirthdate.toISOString().split("T")[0]
-      : null;
-
-    const { error } = await supabase
-      .from("profiles")
-      .update({ birthdate: formatted })
-      .eq("id", user.id);
-
-    if (error) {
-      setError(error.message);
-    } else {
-      setNewBirthdate(null);
-    }
-
-    setLoading(false);
-  }
-
-  // -----------------------------
-  // CHANGE AVATAR
-  // -----------------------------
-  async function handleChangeAvatar() {
-    setLoading(true);
-    setError("");
-
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError || !user) {
-      setError("You must be logged in to perform this action.");
-      setLoading(false);
-      return;
-    }
 
     try {
-      // Convert URI → Blob
-      const response = await fetch(newAvatarUri);
-      const blob = await response.blob();
-
-      // Upload to Supabase Storage
-      const { error: uploadError } = await supabase.storage
-        .from("avatars")
-        .upload(`public/${user.id}.jpg`, blob, {
-          upsert: true,
-        });
-
-      if (uploadError) {
-        setError(uploadError.message);
-        setLoading(false);
-        return;
-      }
-
-      // Get public URL
-      const { data: urlData } = supabase.storage
-        .from("avatars")
-        .getPublicUrl(`public/${user.id}.jpg`);
-
-      const avatarUrl = urlData.publicUrl;
-
-      // Save URL to profile
-      const { error } = await supabase
-        .from("profiles")
-        .update({ avatar_url: avatarUrl })
-        .eq("id", user.id);
-
-      if (error) {
-        setError(error.message);
-      } else {
-        setNewAvatarUri("");
-      }
-    } catch (err) {
-      setError("Failed to upload avatar.");
+      await updatePrimaryGoal(primaryGoal);
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : "Couldn't update your goal",
+      );
     }
 
     setLoading(false);
-  }
-
-  // -----------------------------
-  // THEME SWITCHER
-  // -----------------------------
-  function cycleTheme() {
-    const next =
-      theme === "light" ? "dark" : theme === "dark" ? "system" : "light";
-    setTheme(next);
   }
 
   return (
@@ -260,19 +104,6 @@ export default function SettingsScreen() {
         <ThemedText type="title" style={{ marginBottom: Spacing.four }}>
           Settings
         </ThemedText>
-
-        {/* Theme Switcher */}
-        <ThemedText type="smallBold" style={{ marginBottom: Spacing.two }}>
-          Theme
-        </ThemedText>
-
-        <Button
-          onPress={() => setTheme(resolvedTheme === "light" ? "dark" : "light")}
-        >
-          {resolvedTheme === "light"
-            ? "Switch to Dark Mode"
-            : "Switch to Light Mode"}
-        </Button>
 
         {error.length > 0 && (
           <ThemedText
@@ -301,74 +132,21 @@ export default function SettingsScreen() {
           </Button>
         </View>
 
-        {/* Display Name */}
+        {/* Change Primary Goal */}
         <Input
-          placeholder="New Display Name"
-          value={newDisplayName}
-          onChangeText={setNewDisplayName}
+          placeholder="Primary Goal"
+          value={primaryGoal}
+          onChangeText={setPrimaryGoal}
+          editable={!profileLoading}
           className="mb-4"
         />
 
         <View style={{ marginBottom: Spacing.four }}>
           <Button
-            onPress={handleChangeDisplayName}
-            isDisabled={loading || newDisplayName.length === 0}
+            onPress={handleChangePrimaryGoal}
+            isDisabled={loading || profileLoading || primaryGoal.length === 0}
           >
-            Update Display Name
-          </Button>
-        </View>
-
-        {/* Birthdate Picker */}
-        <Button onPress={() => setShowDatePicker(true)}>
-          {newBirthdate
-            ? `Birthday: ${newBirthdate.toDateString()}`
-            : "Choose Birthdate"}
-        </Button>
-
-        {showDatePicker && (
-          <DateTimePicker
-            value={newBirthdate || new Date()}
-            mode="date"
-            display={Platform.OS === "ios" ? "spinner" : "calendar"}
-            onChange={(event, selectedDate) => {
-              setShowDatePicker(false);
-              if (selectedDate) setNewBirthdate(selectedDate);
-            }}
-          />
-        )}
-
-        <View style={{ marginBottom: Spacing.four }}>
-          <Button
-            onPress={handleChangeBirthdate}
-            isDisabled={loading || !newBirthdate}
-          >
-            Update Birthdate
-          </Button>
-        </View>
-
-        {/* Avatar Picker */}
-        <Button onPress={handleChangeAvatar}>
-          {newAvatarUri ? "Change Avatar" : "Pick Avatar"}
-        </Button>
-
-        {newAvatarUri.length > 0 && (
-          <Image
-            source={{ uri: newAvatarUri }}
-            style={{
-              width: 100,
-              height: 100,
-              borderRadius: 50,
-              marginBottom: Spacing.four,
-            }}
-          />
-        )}
-
-        <View style={{ marginBottom: Spacing.four }}>
-          <Button
-            onPress={handleChangeAvatar}
-            isDisabled={loading || newAvatarUri.length === 0}
-          >
-            Update Avatar
+            Update Primary Goal
           </Button>
         </View>
 

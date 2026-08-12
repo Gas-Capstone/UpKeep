@@ -17,9 +17,14 @@ import {
 } from "@/components/context/workoutsDataContext";
 import { habitsContext } from "@/components/context/habitsContext";
 import { mealsDataContext } from "@/components/context/mealsDataContext";
+import {
+  profileDataContext,
+  Profile,
+} from "@/components/context/profileDataContext";
 import { getHabitsForDate, isHabitDone } from "@/lib/habits/habits";
 import { matchRecipes } from "@/lib/meals/meals";
 import { getTodaysDate } from "@/lib/time_management/week";
+import { estimateCalorieGoal } from "@/lib/calorieGoal";
 import { CircleTimer } from "@/components/ui/CircleTimer";
 import { HStack } from "@/components/ui/hstack";
 import { VStack } from "@/components/ui/vstack";
@@ -70,6 +75,25 @@ function hasWorkoutToday(completedWorkouts: CompletedWorkout[]) {
   return completedWorkouts.some(
     (w) => new Date(w.completed_at).toDateString() === today,
   );
+}
+
+// Only computable once height/weight/sex/age are all present on the profile.
+function getCalorieGoal(profile: Profile | null): number | null {
+  if (
+    !profile?.height ||
+    !profile?.weight ||
+    !profile?.age ||
+    profile.sex === null ||
+    profile.sex === undefined
+  ) {
+    return null;
+  }
+  return estimateCalorieGoal({
+    heightFeet: profile.height,
+    weightLbs: profile.weight,
+    sex: profile.sex,
+    age: profile.age,
+  });
 }
 
 // One row in the "Jump back in" section — a pressable card linking to another tab.
@@ -130,6 +154,14 @@ export default function HomeScreen() {
     catalogLoading: true,
   };
 
+  // Real data, shared with profile.tsx/settings.tsx via profileDataContext.
+  const { profile, loading: profileLoading } = useContext(
+    profileDataContext,
+  ) ?? {
+    profile: null as Profile | null,
+    loading: true,
+  };
+
   const streak = useMemo(
     () => getWorkoutStreak(completedWorkouts),
     [completedWorkouts],
@@ -167,6 +199,8 @@ export default function HomeScreen() {
     totalConsideredRecipes > 0
       ? readyRecipes.length / totalConsideredRecipes
       : 0;
+
+  const calorieGoal = useMemo(() => getCalorieGoal(profile), [profile]);
 
   const displayName =
     user?.user_metadata?.full_name || user?.email?.split("@")[0] || "there";
@@ -206,6 +240,44 @@ export default function HomeScreen() {
               <Text variant="headlineMedium">{workoutsThisWeek}</Text>
             )}
             <Text variant="labelMedium">This week</Text>
+          </VStack>
+        </Card.Content>
+      </Card>
+
+      <Card mode="contained" style={homeStyles.streakCard}>
+        <Card.Content style={homeStyles.calorieContent}>
+          <Avatar.Icon
+            icon="food-apple"
+            size={48}
+            color={theme.colors.onPrimary}
+          />
+
+          <VStack style={{ flex: 1 }}>
+            <Text variant="labelMedium">Estimated daily calorie goal</Text>
+            {profileLoading ? (
+              <ActivityIndicator
+                style={{ alignSelf: "flex-start", marginTop: Spacing.one }}
+              />
+            ) : calorieGoal ? (
+              <>
+                <Text variant="headlineSmall">
+                  {calorieGoal.toLocaleString()} kcal
+                </Text>
+                <Text
+                  variant="labelSmall"
+                  style={{ color: theme.colors.onSurfaceVariant }}
+                >
+                  Estimate — based on your height, weight, sex, and age
+                </Text>
+              </>
+            ) : (
+              <Text
+                variant="bodyMedium"
+                style={{ color: theme.colors.onSurfaceVariant }}
+              >
+                Add your height, weight, and age in Settings to see this
+              </Text>
+            )}
           </VStack>
         </Card.Content>
       </Card>
@@ -304,6 +376,12 @@ const homeStyles = StyleSheet.create({
     width: "100%",
   },
   streakContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.four,
+    paddingVertical: Spacing.three,
+  },
+  calorieContent: {
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.four,
