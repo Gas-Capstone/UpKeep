@@ -66,3 +66,40 @@ export async function removeFridgeItem(userId: string, ingredientId: number): Pr
 
   if (error) throw error;
 }
+
+export async function fetchFavoriteRecipes(user: { id: string }) {
+  const { data, error } = await supabase
+    .from("favorite_recipes")
+    .select("recipe_id")
+    .eq("user_id", user.id)
+  if (error) console.log("Error fetching favorite recipes: ", error)
+  return (data ?? []).map((row) => String(row.recipe_id))
+}
+
+export async function addFavoriteRecipe(user, recipeId) {
+  const { error } = await supabase
+    .from("favorite_recipes")
+    .insert({
+      user_id: user.id,
+      recipe_id: recipeId
+    })
+    if (error) {
+      console.log("Error favoriting recipe: ", error)
+      return false
+    }
+    return true
+}
+
+export async function removeFavoriteRecipe(user, recipeId) {
+  const { error } = await supabase
+    .from("favorite_recipes")
+    .delete()
+    .eq("user_id", user.id)
+    .eq("recipe_id", recipeId)
+  
+  if (error) {
+    console.log("Error unfavoriting recipe: ", error)
+    return false
+  }
+  return true
+}
