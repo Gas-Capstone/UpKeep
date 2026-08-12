@@ -99,3 +99,14 @@ export function matchRecipes(recipes: Recipe[], fridge: ReadonlySet<number>) {
 
   return { ready, almost };
 }
+
+export function sortFavoritesFirst(
+  recipes: Recipe[],
+  favoriteIds: Set<String>,
+): Recipe[] {
+  return [...recipes].sort((a, b) => {
+    const aFav = favoriteIds.has(String(a.id)) ? 1 : 0
+    const bFav = favoriteIds.has(String(b.id)) ? 1 : 0
+    return bFav - aFav
+  })
+}

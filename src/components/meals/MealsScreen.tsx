@@ -11,7 +11,7 @@ import { styles } from "@/constants/styles";
 import { Spacing } from "@/constants/theme";
 import { useSession } from "@/hooks/use-session";
 import { useTheme } from "@/hooks/use-theme";
-import { Ingredient, matchRecipes } from "@/lib/meals/meals";
+import { Ingredient, matchRecipes, sortFavoritesFirst } from "@/lib/meals/meals";
 import { useMealsData } from "@/components/context/mealsDataContext";
 
 import { AddIngredientsModal } from "./AddIngredientsModal";
@@ -34,7 +34,6 @@ export default function MealsScreen() {
     fridgeLoading,
     refreshCatalog,
     refreshFridge,
-    refreshFavorites,
     toggleFavorite,
     toggleFridgeItem: toggleFridgeItemShared,
   } = useMealsData();
@@ -42,8 +41,6 @@ export default function MealsScreen() {
   const [mutationError, setMutationError] = useState("");
   const [modalVisible, setModalVisible] = useState(false);
   const [fabExtended, setFabExtended] = useState(true);
-
-
 
   const ingredientName = (id: number) =>
     ingredients.find((i) => i.id === id)?.name ?? "Unknown";
@@ -62,15 +59,19 @@ export default function MealsScreen() {
 
   const fridgeItems = ingredients.filter((i) => fridgeIds.has(i.id));
 
+  const sortedRecipes = useMemo(
+    () => sortFavoritesFirst(recipes, favoriteIds),
+    [recipes, favoriteIds],
+  );
+
   const { ready, almost } = useMemo(
-    () => matchRecipes(recipes, fridgeIds),
-    [recipes, fridgeIds],
+    () => matchRecipes(sortedRecipes, fridgeIds),
+    [sortedRecipes, fridgeIds],
   );
 
   const onScroll = ({ nativeEvent }: NativeSyntheticEvent<NativeScrollEvent>) => {
     setFabExtended(nativeEvent.contentOffset.y <= 0);
   };
-
 
   if (!sessionLoading && !user) {
     return (
@@ -155,8 +156,8 @@ export default function MealsScreen() {
                     key={recipe.id}
                     missingNames={missingIds.map(ingredientName)}
                     recipe={recipe}
-                    isFavorited={false}
-                    onToggleFavorite={() => console.log("Favorited: ", recipe.name)}
+                    isFavorited={favoriteIds.has(String(recipe.id))}
+                    onToggleFavorite={() => toggleFavorite(String(recipe.id))}
                   />
                 ))
               ) : (
@@ -174,8 +175,8 @@ export default function MealsScreen() {
                     key={recipe.id}
                     missingNames={missingIds.map(ingredientName)}
                     recipe={recipe}
-                    isFavorited={false}
-                    onToggleFavorite={() => console.log("Favorited: ", recipe.name)}
+                    isFavorited={favoriteIds.has(String(recipe.id))}
+                    onToggleFavorite={() => toggleFavorite(String(recipe.id))}
                   />
                 ))
               ) : (
