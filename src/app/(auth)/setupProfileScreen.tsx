@@ -7,11 +7,26 @@ import { ThemedView } from "@/components/themed-view";
 import { ThemedText } from "@/components/themed-text";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { HStack } from "@/components/ui/hstack";
 
 import { Spacing, MaxContentWidth } from "@/constants/theme";
 
 import * as ImagePicker from "expo-image-picker";
 import DateTimePicker from "@react-native-community/datetimepicker";
+
+// `height` is stored as feet.inches (e.g. 5.11 = 5'11")
+function buildHeightValue(feetStr: string, inchesStr: string): number | null {
+  const feet = Number(feetStr);
+  if (!feetStr || Number.isNaN(feet)) return null;
+
+  const rawInches = Number(inchesStr);
+  const inches = Number.isNaN(rawInches)
+    ? 0
+    : Math.min(Math.max(Math.round(rawInches), 0), 11);
+  const inchesPadded = String(inches).padStart(2, "0");
+
+  return Number(`${feet}.${inchesPadded}`);
+}
 
 export default function SetupProfileScreen() {
   const [displayName, setDisplayName] = useState("");
@@ -20,6 +35,13 @@ export default function SetupProfileScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
 
   const [avatarUri, setAvatarUri] = useState("");
+
+  // Calorie-goal inputs
+  const [heightFeet, setHeightFeet] = useState("");
+  const [heightInches, setHeightInches] = useState("");
+  const [weight, setWeight] = useState("");
+  const [age, setAge] = useState("");
+  const [sex, setSex] = useState<boolean | null>(null);
 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -92,6 +114,10 @@ export default function SetupProfileScreen() {
         display_name: displayName || null,
         birthdate: birthdate ? birthdate.toISOString().split("T")[0] : null,
         avatar_url: avatarUrl || null,
+        height: buildHeightValue(heightFeet, heightInches),
+        weight: weight ? Number(weight) : null,
+        age: age ? Number(age) : null,
+        sex: sex,
         onboarding_complete: true,
       })
       .eq("id", user.id);
@@ -159,6 +185,71 @@ export default function SetupProfileScreen() {
             }}
           />
         )}
+
+        {/* Height */}
+        <ThemedText
+          type="smallBold"
+          style={{ marginTop: Spacing.four, marginBottom: Spacing.two }}
+        >
+          Height
+        </ThemedText>
+        <HStack space="sm" style={{ marginBottom: Spacing.four }}>
+          <Input
+            placeholder="Feet"
+            value={heightFeet}
+            onChangeText={setHeightFeet}
+            keyboardType="numeric"
+            style={{ flex: 1 }}
+          />
+          <Input
+            placeholder="Inches"
+            value={heightInches}
+            onChangeText={setHeightInches}
+            keyboardType="numeric"
+            style={{ flex: 1 }}
+          />
+        </HStack>
+
+        {/* Weight */}
+        <ThemedText type="smallBold" style={{ marginBottom: Spacing.two }}>
+          Weight (lbs)
+        </ThemedText>
+        <Input
+          placeholder="Weight in pounds"
+          value={weight}
+          onChangeText={setWeight}
+          keyboardType="numeric"
+          className="mb-4"
+        />
+
+        {/* Age */}
+        <ThemedText type="smallBold" style={{ marginBottom: Spacing.two }}>
+          Age
+        </ThemedText>
+        <Input
+          placeholder="Age"
+          value={age}
+          onChangeText={setAge}
+          keyboardType="numeric"
+          className="mb-4"
+        />
+
+        {/* Sex */}
+        <ThemedText type="smallBold" style={{ marginBottom: Spacing.two }}>
+          Sex
+        </ThemedText>
+        <HStack space="sm" style={{ marginBottom: Spacing.four }}>
+          <View style={{ flex: 1 }}>
+            <Button onPress={() => setSex(true)}>
+              {sex === true ? "✓ Male" : "Male"}
+            </Button>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Button onPress={() => setSex(false)}>
+              {sex === false ? "✓ Female" : "Female"}
+            </Button>
+          </View>
+        </HStack>
 
         {/* Avatar Picker */}
         <Button onPress={pickAvatar}>
