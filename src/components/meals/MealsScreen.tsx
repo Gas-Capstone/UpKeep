@@ -30,9 +30,12 @@ export default function MealsScreen() {
     catalogLoading,
     catalogError,
     fridgeIds,
+    favoriteIds,
     fridgeLoading,
     refreshCatalog,
     refreshFridge,
+    refreshFavorites,
+    toggleFavorite,
     toggleFridgeItem: toggleFridgeItemShared,
   } = useMealsData();
 

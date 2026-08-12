@@ -6,8 +6,12 @@ import {
   fetchIngredients,
   fetchRecipes,
   removeFridgeItem,
+  fetchFavoriteRecipes,
+  addFavoriteRecipe,
+  removeFavoriteRecipe
 } from "@/lib/meals/queries";
 import { userContext } from "./userContext";
+import { getFavoriteWorkouts } from "@/lib/supabaseFunctions";
 
 // Lifted out of MealsScreen's local useState so index.tsx can read the same data.
 
@@ -18,11 +22,14 @@ export type MealsDataContextType = {
   catalogError: string;
   fridgeIds: ReadonlySet<number>;
   fridgeLoading: boolean;
+  favoriteIds: Set<String>;
   refreshCatalog: () => void;
   refreshFridge: () => void;
+  refreshFavorites: () => void;
   // Optimistic toggle — updates fridgeIds immediately, rolls back and
   // re-throws on failure so the caller can surface its own error message.
   toggleFridgeItem: (ingredient: Ingredient) => Promise<void>;
+  toggleFavorite: (recipeId: string) => void;
 };
 
 export const mealsDataContext = createContext<MealsDataContextType | null>(null);
@@ -35,10 +42,59 @@ export const MealsDataProvider = ({ children }: MealsDataProviderProps) => {
   const { user } = useContext(userContext) ?? {};
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set())
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState("");
   const [fridgeIds, setFridgeIds] = useState<ReadonlySet<number>>(new Set());
   const [fridgeLoading, setFridgeLoading] = useState(false);
+  
+  const refreshFavorites = useCallback(() => {
+    if (!user?.id) return
+    getFavoriteWorkouts(user)
+      .then((ids) => setFavoriteIds(new Set(ids)))
+      .catch((err) => {
+        console.log("Error fetching favorite recipes: ", err);
+        setFavoriteIds(new Set())
+      })
+  }, [user?.id])
+
+  const toggleFavorite = useCallback(
+    (recipeId: string) => {
+      if (!user?.id) return;
+      const wasFavorited = favoriteIds.has(recipeId);
+      
+      setFavoriteIds((prev) => {
+        const next = new Set(prev)
+        if (wasFavorited) next.delete(recipeId)
+        else next.add(recipeId)
+        return next
+      })
+
+      const write = wasFavorited
+        ? removeFavoriteRecipe(user, recipeId)
+        : addFavoriteRecipe(user, recipeId)
+
+      write
+        .then((res) => {
+          if (res) return
+          setFavoriteIds((prev) => {
+            const next = new Set(prev)
+            if (wasFavorited) next.add(recipeId)
+              else next.delete(recipeId)
+            return next
+          })
+        })
+        .catch((err) => {
+          console.log("Error toggling favorite recipe: ", err)
+          setFavoriteIds((prev) => {
+            const next = new Set(prev)
+            if (wasFavorited) next.add(recipeId)
+            else next.delete(recipeId)
+            return next
+          })
+        })
+    }, [user?.id, favoriteIds]
+  )
 
   const refreshCatalog = useCallback(() => {
     setCatalogLoading(true);
@@ -70,7 +126,9 @@ export const MealsDataProvider = ({ children }: MealsDataProviderProps) => {
   useEffect(refreshCatalog, []);
 
   useEffect(() => {
+    if (!user?.id) return
     refreshFridge();
+    refreshFavorites()
   }, [user, refreshFridge]);
 
   const toggleFridgeItem = useCallback(
@@ -109,10 +167,13 @@ export const MealsDataProvider = ({ children }: MealsDataProviderProps) => {
     catalogLoading,
     catalogError,
     fridgeIds,
+    favoriteIds,
     fridgeLoading,
     refreshCatalog,
     refreshFridge,
+    refreshFavorites,
     toggleFridgeItem,
+    toggleFavorite,
   };
 
   return (
