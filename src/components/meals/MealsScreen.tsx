@@ -150,10 +150,10 @@ export default function MealsScreen() {
                 ready.map(({ recipe, missingIds }) => (
                   <RecipeCard
                     key={recipe.id}
-                    name={recipe.name}
-                    prepTimeMin={recipe.prepTimeMin}
                     missingNames={missingIds.map(ingredientName)}
-                    totalIngredients={recipe.ingredientIds.length}
+                    recipe={recipe}
+                    isFavorited={false}
+                    onToggleFavorite={() => console.log("Favorited: ", recipe.name)}
                   />
                 ))
               ) : (
@@ -169,10 +169,10 @@ export default function MealsScreen() {
                 almost.map(({ recipe, missingIds }) => (
                   <RecipeCard
                     key={recipe.id}
-                    name={recipe.name}
-                    prepTimeMin={recipe.prepTimeMin}
                     missingNames={missingIds.map(ingredientName)}
-                    totalIngredients={recipe.ingredientIds.length}
+                    recipe={recipe}
+                    isFavorited={false}
+                    onToggleFavorite={() => console.log("Favorited: ", recipe.name)}
                   />
                 ))
               ) : (

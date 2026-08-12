@@ -2,24 +2,23 @@ import { useState } from "react";
 import { Card, Text, IconButton, useTheme } from "react-native-paper";
 
 import type { AppTheme } from "@/constants/paper-theme";
-
+import type { Recipe } from "@/lib/meals/meals";
 type RecipeCardProps = {
-  name: string;
-  prepTimeMin: number;
-  missingNames: string[];
-  totalIngredients: number;
+  recipe: Recipe,
+  isFavorited: boolean,
+  missingNames: String[],
+  onToggleFavorite: () => void
 };
 
-export function RecipeCard({ name, prepTimeMin, missingNames, totalIngredients }: RecipeCardProps) {
+export function RecipeCard({ missingNames, recipe, onToggleFavorite, isFavorited }: RecipeCardProps) {
   const theme = useTheme<AppTheme>();
   const ready = missingNames.length === 0;
-  const [isFavorited, setIsFavorited] = useState(false);
 
   return (
     <Card mode="contained">
       <Card.Title
-        title={name}
-        subtitle={`${prepTimeMin} min`}
+        title={recipe.name}
+        subtitle={`${recipe.prepTimeMin} min`}
         right={() => (
           <IconButton
             icon={isFavorited ? "star" : "star-outline"}
@@ -27,11 +26,11 @@ export function RecipeCard({ name, prepTimeMin, missingNames, totalIngredients }
               isFavorited ? theme.colors.primary : theme.colors.onSurfaceVariant
             }
             size={22}
-            onPress={() => setIsFavorited((prev) => !prev)}
+            onPress={onToggleFavorite}
             accessibilityLabel={
               isFavorited
-                ? `Remove ${name} from favorites`
-                : `Add ${name} to favorites`
+                ? `Remove ${recipe.name} from favorites`
+                : `Add ${recipe.name} to favorites`
             }
           />
         )}
@@ -43,7 +42,7 @@ export function RecipeCard({ name, prepTimeMin, missingNames, totalIngredients }
           }}
         >
           {ready
-            ? `You have all ${totalIngredients} ingredients`
+            ? `You have all ${recipe.ingredientIds.length} ingredients`
             : `Need ${missingNames.length}: ${missingNames.join(", ")}`}
         </Text>
       </Card.Content>
