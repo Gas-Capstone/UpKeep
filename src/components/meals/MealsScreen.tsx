@@ -174,7 +174,7 @@ export default function MealsScreen() {
                     missingNames={missingIds.map(ingredientName)}
                     recipe={recipe}
                     isFavorited={favoriteIds.has(String(recipe.id))}
-                    onToggleFavorite={() => toggleFavorite(String(recipe.id))}
+                    onToggleFavorite={() => toggleFavorite(recipe)}
                   />
                 ))
               ) : (
@@ -193,7 +193,7 @@ export default function MealsScreen() {
                     missingNames={missingIds.map(ingredientName)}
                     recipe={recipe}
                     isFavorited={favoriteIds.has(String(recipe.id))}
-                    onToggleFavorite={() => toggleFavorite(String(recipe.id))}
+                    onToggleFavorite={() => toggleFavorite(recipe)}
                   />
                 ))
               ) : (

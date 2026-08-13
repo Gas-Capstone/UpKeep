@@ -27,6 +27,22 @@ type CustomRecipeRow = {
   custom_recipe_ingredients: { ingredient_id: number }[]
 }
 
+type RecipeIngredientInput = {
+  ingredient_id: number;
+  quantity?: number;
+  unit?: string;
+};
+
+export type CreateRecipeInput = {
+  name: string;
+  prep_time_min?: number;
+  instructions?: string;
+  image_url?: string;
+  calories?: number;
+  protein_g?: number;
+  ingredients: RecipeIngredientInput[];
+};
+
 export async function fetchRecipes(): Promise<Recipe[]> {
   const { data, error } = await supabase
     .from("recipes")
@@ -41,10 +57,11 @@ export async function fetchRecipes(): Promise<Recipe[]> {
     name: row.name,
     prepTimeMin: row.prep_time_min,
     ingredientIds: row.recipe_ingredients.map((ri) => ri.ingredient_id),
+    isCustom: false,
   }));
 }
 
-export async function fetchCustomRecipes(user): Promise<Recipe[]> {
+export async function fetchCustomRecipes(user: { id: string }): Promise<Recipe[]> {
   const { data, error } = await supabase
     .from("custom_recipes")
     .select("id, name, prep_time_min, custom_recipe_ingredients(ingredient_id)")
@@ -58,7 +75,8 @@ export async function fetchCustomRecipes(user): Promise<Recipe[]> {
       id: row.id,
       name: row.name,
       prepTimeMin: row.prep_time_min,
-      ingredientIds: row.custom_recipe_ingredients.map((i) => i.ingredient_id)
+      ingredientIds: row.custom_recipe_ingredients.map((i) => i.ingredient_id),
+      isCustom: true,
     }))
 }
 
@@ -102,7 +120,20 @@ export async function fetchFavoriteRecipes(user: { id: string }) {
   return (data ?? []).map((row) => String(row.recipe_id))
 }
 
-export async function addFavoriteRecipe(user, recipeId) {
+export async function fetchCustomFavoriteRecipes(user: { id: string }) {
+  const { data, error } = await supabase
+    .from("favorite_custom_recipes")
+    .select("custom_recipe_id")
+    .eq("user_id", user.id);
+
+  if (error) throw error;
+  return (data ?? []).map((row) => String(row.custom_recipe_id));
+}
+
+export async function addFavoriteRecipe(
+  user: { id: string },
+  recipeId: string | number,
+) {
   const { error } = await supabase
     .from("favorite_recipes")
     .insert({
@@ -116,7 +147,10 @@ export async function addFavoriteRecipe(user, recipeId) {
     return true
 }
 
-export async function removeFavoriteRecipe(user, recipeId) {
+export async function removeFavoriteRecipe(
+  user: { id: string },
+  recipeId: string | number,
+) {
   const { error } = await supabase
     .from("favorite_recipes")
     .delete()
@@ -130,7 +164,45 @@ export async function removeFavoriteRecipe(user, recipeId) {
   return true
 }
 
-export async function createRecipe(user, recipe) {
+export async function addCustomFavoriteRecipe(
+  user: { id: string },
+  recipeId: string | number,
+) {
+  const { error } = await supabase
+    .from("favorite_custom_recipes")
+    .insert({
+      user_id: user.id,
+      custom_recipe_id: recipeId,
+    });
+
+  if (error) {
+    console.log("Error favoriting custom recipe: ", error);
+    return false;
+  }
+  return true;
+}
+
+export async function removeCustomFavoriteRecipe(
+  user: { id: string },
+  recipeId: string | number,
+) {
+  const { error } = await supabase
+    .from("favorite_custom_recipes")
+    .delete()
+    .eq("user_id", user.id)
+    .eq("custom_recipe_id", recipeId);
+
+  if (error) {
+    console.log("Error unfavoriting custom recipe: ", error);
+    return false;
+  }
+  return true;
+}
+
+export async function createRecipe(
+  user: { id: string },
+  recipe: CreateRecipeInput,
+) {
   // because of the relationship in the db with recipes and ingredients, there will be two insertions in this function
   const { data: recipeData, error: recipeError } = await supabase
     .from("custom_recipes")

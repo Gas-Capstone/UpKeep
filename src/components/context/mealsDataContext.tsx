@@ -8,9 +8,13 @@ import {
   removeFridgeItem,
   fetchFavoriteRecipes,
   fetchCustomRecipes,
+  fetchCustomFavoriteRecipes,
   addFavoriteRecipe,
   removeFavoriteRecipe,
-  createRecipe
+  addCustomFavoriteRecipe,
+  removeCustomFavoriteRecipe,
+  createRecipe,
+  type CreateRecipeInput
 } from "@/lib/meals/queries";
 import { userContext } from "./userContext";
 
@@ -23,15 +27,15 @@ export type MealsDataContextType = {
   catalogError: string;
   fridgeIds: ReadonlySet<number>;
   fridgeLoading: boolean;
-  favoriteIds: Set<String>;
+  favoriteIds: Set<string>;
   refreshCatalog: () => void;
   refreshFridge: () => void;
   refreshFavorites: () => void;
   // Optimistic toggle — updates fridgeIds immediately, rolls back and
   // re-throws on failure so the caller can surface its own error message.
   toggleFridgeItem: (ingredient: Ingredient) => Promise<void>;
-  toggleFavorite: (recipeId: string) => void;
-  createNewRecipe: (recipe) => Promise<boolean | undefined>
+  toggleFavorite: (recipe: Recipe) => void;
+  createNewRecipe: (recipe: CreateRecipeInput) => Promise<boolean | undefined>
 };
 
 export const mealsDataContext = createContext<MealsDataContextType | null>(null);
@@ -52,8 +56,13 @@ export const MealsDataProvider = ({ children }: MealsDataProviderProps) => {
   
   const refreshFavorites = useCallback(() => {
     if (!user?.id) return
-    fetchFavoriteRecipes(user)
-      .then((ids) => setFavoriteIds(new Set(ids)))
+    Promise.all([
+      fetchFavoriteRecipes(user),
+      fetchCustomFavoriteRecipes(user),
+    ])
+      .then(([recipeIds, customRecipeIds]) => {
+        setFavoriteIds(new Set([...recipeIds, ...customRecipeIds]))
+      })
       .catch((err) => {
         console.log("Error fetching favorite recipes: ", err);
         setFavoriteIds(new Set())
@@ -63,8 +72,9 @@ export const MealsDataProvider = ({ children }: MealsDataProviderProps) => {
 
 
   const toggleFavorite = useCallback(
-    (recipeId: string) => {
+    (recipe: Recipe) => {
       if (!user?.id) return;
+      const recipeId = String(recipe.id);
       const wasFavorited = favoriteIds.has(recipeId);
       
       setFavoriteIds((prev) => {
@@ -75,8 +85,12 @@ export const MealsDataProvider = ({ children }: MealsDataProviderProps) => {
       })
 
       const write = wasFavorited
-        ? removeFavoriteRecipe(user, recipeId)
-        : addFavoriteRecipe(user, recipeId)
+        ? recipe.isCustom
+          ? removeCustomFavoriteRecipe(user, recipeId)
+          : removeFavoriteRecipe(user, recipeId)
+        : recipe.isCustom
+          ? addCustomFavoriteRecipe(user, recipeId)
+          : addFavoriteRecipe(user, recipeId)
 
       write
         .then((res) => {
@@ -140,7 +154,7 @@ export const MealsDataProvider = ({ children }: MealsDataProviderProps) => {
 
 
   const createNewRecipe = useCallback(
-    async (recipe) => {
+    async (recipe: CreateRecipeInput) => {
       if (!user?.id) return;
       try {
         const created = await createRecipe(user, recipe)

@@ -13,6 +13,7 @@ export type Recipe = {
   name: string;
   prepTimeMin: number;
   ingredientIds: number[];
+  isCustom?: boolean;
 };
 
 export type RecipeMatch = {
