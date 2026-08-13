@@ -13,6 +13,7 @@ type RecipeIngredientInput = {
 
 export type CreateRecipeInput = {
     name: string,
+    prep_time_min: number,
     ingredients: RecipeIngredientInput[],
 }
 
@@ -31,6 +32,7 @@ export function AddRecipeModal({
     onCreate
 }: AddRecipeModalProps) {
     const [name, setName] = useState("")
+    const [prepTime, setPrepTime] = useState(1)
     const [selectedIds, setSelectedIds] = useState<ReadonlySet<number>>(new Set())
     const [error, setError] = useState("")
     
@@ -71,6 +73,7 @@ export function AddRecipeModal({
 
         const input: CreateRecipeInput = {
             name: trimmedName,
+            prep_time_min: (prepTime === 0) ? 10 : prepTime,
             ingredients: ingredientIds.map((id) => ({
                 ingredient_id: id
             }))
@@ -102,11 +105,20 @@ export function AddRecipeModal({
                 <Card.Content style={styles.stepContainer}>
                     <ScrollView style={{ maxHeight: 420 }} keyboardShouldPersistTaps="handled">
                         <VStack space="md" style={{ alignSelf: "stretch" }}>
+                            {error.length > 0 && (
+                                <Text style={{ color: "#ff4d4f" }}>{error}</Text>
+                            )}
                             <TextInput
                                 label="Recipe name"
                                 mode="outlined"
                                 value={name}
                                 onChangeText={setName}
+                            />
+                            <TextInput
+                                label="Prep time"
+                                mode="outlined"
+                                value={prepTime.toString()}
+                                onChangeText={(text) => setPrepTime(Number(text))}
                             />
                             <Text variant="labelLarge">Ingredients</Text>
                             <IngredientPicker
@@ -114,9 +126,6 @@ export function AddRecipeModal({
                                 selectedIds={selectedIds}
                                 onToggle={toggleIngredient}
                             />
-                            {error.length > 0 && (
-                                <Text style={{ color: "#ff4d4f" }}>{error}</Text>
-                            )}
                         </VStack>
                     </ScrollView>
                 </Card.Content>

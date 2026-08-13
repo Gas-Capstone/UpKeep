@@ -7,6 +7,7 @@ import {
   fetchRecipes,
   removeFridgeItem,
   fetchFavoriteRecipes,
+  fetchCustomRecipes,
   addFavoriteRecipe,
   removeFavoriteRecipe,
   createRecipe
@@ -103,14 +104,23 @@ export const MealsDataProvider = ({ children }: MealsDataProviderProps) => {
   const refreshCatalog = useCallback(() => {
     setCatalogLoading(true);
     setCatalogError("");
-    Promise.all([fetchIngredients(), fetchRecipes()])
-      .then(([ingredientRows, recipeRows]) => {
+
+    const customRecipesRequest = user?.id
+      ? fetchCustomRecipes(user)
+      : Promise.resolve<Recipe[]>([])
+
+    Promise.all([
+      fetchIngredients(), 
+      fetchRecipes(),
+      customRecipesRequest,
+    ])
+      .then(([ingredientRows, recipeRows, customRecipeRows]) => {
         setIngredients(ingredientRows);
-        setRecipes(recipeRows);
+        setRecipes([...recipeRows, ...customRecipeRows]);
       })
       .catch((error: Error) => setCatalogError(error.message))
       .finally(() => setCatalogLoading(false));
-  }, []);
+  }, [user?.id]);
 
   const refreshFridge = useCallback(() => {
     if (!user?.id) {
@@ -143,7 +153,9 @@ export const MealsDataProvider = ({ children }: MealsDataProviderProps) => {
       }
     }, [user?.id, refreshCatalog]
   )
-  useEffect(refreshCatalog, []);
+  useEffect(() => {
+    refreshCatalog()
+  }, [refreshCatalog])
 
   useEffect(() => {
     if (!user?.id) return

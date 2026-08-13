@@ -20,6 +20,13 @@ type RecipeRow = {
   recipe_ingredients: { ingredient_id: number }[];
 };
 
+type CustomRecipeRow = {
+  id: number;
+  name: string;
+  prep_time_min: number;
+  custom_recipe_ingredients: { ingredient_id: number }[]
+}
+
 export async function fetchRecipes(): Promise<Recipe[]> {
   const { data, error } = await supabase
     .from("recipes")
@@ -35,6 +42,24 @@ export async function fetchRecipes(): Promise<Recipe[]> {
     prepTimeMin: row.prep_time_min,
     ingredientIds: row.recipe_ingredients.map((ri) => ri.ingredient_id),
   }));
+}
+
+export async function fetchCustomRecipes(user): Promise<Recipe[]> {
+  const { data, error } = await supabase
+    .from("custom_recipes")
+    .select("id, name, prep_time_min, custom_recipe_ingredients(ingredient_id)")
+    .eq("user_id", user.id)
+    .order("name")
+    .returns<CustomRecipeRow[]>()
+
+    if (error) throw error;
+
+    return data.map((row) => ({
+      id: row.id,
+      name: row.name,
+      prepTimeMin: row.prep_time_min,
+      ingredientIds: row.custom_recipe_ingredients.map((i) => i.ingredient_id)
+    }))
 }
 
 export async function fetchFridgeItemIds(userId: string): Promise<number[]> {
