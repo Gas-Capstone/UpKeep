@@ -32,7 +32,7 @@ export function AddRecipeModal({
     onCreate
 }: AddRecipeModalProps) {
     const [name, setName] = useState("")
-    const [prepTime, setPrepTime] = useState(1)
+    const [prepTime, setPrepTime] = useState("1")
     const [selectedIds, setSelectedIds] = useState<ReadonlySet<number>>(new Set())
     const [error, setError] = useState("")
     
@@ -71,9 +71,20 @@ export function AddRecipeModal({
             return
         }
 
+        const prepTimeMin = Number(prepTime.trim())
+        if (
+            !prepTime.trim() ||
+            !Number.isFinite(prepTimeMin) ||
+            !Number.isInteger(prepTimeMin) ||
+            prepTimeMin <= 0
+        ) {
+            setError("Prep time must be a positive whole number.")
+            return
+        }
+
         const input: CreateRecipeInput = {
             name: trimmedName,
-            prep_time_min: (prepTime === 0) ? 10 : prepTime,
+            prep_time_min: prepTimeMin,
             ingredients: ingredientIds.map((id) => ({
                 ingredient_id: id
             }))
@@ -83,6 +94,7 @@ export function AddRecipeModal({
             setError("")
             await onCreate(input)
             setName("")
+            setPrepTime("1")
             setSelectedIds(new Set())
             onDismiss()
         } catch (error) {
@@ -117,8 +129,9 @@ export function AddRecipeModal({
                             <TextInput
                                 label="Prep time"
                                 mode="outlined"
-                                value={prepTime.toString()}
-                                onChangeText={(text) => setPrepTime(Number(text))}
+                                value={prepTime}
+                                onChangeText={setPrepTime}
+                                keyboardType="number-pad"
                             />
                             <Text variant="labelLarge">Ingredients</Text>
                             <IngredientPicker

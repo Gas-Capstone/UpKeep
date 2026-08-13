@@ -18,7 +18,11 @@ export function RecipeCard({ missingNames, recipe, onToggleFavorite, isFavorited
     <Card mode="contained">
       <Card.Title
         title={recipe.name}
-        subtitle={`${recipe.prepTimeMin} min`}
+        subtitle={
+          recipe.prepTimeMin
+            ? `${recipe.prepTimeMin} min`
+            : "Prep time not set"
+        }
         right={() => (
           <IconButton
             icon={isFavorited ? "star" : "star-outline"}

@@ -35,7 +35,7 @@ export type MealsDataContextType = {
   // re-throws on failure so the caller can surface its own error message.
   toggleFridgeItem: (ingredient: Ingredient) => Promise<void>;
   toggleFavorite: (recipe: Recipe) => void;
-  createNewRecipe: (recipe: CreateRecipeInput) => Promise<boolean | undefined>
+  createNewRecipe: (recipe: CreateRecipeInput) => Promise<void>
 };
 
 export const mealsDataContext = createContext<MealsDataContextType | null>(null);
@@ -158,12 +158,13 @@ export const MealsDataProvider = ({ children }: MealsDataProviderProps) => {
       if (!user?.id) return;
       try {
         const created = await createRecipe(user, recipe)
-        if (!created) return false
+        if (!created) {
+          throw new Error("Could not create the recipe.")
+        }
         refreshCatalog()
-        return true
       } catch (err) {
         console.log("Error creating recipe: ", err)
-        return false
+        throw err
       }
     }, [user?.id, refreshCatalog]
   )
