@@ -44,7 +44,7 @@ export const ProfileDataProvider = ({ children }: ProfileDataProviderProps) => {
     setLoading(true);
     supabase
       .from("profiles")
-      .select("name, primary_goal, created_at, height, weight, sex, age")
+      .select("display_name, primary_goal, created_at, height, weight, sex, age")
       .eq("id", userId)
       .single()
       .then(({ data, error }) => {

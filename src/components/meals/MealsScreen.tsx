@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native";
-import { ActivityIndicator, Chip, Text } from "react-native-paper";
+import { ActivityIndicator, Chip, Text, Button } from "react-native-paper";
 
 import { HabitAnimatedFAB } from "@/components/habits/HabitAnimatedFAB";
 import { Center } from "@/components/ui/center";
@@ -16,7 +16,7 @@ import { useMealsData } from "@/components/context/mealsDataContext";
 
 import { AddIngredientsModal } from "./AddIngredientsModal";
 import { RecipeCard } from "./RecipeCard";
-
+import { AddRecipeModal } from "./AddRecipeModal";
 const ERROR_COLOR = "#ff4d4f";
 
 export default function MealsScreen() {
@@ -40,6 +40,7 @@ export default function MealsScreen() {
 
   const [mutationError, setMutationError] = useState("");
   const [modalVisible, setModalVisible] = useState(false);
+  const [ createModalVisible, setCreateModalVisible ] = useState(false)
   const [fabExtended, setFabExtended] = useState(true);
 
   const ingredientName = (id: number) =>
@@ -90,9 +91,9 @@ export default function MealsScreen() {
         <>
           <HabitAnimatedFAB
             extended={fabExtended}
-            label="Add ingredients"
+            label="Create recipe"
             visible={!sessionLoading && !catalogLoading && !catalogError}
-            onPress={() => setModalVisible(true)}
+            onPress={() => setCreateModalVisible(true)}
           />
           <AddIngredientsModal
             visible={modalVisible}
@@ -100,6 +101,12 @@ export default function MealsScreen() {
             ingredients={ingredients}
             selectedIds={fridgeIds}
             onToggle={toggleFridgeItem}
+          />
+          <AddRecipeModal
+            visible={createModalVisible}
+            onDismiss={() => setCreateModalVisible(false)}
+            availableIngredients={ingredients}
+            onCreate={(recipe) => console.log("Created: ", recipe)}
           />
         </>
       }>
@@ -126,6 +133,13 @@ export default function MealsScreen() {
                     : `${fridgeItems.length} ${fridgeItems.length === 1 ? "item" : "items"}`}
                 </Text>
               </HStack>
+              <Button
+                mode="contained-tonal"
+                icon="plus"
+                onPress={() => setModalVisible(true)}
+              >
+                Add Ingredients
+              </Button>
 
               {fridgeItems.length > 0 ? (
                 <HStack space="sm" style={{ flexWrap: "wrap" }}>
