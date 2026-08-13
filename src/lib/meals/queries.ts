@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabaseClient";
 
 import type { Ingredient, Recipe } from "./meals";
+import { SUPPORTED_TAB_BAR_ITEM_LABEL_VISIBILITY_MODES } from "expo-router/build/native-tabs/types";
 
 export async function fetchIngredients(): Promise<Ingredient[]> {
   const { data, error } = await supabase
@@ -102,4 +103,48 @@ export async function removeFavoriteRecipe(user, recipeId) {
     return false
   }
   return true
+}
+
+export async function createRecipe(user, recipe) {
+  // because of the relationship in the db with recipes and ingredients, there will be two insertions in this function
+  const { data: recipeData, error: recipeError } = await supabase
+    .from("custom_recipes")
+    .insert({
+      user_id: user.id,
+      name: recipe.name,
+      prep_time_min: recipe.prep_time_min ?? null,
+      instructions: recipe.instructions ?? null,
+      image_url: recipe.image_url ?? null,
+      calories: recipe.calories ?? null,
+      protein_g: recipe.protein_g ?? null
+    })
+    .select("id")
+    .single();
+    if (recipeError) {
+      console.log("Error inserting custom recipe: ", recipeError)
+      return false
+    }
+
+    const ingredientRows = recipe.ingredients.map((i) => ({
+      custom_recipe_id: recipeData?.id,
+      ingredient_id: i.ingredient_id,
+      quantity: i.quantity ?? 1,
+      unit: i.unit ?? null,
+    }))
+
+    const { error: ingredientError } = await supabase
+      .from("custom_recipe_ingredients")
+      .insert(ingredientRows)
+    
+    if (ingredientError) {
+      await supabase
+        .from("custom_recipes")
+        .delete()
+        .eq("id", recipeData.id)
+
+      console.log("Error creating custom recipe ingredients relation: ", ingredientError)
+      return false
+    }
+
+    return true
 }

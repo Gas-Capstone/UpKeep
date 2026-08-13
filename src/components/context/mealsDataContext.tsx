@@ -8,7 +8,8 @@ import {
   removeFridgeItem,
   fetchFavoriteRecipes,
   addFavoriteRecipe,
-  removeFavoriteRecipe
+  removeFavoriteRecipe,
+  createRecipe
 } from "@/lib/meals/queries";
 import { userContext } from "./userContext";
 
@@ -29,6 +30,7 @@ export type MealsDataContextType = {
   // re-throws on failure so the caller can surface its own error message.
   toggleFridgeItem: (ingredient: Ingredient) => Promise<void>;
   toggleFavorite: (recipeId: string) => void;
+  createNewRecipe: (recipe) => Promise<boolean | undefined>
 };
 
 export const mealsDataContext = createContext<MealsDataContextType | null>(null);
@@ -56,6 +58,8 @@ export const MealsDataProvider = ({ children }: MealsDataProviderProps) => {
         setFavoriteIds(new Set())
       })
   }, [user?.id])
+
+
 
   const toggleFavorite = useCallback(
     (recipeId: string) => {
@@ -95,6 +99,7 @@ export const MealsDataProvider = ({ children }: MealsDataProviderProps) => {
     }, [user?.id, favoriteIds]
   )
 
+
   const refreshCatalog = useCallback(() => {
     setCatalogLoading(true);
     setCatalogError("");
@@ -122,6 +127,22 @@ export const MealsDataProvider = ({ children }: MealsDataProviderProps) => {
       .finally(() => setFridgeLoading(false));
   }, [user?.id]);
 
+
+
+  const createNewRecipe = useCallback(
+    async (recipe) => {
+      if (!user?.id) return;
+      try {
+        const created = await createRecipe(user, recipe)
+        if (!created) return false
+        refreshCatalog()
+        return true
+      } catch (err) {
+        console.log("Error creating recipe: ", err)
+        return false
+      }
+    }, [user?.id, refreshCatalog]
+  )
   useEffect(refreshCatalog, []);
 
   useEffect(() => {
@@ -173,6 +194,7 @@ export const MealsDataProvider = ({ children }: MealsDataProviderProps) => {
     refreshFavorites,
     toggleFridgeItem,
     toggleFavorite,
+    createNewRecipe
   };
 
   return (

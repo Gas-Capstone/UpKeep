@@ -35,6 +35,7 @@ export default function MealsScreen() {
     refreshCatalog,
     refreshFridge,
     toggleFavorite,
+    createNewRecipe,
     toggleFridgeItem: toggleFridgeItemShared,
   } = useMealsData();
 
@@ -106,7 +107,9 @@ export default function MealsScreen() {
             visible={createModalVisible}
             onDismiss={() => setCreateModalVisible(false)}
             availableIngredients={ingredients}
-            onCreate={(recipe) => console.log("Created: ", recipe)}
+            onCreate={async (recipe) => {
+              await createNewRecipe(recipe);
+            }}
           />
         </>
       }>
