@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native";
-import { ActivityIndicator, Chip, Text } from "react-native-paper";
+import { ActivityIndicator, Chip, Text, Button } from "react-native-paper";
 
 import { HabitAnimatedFAB } from "@/components/habits/HabitAnimatedFAB";
 import { Center } from "@/components/ui/center";
@@ -11,12 +11,12 @@ import { styles } from "@/constants/styles";
 import { Spacing } from "@/constants/theme";
 import { useSession } from "@/hooks/use-session";
 import { useTheme } from "@/hooks/use-theme";
-import { Ingredient, matchRecipes } from "@/lib/meals/meals";
+import { Ingredient, matchRecipes, recipeKey, sortFavoritesFirst } from "@/lib/meals/meals";
 import { useMealsData } from "@/components/context/mealsDataContext";
 
 import { AddIngredientsModal } from "./AddIngredientsModal";
 import { RecipeCard } from "./RecipeCard";
-
+import { AddRecipeModal } from "./AddRecipeModal";
 const ERROR_COLOR = "#ff4d4f";
 
 export default function MealsScreen() {
@@ -30,17 +30,19 @@ export default function MealsScreen() {
     catalogLoading,
     catalogError,
     fridgeIds,
+    favoriteIds,
     fridgeLoading,
     refreshCatalog,
     refreshFridge,
+    toggleFavorite,
+    createNewRecipe,
     toggleFridgeItem: toggleFridgeItemShared,
   } = useMealsData();
 
   const [mutationError, setMutationError] = useState("");
   const [modalVisible, setModalVisible] = useState(false);
+  const [ createModalVisible, setCreateModalVisible ] = useState(false)
   const [fabExtended, setFabExtended] = useState(true);
-
-
 
   const ingredientName = (id: number) =>
     ingredients.find((i) => i.id === id)?.name ?? "Unknown";
@@ -59,15 +61,19 @@ export default function MealsScreen() {
 
   const fridgeItems = ingredients.filter((i) => fridgeIds.has(i.id));
 
+  const sortedRecipes = useMemo(
+    () => sortFavoritesFirst(recipes, favoriteIds),
+    [recipes, favoriteIds],
+  );
+
   const { ready, almost } = useMemo(
-    () => matchRecipes(recipes, fridgeIds),
-    [recipes, fridgeIds],
+    () => matchRecipes(sortedRecipes, fridgeIds),
+    [sortedRecipes, fridgeIds],
   );
 
   const onScroll = ({ nativeEvent }: NativeSyntheticEvent<NativeScrollEvent>) => {
     setFabExtended(nativeEvent.contentOffset.y <= 0);
   };
-
 
   if (!sessionLoading && !user) {
     return (
@@ -86,9 +92,9 @@ export default function MealsScreen() {
         <>
           <HabitAnimatedFAB
             extended={fabExtended}
-            label="Add ingredients"
+            label="Create recipe"
             visible={!sessionLoading && !catalogLoading && !catalogError}
-            onPress={() => setModalVisible(true)}
+            onPress={() => setCreateModalVisible(true)}
           />
           <AddIngredientsModal
             visible={modalVisible}
@@ -96,6 +102,14 @@ export default function MealsScreen() {
             ingredients={ingredients}
             selectedIds={fridgeIds}
             onToggle={toggleFridgeItem}
+          />
+          <AddRecipeModal
+            visible={createModalVisible}
+            onDismiss={() => setCreateModalVisible(false)}
+            availableIngredients={ingredients}
+            onCreate={async (recipe) => {
+              await createNewRecipe(recipe);
+            }}
           />
         </>
       }>
@@ -122,6 +136,13 @@ export default function MealsScreen() {
                     : `${fridgeItems.length} ${fridgeItems.length === 1 ? "item" : "items"}`}
                 </Text>
               </HStack>
+              <Button
+                mode="contained-tonal"
+                icon="plus"
+                onPress={() => setModalVisible(true)}
+              >
+                Add Ingredients
+              </Button>
 
               {fridgeItems.length > 0 ? (
                 <HStack space="sm" style={{ flexWrap: "wrap" }}>
@@ -149,11 +170,11 @@ export default function MealsScreen() {
               {ready.length > 0 ? (
                 ready.map(({ recipe, missingIds }) => (
                   <RecipeCard
-                    key={recipe.id}
-                    name={recipe.name}
-                    prepTimeMin={recipe.prepTimeMin}
+                    key={recipeKey(recipe)}
                     missingNames={missingIds.map(ingredientName)}
-                    totalIngredients={recipe.ingredientIds.length}
+                    recipe={recipe}
+                    isFavorited={favoriteIds.has(recipeKey(recipe))}
+                    onToggleFavorite={() => toggleFavorite(recipe)}
                   />
                 ))
               ) : (
@@ -168,11 +189,11 @@ export default function MealsScreen() {
               {almost.length > 0 ? (
                 almost.map(({ recipe, missingIds }) => (
                   <RecipeCard
-                    key={recipe.id}
-                    name={recipe.name}
-                    prepTimeMin={recipe.prepTimeMin}
+                    key={recipeKey(recipe)}
                     missingNames={missingIds.map(ingredientName)}
-                    totalIngredients={recipe.ingredientIds.length}
+                    recipe={recipe}
+                    isFavorited={favoriteIds.has(recipeKey(recipe))}
+                    onToggleFavorite={() => toggleFavorite(recipe)}
                   />
                 ))
               ) : (

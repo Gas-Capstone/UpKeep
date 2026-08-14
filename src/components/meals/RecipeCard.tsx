@@ -1,30 +1,52 @@
-import { Card, Text } from "react-native-paper";
+import { useState } from "react";
+import { Card, Text, IconButton, useTheme } from "react-native-paper";
 
-import { useTheme } from "@/hooks/use-theme";
-
-const READY_COLOR = "#4CAF50";
-
+import type { AppTheme } from "@/constants/paper-theme";
+import type { Recipe } from "@/lib/meals/meals";
 type RecipeCardProps = {
-  name: string;
-  prepTimeMin: number;
-  missingNames: string[];
-  totalIngredients: number;
+  recipe: Recipe,
+  isFavorited: boolean,
+  missingNames: String[],
+  onToggleFavorite: () => void
 };
 
-export function RecipeCard({ name, prepTimeMin, missingNames, totalIngredients }: RecipeCardProps) {
-  const theme = useTheme();
+export function RecipeCard({ missingNames, recipe, onToggleFavorite, isFavorited }: RecipeCardProps) {
+  const theme = useTheme<AppTheme>();
   const ready = missingNames.length === 0;
 
   return (
     <Card mode="contained">
       <Card.Title
-        title={name}
-        subtitle={`${prepTimeMin} min`}
+        title={recipe.name}
+        subtitle={
+          recipe.prepTimeMin
+            ? `${recipe.prepTimeMin} min`
+            : "Prep time not set"
+        }
+        right={() => (
+          <IconButton
+            icon={isFavorited ? "star" : "star-outline"}
+            iconColor={
+              isFavorited ? theme.colors.primary : theme.colors.onSurfaceVariant
+            }
+            size={22}
+            onPress={onToggleFavorite}
+            accessibilityLabel={
+              isFavorited
+                ? `Remove ${recipe.name} from favorites`
+                : `Add ${recipe.name} to favorites`
+            }
+          />
+        )}
       />
       <Card.Content>
-        <Text style={{ color: ready ? READY_COLOR : theme.accentMeals }}>
+        <Text
+          style={{
+            color: ready ? theme.colors.success : theme.colors.accentMeals,
+          }}
+        >
           {ready
-            ? `You have all ${totalIngredients} ingredients`
+            ? `You have all ${recipe.ingredientIds.length} ingredients`
             : `Need ${missingNames.length}: ${missingNames.join(", ")}`}
         </Text>
       </Card.Content>

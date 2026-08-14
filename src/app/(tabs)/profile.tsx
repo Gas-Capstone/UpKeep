@@ -98,7 +98,7 @@ export default function ProfileScreen() {
         }}
       >
         <Text variant="headlineSmall">
-          {profileLoading ? "..." : profile?.name || "No name set"}
+          {profileLoading ? "..." : profile?.display_name || "No name set"}
         </Text>
 
         <Text variant="bodyMedium">{user?.email || "No email found"}</Text>

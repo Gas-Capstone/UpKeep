@@ -15,7 +15,13 @@ export type Recipe = {
   name: string;
   prepTimeMin: number;
   ingredientIds: number[];
+  isCustom: boolean;
 };
+
+/** Catalog and custom recipes have independent numeric ids — never mix them as one key. */
+export function recipeKey(recipe: Pick<Recipe, "id" | "isCustom">): string {
+  return recipe.isCustom ? `custom:${recipe.id}` : `catalog:${recipe.id}`;
+}
 
 export type RecipeMatch = {
   recipe: Recipe;
@@ -100,4 +106,15 @@ export function matchRecipes(recipes: Recipe[], fridge: ReadonlySet<number>) {
   }
 
   return { ready, almost };
+}
+
+export function sortFavoritesFirst(
+  recipes: Recipe[],
+  favoriteIds: Set<string>,
+): Recipe[] {
+  return [...recipes].sort((a, b) => {
+    const aFav = favoriteIds.has(recipeKey(a)) ? 1 : 0
+    const bFav = favoriteIds.has(recipeKey(b)) ? 1 : 0
+    return bFav - aFav
+  })
 }
