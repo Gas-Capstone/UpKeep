@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": [
+    "src/app/(tabs)/index.tsx",
+    "src/lib/wellnessScore.ts"
+  ]
+}
