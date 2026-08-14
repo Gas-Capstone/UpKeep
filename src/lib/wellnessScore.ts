@@ -204,7 +204,7 @@ export type NutrientGapStats = {
 
 export function getNutrientGapStats(
   ingredients: Ingredient[],
-  fridgeIds: ReadonlySet<number>,
+  fridgeIds: ReadonlySet<string>,
 ): NutrientGapStats {
   const byCategory = new Map<string, Ingredient[]>();
   for (const ingredient of ingredients) {

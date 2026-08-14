@@ -1,9 +1,10 @@
 import React, { createContext, useCallback, useContext, useState, useEffect } from "react";
-import { Ingredient, Recipe, recipeKey } from "@/lib/meals/meals";
+import { FridgeEntry, Ingredient, Recipe, recipeKey } from "@/lib/meals/meals";
 import {
   addFridgeItem,
-  fetchFridgeItemIds,
+  fetchFridgeItems,
   fetchIngredients,
+  saveFridgeItems,
   fetchRecipes,
   removeFridgeItem,
   fetchFavoriteRecipes,
@@ -25,9 +26,15 @@ export type MealsDataContextType = {
   recipes: Recipe[];
   catalogLoading: boolean;
   catalogError: string;
-  fridgeIds: ReadonlySet<number>;
+  fridgeIds: ReadonlySet<string>;
+  // Quantities keyed by ingredient id. fridgeIds is kept alongside it because
+  // recipe matching only cares about presence, not amounts.
+  fridgeEntries: ReadonlyMap<string, FridgeEntry>;
   fridgeLoading: boolean;
   favoriteIds: Set<string>;
+  // Batch write of the whole fridge. Throws on failure so the caller can
+  // surface it; state is updated from the saved draft on success.
+  saveFridge: (entries: ReadonlyMap<string, FridgeEntry>) => Promise<void>;
   refreshCatalog: () => void;
   refreshFridge: () => void;
   refreshFavorites: () => void;
@@ -51,7 +58,10 @@ export const MealsDataProvider = ({ children }: MealsDataProviderProps) => {
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set())
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState("");
-  const [fridgeIds, setFridgeIds] = useState<ReadonlySet<number>>(new Set());
+  const [fridgeIds, setFridgeIds] = useState<ReadonlySet<string>>(new Set());
+  const [fridgeEntries, setFridgeEntries] = useState<ReadonlyMap<string, FridgeEntry>>(
+    new Map(),
+  );
   const [fridgeLoading, setFridgeLoading] = useState(false);
   
   const refreshFavorites = useCallback(() => {
@@ -139,17 +149,43 @@ export const MealsDataProvider = ({ children }: MealsDataProviderProps) => {
   const refreshFridge = useCallback(() => {
     if (!user?.id) {
       setFridgeIds(new Set());
+      setFridgeEntries(new Map());
       return;
     }
     setFridgeLoading(true);
-    fetchFridgeItemIds(user.id)
-      .then((ids) => setFridgeIds(new Set(ids)))
+    fetchFridgeItems(user.id)
+      .then((entries) => {
+        setFridgeEntries(entries);
+        setFridgeIds(new Set(entries.keys()));
+      })
       .catch(() => {
         // MealsScreen surfaces this via its own error state today; keep
         // this context focused on data, not UI error messaging.
       })
       .finally(() => setFridgeLoading(false));
   }, [user?.id]);
+
+  // Diffs the draft against what's loaded and writes both sides in one pass.
+  const saveFridge = useCallback(
+    async (entries: ReadonlyMap<string, FridgeEntry>) => {
+      if (!user?.id) return;
+
+      const items = [...entries].map(([ingredientId, entry]) => ({
+        ingredientId,
+        quantity: entry.quantity,
+        unit: entry.unit,
+      }));
+      const removedIngredientIds = [...fridgeEntries.keys()].filter(
+        (id) => !entries.has(id),
+      );
+
+      await saveFridgeItems(user.id, items, removedIngredientIds);
+
+      setFridgeEntries(new Map(entries));
+      setFridgeIds(new Set(entries.keys()));
+    },
+    [user?.id, fridgeEntries],
+  );
 
 
 
@@ -185,23 +221,30 @@ export const MealsDataProvider = ({ children }: MealsDataProviderProps) => {
       const id = ingredient.id;
       const had = fridgeIds.has(id);
 
-      setFridgeIds((prev) => {
-        const next = new Set(prev);
-        if (had) next.delete(id);
-        else next.add(id);
-        return next;
-      });
+      // Keep fridgeEntries in step with fridgeIds — a toggle-on defaults to a
+      // quantity of 1 in the catalog unit, matching what addFridgeItem writes.
+      const applyLocal = (present: boolean) => {
+        setFridgeIds((prev) => {
+          const next = new Set(prev);
+          if (present) next.add(id);
+          else next.delete(id);
+          return next;
+        });
+        setFridgeEntries((prev) => {
+          const next = new Map(prev);
+          if (present) next.set(id, prev.get(id) ?? { quantity: 1, unit: ingredient.unit });
+          else next.delete(id);
+          return next;
+        });
+      };
+
+      applyLocal(!had);
 
       try {
         if (had) await removeFridgeItem(userId, id);
         else await addFridgeItem(userId, id);
       } catch (error) {
-        setFridgeIds((prev) => {
-          const next = new Set(prev);
-          if (had) next.add(id);
-          else next.delete(id);
-          return next;
-        });
+        applyLocal(had);
         throw error;
       }
     },
@@ -214,8 +257,10 @@ export const MealsDataProvider = ({ children }: MealsDataProviderProps) => {
     catalogLoading,
     catalogError,
     fridgeIds,
+    fridgeEntries,
     favoriteIds,
     fridgeLoading,
+    saveFridge,
     refreshCatalog,
     refreshFridge,
     refreshFavorites,

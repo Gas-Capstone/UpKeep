@@ -32,7 +32,15 @@ type TabConfig = {
   href: TabHref;
   label: string;
   icon: string;
-  hidden?: boolean;
+  // "bar"      — shown in the bottom bar (default).
+  // "hidden"   — route lives in (tabs) and still needs a TabTrigger to stay
+  //              navigable, but isn't drawn in the bar. Per the expo-router
+  //              docs, not rendering a trigger removes the route and its
+  //              navigation state entirely.
+  // "external" — route lives outside (tabs); listed only so the top badge can
+  //              label it. Rendering a trigger for it would point at a tab
+  //              route that doesn't exist.
+  placement?: "bar" | "hidden" | "external";
 };
 
 const TABS: TabConfig[] = [
@@ -51,7 +59,22 @@ const TABS: TabConfig[] = [
     href: "/settings",
     label: "Settings",
     icon: "cog",
-    hidden: true,
+    placement: "external",
+  },
+  // Reached from the Meals page, not the bottom bar.
+  {
+    name: "grocery",
+    href: "/grocery",
+    label: "Grocery list",
+    icon: "cart-outline",
+    placement: "hidden",
+  },
+  {
+    name: "mealplan",
+    href: "/mealplan",
+    label: "Meal plan",
+    icon: "calendar-month",
+    placement: "hidden",
   },
 ];
 
@@ -70,16 +93,32 @@ export default function AppTabs() {
         <TabSlot style={{ height: "100%" }} />
         <TabList asChild>
           <BottomBar>
-            {TABS.filter((t) => !t.hidden).map((tab) => (
-              <TabTrigger
-                key={tab.name}
-                name={tab.name}
-                href={tab.href}
-                asChild
-              >
-                <TabIcon tab={tab} />
-              </TabTrigger>
-            ))}
+            {TABS.filter((t) => t.placement !== "external").map((tab) =>
+              tab.placement === "hidden" ? (
+                // Absolutely positioned so it keeps the route registered
+                // without taking a slot in the bar's space-evenly layout.
+                <TabTrigger
+                  key={tab.name}
+                  name={tab.name}
+                  href={tab.href}
+                  asChild
+                >
+                  <View
+                    style={{ position: "absolute", width: 0, height: 0 }}
+                    pointerEvents="none"
+                  />
+                </TabTrigger>
+              ) : (
+                <TabTrigger
+                  key={tab.name}
+                  name={tab.name}
+                  href={tab.href}
+                  asChild
+                >
+                  <TabIcon tab={tab} />
+                </TabTrigger>
+              ),
+            )}
           </BottomBar>
         </TabList>
       </Tabs>
