@@ -12,6 +12,6 @@
     "resolveJsonModule": true,
     "lib": ["ESNext", "DOM"]
   },
-  "include": [".vitepress/**/*", "docs/**/*"],
+  "include": [".vitepress/**/*", "docs/**/*", "posts.data.ts"],
   "exclude": ["node_modules", ".vitepress/dist", ".vitepress/cache"]
 }

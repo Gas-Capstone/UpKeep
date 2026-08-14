@@ -28,6 +28,8 @@ npx expo start
 ## Features
 ###  Current features
 - Authentication via email/password
+- After first login/registration, asks for information such as display name, profile pic, and date of birth then never asks again
+- If it is your birthday, displays happy birthday message as an alert.
 - Home page displaying information from the various pages in the app
 - Workouts page with a list of workouts, and the ability to time each workout
 	- Workouts can be set as complete via the timer page
@@ -38,6 +40,7 @@ npx expo start
   	- Users can create a weekly mealplan
 - Habits page allows you to create, schedule, and keep track of habits you want to keep
 	- Habits can be scheduled for separate weekdays (i.e. only M/W/F)
+ - Settings page allows changing of display name, profile picture, date of birth, and switch between light and dark modes
 ### Planned features
 - Integrate habits page with backend
 - Add more features to profile page such as name change, profile picture

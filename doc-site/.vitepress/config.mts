@@ -3,7 +3,7 @@ import { defineConfig } from "vitepress";
 export default defineConfig({
   srcDir: "docs",
   title: "UpKeep",
-  description: "Documentation for UpKeep",
+  description: "Development blog for UpKeep",
   base: "/UpKeep/",
   vite: {
     css: {
@@ -14,29 +14,18 @@ export default defineConfig({
   },
   themeConfig: {
     nav: [
-      { text: "Home", link: "/" },
-      { text: "Getting started", link: "/getting-started" },
-      { text: "Features", link: "/features" },
-      { text: "Development blog", link: "/features-blog/" },
+      { text: "Development blog", link: "/" },
     ],
-    sidebar: {
-      "/features-blog/": [
+    sidebar: [
         {
-          text: "Features blog",
-          items: [{ text: "Index", link: "/features-blog/" }],
-        },
-      ],
-      "/": [
-        {
-          text: "Guide",
+          text: "Development blog",
           items: [
-            { text: "Getting started", link: "/getting-started" },
-            { text: "Features", link: "/features" },
-            { text: "Development blog", link: "/features-blog/" },
+            { text: "Index", link: "/" },
+            { text: "July 27, 2026", link: "/posts/07-27-2026/"},
+            { text: "August 14, 2026", link: "/posts/08-14-2026"}
           ],
         },
       ],
-    },
     socialLinks: [
       { icon: "github", link: "https://github.com/Gas-Capstone/UpKeep" },
     ],

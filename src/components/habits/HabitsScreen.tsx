@@ -16,6 +16,8 @@ import { AddHabitModal } from "./AddHabitModal";
 import { ScreenView } from "../ui/ScreenView";
 import { Spacing, TopBadgeInset } from "@/constants/theme";
 import { useHabitsContext } from "../context/habitsContext";
+import { createHabit, getHabitsByUser, getCompletedHabitsByUser, deleteHabit } from "@/lib/supabaseFunctions";
+import { useUserContext } from "../context/userContext";
 
 export default function HabitsScreen() {
   // habit state now lives in habitsContext so index.tsx can read the same data.
@@ -28,9 +30,11 @@ export default function HabitsScreen() {
     removeHabit,
     toggleHabit,
   } = useHabitsContext();
+  const { user } = useUserContext()
+  const [ habitsList, setHabitsList ] = useState([])
+  const [ completedHabits, setCompletedHabits ] = useState([])
   const [fabExtended, setFabExtended] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
-
   const habitsForDay = getHabitsForDate(habitArray, selectedDate);
   const habitNumber = habitsForDay.length;
   // use .filter to grab number of habits complete based on result of isHabitDone() for given habit
@@ -81,8 +85,8 @@ export default function HabitsScreen() {
       >
         <VStack space="md" style={{ alignSelf: "stretch" }}>
         {habitsForDay.length !== 0 &&
-          habitsForDay.map((habit) => (
-            <HabitCard
+          habitsForDay.map((habit) => {
+            return ( <HabitCard
               key={habit.id}
               title={habit.title}
               time={habit.time}
@@ -92,7 +96,8 @@ export default function HabitsScreen() {
               }
               onDelete={() => removeHabit(habit.id)}
             />
-          ))}
+            )
+          })}
         {habitsForDay.length === 0 && (
           <Center>
             <Text>No habits for today...</Text>

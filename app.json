@@ -1,9 +1,9 @@
 {
   "expo": {
-    "name": "Wellness-App",
+    "name": "UpKeep",
     "slug": "Wellness-App",
     "owner": "team-gas",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "wellnessapp",
@@ -19,7 +19,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.tbraud03.WellnessApp"
+      "package": "com.gas.upkeep"
     },
     "web": {
       "output": "static",

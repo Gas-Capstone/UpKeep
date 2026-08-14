@@ -2,22 +2,88 @@
 // whether Ingredient/Recipe data came from Supabase or a test fixture — see
 // queries.ts for the Supabase reads/writes that feed this.
 
+// Ids throughout this module are uuids in the database, so they're strings —
+// never parse one as a number, which silently yields NaN and matches nothing.
 export type Ingredient = {
-  id: number;
+  id: string;
   name: string;
   category: string;
+  calories: number; // kcal per unit (see unit)
+  // The `unit_type` column was renamed to `unit`, so this is a straight
+  // passthrough now rather than a camelCase mapping.
+  unit: string; // e.g. "lb", "cup", "oz"
+};
+
+// One line of the user's fridge: how much of an ingredient they have. The unit
+// is stored per fridge row rather than read back off the catalog, so changing a
+// catalog unit later can't silently reinterpret quantities already saved.
+export type FridgeEntry = {
+  quantity: number;
+  unit: string;
+};
+
+// Mirrors the check constraint on grocery_items.source.
+export type GrocerySource = "manual" | "recipe" | "meal_plan";
+
+// A grocery list row. Either ingredient_id or custom_name is set — the table
+// has a check constraint requiring at least one — so the display name falls
+// back to custom_name when the item isn't a catalog ingredient.
+export type GroceryItem = {
+  id: string;
+  ingredientId: string | null;
+  customName: string | null;
+  quantity: number | null;
+  unit: string | null;
+  checked: boolean;
+  source: GrocerySource;
 };
 
 export type Recipe = {
-  id: number;
+  id: string;
   name: string;
   prepTimeMin: number;
-  ingredientIds: number[];
+  ingredientIds: string[];
+  isCustom: boolean;
 };
+
+// Everything the recipe page shows, from whichever table the recipe lives in.
+export type RecipeDetail = {
+  id: string;
+  name: string;
+  prepTimeMin: number | null;
+  calories: number | null;
+  proteinG: number | null;
+  instructions: string | null;
+  isCustom: boolean;
+  ingredients: {
+    ingredientId: string;
+    quantity: number | null;
+    unit: string | null;
+  }[];
+};
+
+/**
+ * Splits the single `instructions` column into steps — one per line.
+ *
+ * Leading "1." / "2)" / "-" markers are stripped because the list renders its
+ * own numbering; leaving them would double it up.
+ */
+export function parseInstructionSteps(instructions: string | null): string[] {
+  if (!instructions) return [];
+  return instructions
+    .split(/\r?\n/)
+    .map((line) => line.trim().replace(/^(\d+[.)]|[-*•])\s*/, "").trim())
+    .filter((line) => line !== "");
+}
+
+/** Catalog and custom recipes have independent id spaces — never mix them as one key. */
+export function recipeKey(recipe: Pick<Recipe, "id" | "isCustom">): string {
+  return recipe.isCustom ? `custom:${recipe.id}` : `catalog:${recipe.id}`;
+}
 
 export type RecipeMatch = {
   recipe: Recipe;
-  missingIds: number[];
+  missingIds: string[];
 };
 
 export type IngredientGroup = {
@@ -84,11 +150,11 @@ export function groupIngredientsByCategory(ingredients: Ingredient[]): Ingredien
   }));
 }
 
-export function getMissingIngredientIds(recipe: Recipe, fridge: ReadonlySet<number>): number[] {
+export function getMissingIngredientIds(recipe: Recipe, fridge: ReadonlySet<string>): string[] {
   return recipe.ingredientIds.filter((id) => !fridge.has(id));
 }
 
-export function matchRecipes(recipes: Recipe[], fridge: ReadonlySet<number>) {
+export function matchRecipes(recipes: Recipe[], fridge: ReadonlySet<string>) {
   const ready: RecipeMatch[] = [];
   const almost: RecipeMatch[] = [];
 
@@ -98,4 +164,15 @@ export function matchRecipes(recipes: Recipe[], fridge: ReadonlySet<number>) {
   }
 
   return { ready, almost };
+}
+
+export function sortFavoritesFirst(
+  recipes: Recipe[],
+  favoriteIds: Set<string>,
+): Recipe[] {
+  return [...recipes].sort((a, b) => {
+    const aFav = favoriteIds.has(recipeKey(a)) ? 1 : 0
+    const bFav = favoriteIds.has(recipeKey(b)) ? 1 : 0
+    return bFav - aFav
+  })
 }
