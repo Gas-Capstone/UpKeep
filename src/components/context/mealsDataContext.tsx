@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useState, useEffect } from "react";
-import { Ingredient, Recipe } from "@/lib/meals/meals";
+import { Ingredient, Recipe, recipeKey } from "@/lib/meals/meals";
 import {
   addFridgeItem,
   fetchFridgeItemIds,
@@ -74,31 +74,31 @@ export const MealsDataProvider = ({ children }: MealsDataProviderProps) => {
   const toggleFavorite = useCallback(
     (recipe: Recipe) => {
       if (!user?.id) return;
-      const recipeId = String(recipe.id);
-      const wasFavorited = favoriteIds.has(recipeId);
+      const key = recipeKey(recipe);
+      const wasFavorited = favoriteIds.has(key);
       
       setFavoriteIds((prev) => {
         const next = new Set(prev)
-        if (wasFavorited) next.delete(recipeId)
-        else next.add(recipeId)
+        if (wasFavorited) next.delete(key)
+        else next.add(key)
         return next
       })
 
       const write = wasFavorited
         ? recipe.isCustom
-          ? removeCustomFavoriteRecipe(user, recipeId)
-          : removeFavoriteRecipe(user, recipeId)
+          ? removeCustomFavoriteRecipe(user, recipe.id)
+          : removeFavoriteRecipe(user, recipe.id)
         : recipe.isCustom
-          ? addCustomFavoriteRecipe(user, recipeId)
-          : addFavoriteRecipe(user, recipeId)
+          ? addCustomFavoriteRecipe(user, recipe.id)
+          : addFavoriteRecipe(user, recipe.id)
 
       write
         .then((res) => {
           if (res) return
           setFavoriteIds((prev) => {
             const next = new Set(prev)
-            if (wasFavorited) next.add(recipeId)
-              else next.delete(recipeId)
+            if (wasFavorited) next.add(key)
+              else next.delete(key)
             return next
           })
         })
@@ -106,8 +106,8 @@ export const MealsDataProvider = ({ children }: MealsDataProviderProps) => {
           console.log("Error toggling favorite recipe: ", err)
           setFavoriteIds((prev) => {
             const next = new Set(prev)
-            if (wasFavorited) next.add(recipeId)
-            else next.delete(recipeId)
+            if (wasFavorited) next.add(key)
+            else next.delete(key)
             return next
           })
         })

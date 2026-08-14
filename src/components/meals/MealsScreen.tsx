@@ -11,7 +11,7 @@ import { styles } from "@/constants/styles";
 import { Spacing } from "@/constants/theme";
 import { useSession } from "@/hooks/use-session";
 import { useTheme } from "@/hooks/use-theme";
-import { Ingredient, matchRecipes, sortFavoritesFirst } from "@/lib/meals/meals";
+import { Ingredient, matchRecipes, recipeKey, sortFavoritesFirst } from "@/lib/meals/meals";
 import { useMealsData } from "@/components/context/mealsDataContext";
 
 import { AddIngredientsModal } from "./AddIngredientsModal";
@@ -170,10 +170,10 @@ export default function MealsScreen() {
               {ready.length > 0 ? (
                 ready.map(({ recipe, missingIds }) => (
                   <RecipeCard
-                    key={recipe.id}
+                    key={recipeKey(recipe)}
                     missingNames={missingIds.map(ingredientName)}
                     recipe={recipe}
-                    isFavorited={favoriteIds.has(String(recipe.id))}
+                    isFavorited={favoriteIds.has(recipeKey(recipe))}
                     onToggleFavorite={() => toggleFavorite(recipe)}
                   />
                 ))
@@ -189,10 +189,10 @@ export default function MealsScreen() {
               {almost.length > 0 ? (
                 almost.map(({ recipe, missingIds }) => (
                   <RecipeCard
-                    key={recipe.id}
+                    key={recipeKey(recipe)}
                     missingNames={missingIds.map(ingredientName)}
                     recipe={recipe}
-                    isFavorited={favoriteIds.has(String(recipe.id))}
+                    isFavorited={favoriteIds.has(recipeKey(recipe))}
                     onToggleFavorite={() => toggleFavorite(recipe)}
                   />
                 ))

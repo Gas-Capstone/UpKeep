@@ -1,14 +1,13 @@
 import { supabase } from "@/lib/supabaseClient";
 
-import type { Ingredient, Recipe } from "./meals";
-import { SUPPORTED_TAB_BAR_ITEM_LABEL_VISIBILITY_MODES } from "expo-router/build/native-tabs/types";
+import { recipeKey, type Ingredient, type Recipe } from "./meals";
 
 type IngredientRow = {
   id: number;
   name: string;
   category: string;
   calories: number;
-  unit_type: string;
+  unit: string;
 };
 
 export async function fetchIngredients(): Promise<Ingredient[]> {
@@ -25,7 +24,7 @@ export async function fetchIngredients(): Promise<Ingredient[]> {
     name: row.name,
     category: row.category,
     calories: row.calories,
-    unitType: row.unit_type,
+    unitType: row.unit,
   }));
 }
 
@@ -133,7 +132,7 @@ export async function fetchFavoriteRecipes(user: { id: string }) {
     .select("recipe_id")
     .eq("user_id", user.id)
   if (error) console.log("Error fetching favorite recipes: ", error)
-  return (data ?? []).map((row) => String(row.recipe_id))
+  return (data ?? []).map((row) => recipeKey({ id: row.recipe_id, isCustom: false }))
 }
 
 export async function fetchCustomFavoriteRecipes(user: { id: string }) {
@@ -143,7 +142,7 @@ export async function fetchCustomFavoriteRecipes(user: { id: string }) {
     .eq("user_id", user.id);
 
   if (error) throw error;
-  return (data ?? []).map((row) => String(row.custom_recipe_id));
+  return (data ?? []).map((row) => recipeKey({ id: row.custom_recipe_id, isCustom: true }));
 }
 
 export async function addFavoriteRecipe(
