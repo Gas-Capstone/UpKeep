@@ -9,7 +9,7 @@ import { Ingredient, groupIngredientsByCategory } from "@/lib/meals/meals";
 
 type IngredientPickerProps = {
   ingredients: Ingredient[];
-  selectedIds: ReadonlySet<number>;
+  selectedIds: ReadonlySet<string>;
   onToggle: (ingredient: Ingredient) => void;
 };
 

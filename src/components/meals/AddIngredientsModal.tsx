@@ -12,7 +12,7 @@ type AddIngredientsModalProps = {
   visible: boolean;
   onDismiss: () => void;
   ingredients: Ingredient[];
-  selectedIds: ReadonlySet<number>;
+  selectedIds: ReadonlySet<string>;
   onToggle: (ingredient: Ingredient) => void;
 };
 

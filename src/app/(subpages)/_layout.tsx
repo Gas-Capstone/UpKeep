@@ -9,6 +9,10 @@ export default function SubpagesLayout() {
         name="workouttimer"
         options={{ title: "Workout Timer", presentation: "card" }}
       />
+      <Stack.Screen
+        name="recipe"
+        options={{ title: "Recipe", presentation: "card" }}
+      />
     </Stack>
 
   );

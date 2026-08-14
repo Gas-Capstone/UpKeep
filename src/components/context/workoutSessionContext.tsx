@@ -1,6 +1,7 @@
 import { useState, useEffect, createContext, useContext } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import type { Workout } from "./workoutsDataContext";
+import type { ExerciseProgress } from "@/lib/workouts";
 
 type WorkoutSession = {
   workout: {
@@ -20,6 +21,14 @@ type WorkoutSession = {
 // Was previously `createContext(null)` with no generic, so every property access failed to type-check — giving it a real type fixes that.
 type WorkoutSessionContextType = {
   workoutSession: WorkoutSession | null;
+  // Per-exercise progress for the running session, keyed by workout id. Lives
+  // here rather than in the timer screen so it survives navigating away, and
+  // rather than in the database so a new session always starts clean.
+  exerciseProgress: ReadonlyMap<string, ExerciseProgress>;
+  setExerciseProgress: (workoutId: string, progress: ExerciseProgress) => void;
+  // Seeds any exercise not yet tracked; existing entries are left alone so
+  // this can run on every screen mount without wiping progress.
+  seedExerciseProgress: (exercises: { workoutId: string; sets: number }[]) => void;
   startSession: (workout: Workout, plannedDuration: number) => void;
   pauseSession: () => void;
   resumeSession: () => void;
@@ -40,8 +49,38 @@ const WorkoutSessionProvider = ({
   const [workoutSession, setWorkoutSession] = useState<WorkoutSession | null>(
     null,
   );
+  const [exerciseProgress, setExerciseProgressState] = useState<
+    ReadonlyMap<string, ExerciseProgress>
+  >(new Map());
+
+  const setExerciseProgress = (workoutId: string, progress: ExerciseProgress) => {
+    setExerciseProgressState((current) => new Map(current).set(workoutId, progress));
+  };
+
+  const seedExerciseProgress = (
+    exercises: { workoutId: string; sets: number }[],
+  ) => {
+    setExerciseProgressState((current) => {
+      const next = new Map(current);
+      let added = false;
+      for (const exercise of exercises) {
+        if (next.has(exercise.workoutId)) continue;
+        next.set(exercise.workoutId, {
+          setsRemaining: exercise.sets,
+          completed: false,
+        });
+        added = true;
+      }
+      // Returning the same reference when nothing changed keeps this from
+      // looping against effects that depend on the map.
+      return added ? next : current;
+    });
+  };
 
   const startSession = (workout: Workout, plannedDuration: number) => {
+    // A new workout starts from scratch — this is the reason progress isn't
+    // persisted per plan.
+    setExerciseProgressState(new Map());
     setWorkoutSession({
       workout: {
         id: workout.id,
@@ -107,6 +146,7 @@ const WorkoutSessionProvider = ({
 
   const clearSession = () => {
     setWorkoutSession(null);
+    setExerciseProgressState(new Map());
   };
 
   const getElapsedTime = () => {
@@ -125,6 +165,9 @@ const WorkoutSessionProvider = ({
 
   const contextValue: WorkoutSessionContextType = {
     workoutSession,
+    exerciseProgress,
+    setExerciseProgress,
+    seedExerciseProgress,
     startSession,
     completeSession,
     clearSession,

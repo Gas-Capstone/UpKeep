@@ -72,9 +72,11 @@ export async function createWorkoutPlan(
 }
 
 export async function setWorkoutComplete(user, workout, durationMin){
+    // The column is workout_plan_id, not workout_id — it was renamed alongside
+    // workouts -> workout_plans, and this insert was missed at the time.
     const {data, error} = await supabase
         .from("workout_sessions")
-        .insert({ user_id: user.id, workout_id: workout.id, duration_min: durationMin })
+        .insert({ user_id: user.id, workout_plan_id: workout.id, duration_min: durationMin })
     if (error) console.log("Error setting workout as complete: ", error)
 }
 
@@ -97,6 +99,29 @@ export async function getCompletedWorkouts(user){
         duration_min: session.duration_min,
         completed_at: session.completed_at,
         name: (session.workout_plans as any)?.name
+    }))
+}
+
+/* --------------
+    PLAN EXERCISES
+------------- */
+// The exercises that make up a plan, in the order they were arranged.
+export async function getPlanExercises(workoutPlanId: string) {
+    const {data, error} = await supabase
+        .from("workout_plan_workouts")
+        .select("workout_id, sets, reps, position, workouts ( name )")
+        .eq("workout_plan_id", workoutPlanId)
+        .order("position", { ascending: true })
+    if (error) {
+        console.log("Error fetching plan exercises: ", error)
+        return []
+    }
+    return (data ?? []).map((row: any) => ({
+        workoutId: String(row.workout_id),
+        name: row.workouts?.name ?? "Unknown exercise",
+        sets: row.sets ?? 0,
+        reps: row.reps ?? 0,
+        position: row.position ?? 0,
     }))
 }
 

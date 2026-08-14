@@ -221,7 +221,7 @@ export default function HomeScreen() {
   } = useContext(mealsDataContext) ?? {
     ingredients: [],
     recipes: [],
-    fridgeIds: new Set<number>(),
+    fridgeIds: new Set<string>(),
     catalogLoading: true,
   };
 

@@ -8,7 +8,7 @@ import type { Ingredient } from "@/lib/meals/meals"
 import { IngredientPicker } from "./IngredientPicker"
 
 type RecipeIngredientInput = {
-    ingredient_id: number,
+    ingredient_id: string,
 }
 
 export type CreateRecipeInput = {
@@ -33,7 +33,7 @@ export function AddRecipeModal({
 }: AddRecipeModalProps) {
     const [name, setName] = useState("")
     const [prepTime, setPrepTime] = useState("1")
-    const [selectedIds, setSelectedIds] = useState<ReadonlySet<number>>(new Set())
+    const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set())
     const [error, setError] = useState("")
     
     const handleDismiss = () => {
