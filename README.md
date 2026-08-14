@@ -34,14 +34,17 @@ npx expo start
 - Workouts page with a list of workouts, and the ability to time each workout
 	- Workouts can be set as complete via the timer page
 	- Completed workouts can be viewed from this page
+   	- Users can create their own workout plans
 - Meal planner page keeps track of ingredients you currently have, and suggests meals to make
+  	- Users can create their own recipes
+  	- Users can create a weekly mealplan
 - Habits page allows you to create, schedule, and keep track of habits you want to keep
 	- Habits can be scheduled for separate weekdays (i.e. only M/W/F)
  - Settings page allows changing of display name, profile picture, date of birth, and switch between light and dark modes
 ### Planned features
 - Integrate habits page with backend
-- Add ability to create custom recipes and workouts
-
+- Add more features to profile page such as name change, profile picture
+- Add multiple themes
 
 ## Known Issues
 - Meals page may fail to load after login 
