@@ -2,14 +2,30 @@ import { supabase } from "@/lib/supabaseClient";
 
 import type { Ingredient, Recipe } from "./meals";
 
+type IngredientRow = {
+  id: number;
+  name: string;
+  category: string;
+  calories: number;
+  unit_type: string;
+};
+
 export async function fetchIngredients(): Promise<Ingredient[]> {
   const { data, error } = await supabase
     .from("ingredients")
-    .select("id, name, category")
-    .order("name");
+    .select("id, name, category, calories, unit_type")
+    .order("name")
+    .returns<IngredientRow[]>();
 
   if (error) throw error;
-  return data;
+
+  return data.map((row) => ({
+    id: row.id,
+    name: row.name,
+    category: row.category,
+    calories: row.calories,
+    unitType: row.unit_type,
+  }));
 }
 
 type RecipeRow = {
