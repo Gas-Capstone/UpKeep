@@ -1,5 +1,7 @@
 module.exports = function (api) {
-  api.cache(true);
+  // Invalidate Babel's config cache when worklets changes so the plugin
+  // version stays in sync with the JS package (avoids 0.10.1 vs 0.10.0).
+  api.cache.using(() => require('react-native-worklets/package.json').version);
 
   return {
     presets: [['babel-preset-expo'], 'nativewind/babel'],
@@ -17,7 +19,6 @@ module.exports = function (api) {
           },
         },
       ],
-      'react-native-worklets/plugin',
     ],
   };
 };

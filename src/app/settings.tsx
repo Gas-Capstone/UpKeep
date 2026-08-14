@@ -1,4 +1,4 @@
-import { View, Image, Platform } from "react-native";
+import { View, Image, Platform, ScrollView, KeyboardAvoidingView } from "react-native";
 import { useColorScheme } from "react-native";
 import { router } from "expo-router";
 
@@ -306,7 +306,21 @@ export default function SettingsScreen() {
   }
 
   return (
-    <View className="flex-1 items-center justify-center px-6">
+    <KeyboardAvoidingView
+      className="flex-1"
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{
+          flexGrow: 1,
+          alignItems: "center",
+          justifyContent: "center",
+          paddingHorizontal: 24,
+          paddingVertical: 24,
+        }}
+        keyboardShouldPersistTaps="handled"
+      >
       <ThemedView
         type="backgroundElement"
         style={{
@@ -540,6 +554,7 @@ export default function SettingsScreen() {
 
         <Button onPress={() => router.back()}>Back</Button>
       </ThemedView>
-    </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }

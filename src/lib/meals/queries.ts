@@ -14,7 +14,7 @@ type IngredientRow = {
 export async function fetchIngredients(): Promise<Ingredient[]> {
   const { data, error } = await supabase
     .from("ingredients")
-    .select("id, name, category, calories, unit_type")
+    .select("id, name, category, calories, unit")
     .order("name")
     .returns<IngredientRow[]>();
 
