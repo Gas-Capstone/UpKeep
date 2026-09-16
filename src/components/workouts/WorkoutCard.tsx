@@ -1,3 +1,4 @@
+import { View } from "react-native";
 import { Card, Text, Button, Chip, IconButton, useTheme } from "react-native-paper";
 import { HStack } from "../ui/hstack";
 import { VStack } from "../ui/vstack";
@@ -29,21 +30,15 @@ export function WorkoutCard({
     <Card mode="contained" style={{ width: "100%", alignSelf: "stretch" }}>
       <Card.Title
         title={<Text variant="titleMedium">{workout.name}</Text>}
-        // Card.Title's `right` slot puts the star in the card's top-right
-        // corner without absolute positioning fighting the title layout.
+        // Card.Title's `right` slot puts this in the card's top-right corner
+        // without absolute positioning fighting the title layout. Menu is a
+        // placeholder for now — no handler wired up yet.
         right={() => (
           <IconButton
-            icon={isFavorited ? "star" : "star-outline"}
-            iconColor={
-              isFavorited ? theme.colors.primary : theme.colors.onSurfaceVariant
-            }
+            icon="menu"
             size={22}
-            onPress={onToggleFavorite}
-            accessibilityLabel={
-              isFavorited
-                ? `Remove ${workout.name} from favorites`
-                : `Add ${workout.name} to favorites`
-            }
+            iconColor={theme.colors.onSurfaceVariant}
+            accessibilityLabel={`More options for ${workout.name}`}
           />
         )}
       />
@@ -65,7 +60,34 @@ export function WorkoutCard({
         </HStack>
       </Card.Content>
       <Card.Actions>
-        <Button onPress={onPress}>Start Workout</Button>
+        {/* Card.Actions right-aligns its children, so this row spans the full
+            width to hold the star at the left edge while Start Workout stays
+            right. */}
+        <View
+          style={{
+            flex: 1,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <IconButton
+            icon={isFavorited ? "star" : "star-outline"}
+            iconColor={
+              isFavorited ? theme.colors.primary : theme.colors.onSurfaceVariant
+            }
+            size={22}
+            style={{ margin: 0 }}
+            onPress={onToggleFavorite}
+            accessibilityLabel={
+              isFavorited
+                ? `Remove ${workout.name} from favorites`
+                : `Add ${workout.name} to favorites`
+            }
+          />
+
+          <Button onPress={onPress}>Start Workout</Button>
+        </View>
       </Card.Actions>
     </Card>
   );

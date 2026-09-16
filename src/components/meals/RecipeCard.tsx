@@ -11,8 +11,6 @@ type RecipeCardProps = {
   // Queues this recipe's missing ingredients onto the grocery list.
   onQuickAdd?: () => void;
   adding?: boolean;
-  // Opens the day/meal picker to place this recipe on the plan.
-  onAddToPlan?: () => void;
   // Opens the full recipe page.
   onOpen?: () => void;
 };
@@ -24,7 +22,6 @@ export function RecipeCard({
   isFavorited,
   onQuickAdd,
   adding = false,
-  onAddToPlan,
   onOpen,
 }: RecipeCardProps) {
   const theme = useTheme<AppTheme>();
@@ -41,19 +38,16 @@ export function RecipeCard({
             ? `${recipe.prepTimeMin} min`
             : "Prep time not set"
         }
+        // Menu is a placeholder for now. The no-op press is deliberate: the
+        // whole Card is pressable, so without its own handler a tap here would
+        // fall through and open the recipe page.
         right={() => (
           <IconButton
-            icon={isFavorited ? "star" : "star-outline"}
-            iconColor={
-              isFavorited ? theme.colors.primary : theme.colors.onSurfaceVariant
-            }
+            icon="menu"
             size={22}
-            onPress={onToggleFavorite}
-            accessibilityLabel={
-              isFavorited
-                ? `Remove ${recipe.name} from favorites`
-                : `Add ${recipe.name} to favorites`
-            }
+            iconColor={theme.colors.onSurfaceVariant}
+            onPress={() => {}}
+            accessibilityLabel={`More options for ${recipe.name}`}
           />
         )}
       />
@@ -68,50 +62,48 @@ export function RecipeCard({
             : `Need ${missingNames.length}: ${missingNames.join(", ")}`}
         </Text>
       </Card.Content>
-      {(onQuickAdd || onAddToPlan) && (
-        <Card.Actions>
-          {/* Card.Actions right-aligns its children, so this row spans the
-              full width to push "Add to plan" to the left edge while Quick
-              add stays on the right. */}
-          <View
-            style={{
-              flex: 1,
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
-            {onAddToPlan ? (
-              <Button
-                mode="outlined"
-                icon="calendar-plus"
-                onPress={onAddToPlan}
-                style={{ borderRadius: 999 }}
-                accessibilityLabel={`Add ${recipe.name} to meal plan`}
-              >
-                Add to plan
-              </Button>
-            ) : (
-              // Keeps Quick add hard right when there's no left-hand button.
-              <View />
-            )}
+      <Card.Actions>
+        {/* Card.Actions right-aligns its children, so this row spans the full
+            width to hold the star at the left edge while Quick add stays
+            right. */}
+        <View
+          style={{
+            flex: 1,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <IconButton
+            icon={isFavorited ? "star" : "star-outline"}
+            iconColor={
+              isFavorited ? theme.colors.primary : theme.colors.onSurfaceVariant
+            }
+            size={22}
+            style={{ margin: 0 }}
+            onPress={onToggleFavorite}
+            accessibilityLabel={
+              isFavorited
+                ? `Remove ${recipe.name} from favorites`
+                : `Add ${recipe.name} to favorites`
+            }
+          />
 
-            {onQuickAdd && (
-              <Button
-                mode="contained"
-                icon="plus"
-                loading={adding}
-                disabled={adding}
-                onPress={onQuickAdd}
-                style={{ borderRadius: 999 }}
-                accessibilityLabel={`Add missing ingredients for ${recipe.name} to grocery list`}
-              >
-                Quick add
-              </Button>
-            )}
-          </View>
-        </Card.Actions>
-      )}
+          {onQuickAdd && (
+            <Button
+              mode="contained"
+              icon="plus"
+              loading={adding}
+              disabled={adding}
+              onPress={onQuickAdd}
+              style={{ borderRadius: 999 }}
+              accessibilityLabel={`Add missing ingredients for ${recipe.name} to grocery list`}
+            >
+              Quick add
+            </Button>
+          )}
+        </View>
+      </Card.Actions>
     </Card>
   );
 }

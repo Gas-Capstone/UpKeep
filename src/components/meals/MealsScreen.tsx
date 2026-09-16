@@ -13,11 +13,10 @@ import { Spacing, TopBadgeInset } from "@/constants/theme";
 import { useSession } from "@/hooks/use-session";
 import { useTheme } from "@/hooks/use-theme";
 import { Ingredient, Recipe, matchRecipes, recipeKey, sortFavoritesFirst } from "@/lib/meals/meals";
-import { addRecipeToGroceryList, setMealPlanEntry } from "@/lib/meals/queries";
+import { addRecipeToGroceryList } from "@/lib/meals/queries";
 import { useMealsData } from "@/components/context/mealsDataContext";
 
 import { AddIngredientsModal } from "./AddIngredientsModal";
-import { AddToMealPlanModal } from "./AddToMealPlanModal";
 import { FridgeModal } from "./FridgeModal";
 import { RecipeCard } from "./RecipeCard";
 import { AddRecipeModal } from "./AddRecipeModal";
@@ -50,8 +49,6 @@ export default function MealsScreen() {
   const [ createModalVisible, setCreateModalVisible ] = useState(false)
   const [fabExtended, setFabExtended] = useState(true);
   const [fridgeModalVisible, setFridgeModalVisible] = useState(false);
-  // Recipe queued for the meal plan, or null when the picker is closed.
-  const [planRecipe, setPlanRecipe] = useState<Recipe | null>(null);
   // Recipe currently being queued, so only that card shows a spinner.
   const [addingKey, setAddingKey] = useState<string | null>(null);
 
@@ -194,14 +191,6 @@ export default function MealsScreen() {
             entries={fridgeEntries}
             onSave={saveFridge}
           />
-          <AddToMealPlanModal
-            visible={planRecipe !== null}
-            onDismiss={() => setPlanRecipe(null)}
-            recipeName={planRecipe?.name ?? ""}
-            onConfirm={(plannedDate, mealType) =>
-              setMealPlanEntry(user!.id, planRecipe!, plannedDate, mealType)
-            }
-          />
         </>
       }>
       <VStack style={styles.columnContainer} space="md">
@@ -234,7 +223,6 @@ export default function MealsScreen() {
                     onToggleFavorite={() => toggleFavorite(recipe)}
                     onQuickAdd={() => quickAdd(recipe)}
                     adding={addingKey === recipeKey(recipe)}
-                    onAddToPlan={() => setPlanRecipe(recipe)}
                     onOpen={() => openRecipe(recipe)}
                   />
                 ))
@@ -257,7 +245,6 @@ export default function MealsScreen() {
                     onToggleFavorite={() => toggleFavorite(recipe)}
                     onQuickAdd={() => quickAdd(recipe)}
                     adding={addingKey === recipeKey(recipe)}
-                    onAddToPlan={() => setPlanRecipe(recipe)}
                     onOpen={() => openRecipe(recipe)}
                   />
                 ))
