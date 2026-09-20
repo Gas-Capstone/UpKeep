@@ -15,6 +15,7 @@ import { MealsDataProvider } from "@/components/context/mealsDataContext";
 import { ProfileDataProvider } from "@/components/context/profileDataContext";
 import { GluestackUIProvider } from "@/components/ui/gluestack-ui-provider";
 import { paperDarkTheme, paperLightTheme } from "@/constants/paper-theme";
+import "@/lib/notifications";
 import "@/global.css";
 
 SplashScreen.preventAutoHideAsync();
