@@ -5,6 +5,7 @@ import { format } from "date-fns";
 import {
   ActivityIndicator,
   Avatar,
+  Button,
   Card,
   Chip,
   Text,
@@ -37,7 +38,6 @@ import { CircleTimer } from "@/components/ui/CircleTimer";
 import { HStack } from "@/components/ui/hstack";
 import { VStack } from "@/components/ui/vstack";
 import { ScreenView } from "@/components/ui/ScreenView";
-import { Button } from "@/components/ui/button";
 import { Spacing } from "@/constants/theme";
 import { styles } from "@/constants/styles";
 import {
@@ -614,13 +614,17 @@ export default function HomeScreen() {
         <Text variant="titleMedium">Notifications</Text>
         <Button
           onPress={handleTestNotification}
-          isDisabled={notificationLoading}
+          disabled={notificationLoading}
+          mode="contained"
+          style={homeStyles.notificationButton}
         >
           {notificationLoading ? "Sending..." : "Test Notification"}
         </Button>
         <Button
           onPress={showNotificationTimePicker}
-          isDisabled={notificationLoading || Platform.OS !== "android"}
+          disabled={notificationLoading || Platform.OS !== "android"}
+          mode="contained"
+          style={homeStyles.notificationButton}
         >
           Set Notification Time
         </Button>
@@ -723,5 +727,8 @@ const homeStyles = StyleSheet.create({
   },
   notificationSection: {
     alignSelf: "stretch",
+  },
+  notificationButton: {
+    width: "100%",
   },
 });
