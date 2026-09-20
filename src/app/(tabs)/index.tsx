@@ -1,5 +1,7 @@
-import { useContext, useMemo } from "react";
-import { StyleSheet } from "react-native";
+import { useContext, useMemo, useState } from "react";
+import { Platform, StyleSheet } from "react-native";
+import { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
+import { format } from "date-fns";
 import {
   ActivityIndicator,
   Avatar,
@@ -35,8 +37,13 @@ import { CircleTimer } from "@/components/ui/CircleTimer";
 import { HStack } from "@/components/ui/hstack";
 import { VStack } from "@/components/ui/vstack";
 import { ScreenView } from "@/components/ui/ScreenView";
+import { Button } from "@/components/ui/button";
 import { Spacing } from "@/constants/theme";
 import { styles } from "@/constants/styles";
+import {
+  scheduleTimeNotification,
+  sendTestNotification,
+} from "@/lib/notifications";
 
 function getGreeting() {
   const hour = new Date().getHours();
@@ -194,6 +201,10 @@ function FeedbackCompareCard({
 export default function HomeScreen() {
   const theme = useTheme();
   const { user } = useContext(userContext) ?? {};
+  const [notificationTime, setNotificationTime] = useState(new Date());
+  const [notificationLoading, setNotificationLoading] = useState(false);
+  const [notificationMessage, setNotificationMessage] = useState("");
+  const [notificationError, setNotificationError] = useState("");
 
   // Real data, shared with WorkoutsPage via workoutsDataContext.
   const {
@@ -345,6 +356,60 @@ export default function HomeScreen() {
     user?.user_metadata?.full_name || user?.email?.split("@")[0] || "there";
 
   const isLoadingAnyData = workoutsLoading || profileLoading || mealsLoading;
+
+  function showNotificationTimePicker() {
+    if (Platform.OS !== "android") return;
+
+    DateTimePickerAndroid.open({
+      value: notificationTime,
+      onChange: (_event, selectedDate) => {
+        if (selectedDate) {
+          setNotificationTime(selectedDate);
+          void handleScheduleNotification(selectedDate);
+        }
+      },
+      mode: "time",
+      is24Hour: false,
+    });
+  }
+
+  async function handleTestNotification() {
+    setNotificationLoading(true);
+    setNotificationMessage("");
+    setNotificationError("");
+
+    try {
+      await sendTestNotification();
+      setNotificationMessage("Test notification sent.");
+    } catch (err) {
+      setNotificationError(
+        err instanceof Error ? err.message : "Failed to send notification.",
+      );
+    } finally {
+      setNotificationLoading(false);
+    }
+  }
+
+  async function handleScheduleNotification(time = notificationTime) {
+    setNotificationLoading(true);
+    setNotificationMessage("");
+    setNotificationError("");
+
+    try {
+      await scheduleTimeNotification(time);
+      setNotificationMessage(
+        `Notification scheduled for ${format(time, "h:mm aa")}.`,
+      );
+    } catch (err) {
+      setNotificationError(
+        err instanceof Error
+          ? err.message
+          : "Failed to schedule notification.",
+      );
+    } finally {
+      setNotificationLoading(false);
+    }
+  }
 
   return (
     <ScreenView
@@ -544,6 +609,41 @@ export default function HomeScreen() {
         rightItems={nutrientStats.possiblyMissing}
         emptyText="Add ingredients to your fridge to see your nutrient balance"
       />
+
+      <VStack space="sm" style={homeStyles.notificationSection}>
+        <Text variant="titleMedium">Notifications</Text>
+        <Button
+          onPress={handleTestNotification}
+          isDisabled={notificationLoading}
+        >
+          {notificationLoading ? "Sending..." : "Test Notification"}
+        </Button>
+        <Button
+          onPress={showNotificationTimePicker}
+          isDisabled={notificationLoading || Platform.OS !== "android"}
+        >
+          Set Notification Time
+        </Button>
+        <Text variant="bodyMedium">
+          Selected: {format(notificationTime, "h:mm aa")}
+        </Text>
+        {notificationMessage.length > 0 && (
+          <Text
+            variant="bodyMedium"
+            style={{ color: theme.colors.primary }}
+          >
+            {notificationMessage}
+          </Text>
+        )}
+        {notificationError.length > 0 && (
+          <Text
+            variant="bodyMedium"
+            style={{ color: theme.colors.error }}
+          >
+            {notificationError}
+          </Text>
+        )}
+      </VStack>
     </ScreenView>
   );
 }
@@ -620,5 +720,8 @@ const homeStyles = StyleSheet.create({
   },
   chip: {
     marginBottom: Spacing.one,
+  },
+  notificationSection: {
+    alignSelf: "stretch",
   },
 });

@@ -1,4 +1,4 @@
-import { View, Image, Platform, ScrollView, KeyboardAvoidingView } from "react-native";
+import { Image, Platform, ScrollView, KeyboardAvoidingView } from "react-native";
 import { useColorScheme } from "react-native";
 import { router } from "expo-router";
 
@@ -10,7 +10,6 @@ import { HStack } from "@/components/ui/hstack";
 
 import { Colors, Spacing, MaxContentWidth } from "@/constants/theme";
 import { supabase } from "@/lib/supabaseClient";
-import { sendTestNotification } from "@/lib/notifications";
 import { useState } from "react";
 
 import * as ImagePicker from "expo-image-picker";
@@ -54,8 +53,6 @@ export default function SettingsScreen() {
 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [notificationLoading, setNotificationLoading] = useState(false);
-  const [notificationMessage, setNotificationMessage] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   async function uploadAvatar(
@@ -299,23 +296,6 @@ export default function SettingsScreen() {
     setLoading(false);
   }
 
-  async function handleTestNotification() {
-    setNotificationLoading(true);
-    setNotificationMessage("");
-    setError("");
-
-    try {
-      await sendTestNotification();
-      setNotificationMessage("Test notification sent.");
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to send notification.",
-      );
-    } finally {
-      setNotificationLoading(false);
-    }
-  }
-
   // -----------------------------
   // THEME SWITCHER
   // -----------------------------
@@ -370,27 +350,6 @@ export default function SettingsScreen() {
             ? "Switch to Dark Mode"
             : "Switch to Light Mode"}
         </Button>
-
-        <ThemedText type="smallBold" style={{ marginBottom: Spacing.two }}>
-          Notifications
-        </ThemedText>
-        <View style={{ marginBottom: Spacing.four }}>
-          <Button
-            onPress={handleTestNotification}
-            isDisabled={notificationLoading}
-          >
-            {notificationLoading ? "Sending..." : "Test Notification"}
-          </Button>
-        </View>
-
-        {notificationMessage.length > 0 && (
-          <ThemedText
-            type="smallBold"
-            style={{ color: "green", marginBottom: Spacing.four }}
-          >
-            {notificationMessage}
-          </ThemedText>
-        )}
 
         {error.length > 0 && (
           <ThemedText
