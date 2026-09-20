@@ -1,4 +1,4 @@
-import { Image, Platform, ScrollView, KeyboardAvoidingView } from "react-native";
+import { View, Image, Platform, ScrollView, KeyboardAvoidingView } from "react-native";
 import { useColorScheme } from "react-native";
 import { router } from "expo-router";
 
