@@ -1,32 +1,38 @@
-import { TextInput, StyleSheet } from "react-native";
-import { ThemedView } from "@/components/themed-view";
-import { Colors, Spacing } from "@/constants/theme";
+import { StyleSheet, TextInput } from "react-native";
 import { TextInputProps } from "react-native-paper";
+
 import { useThemeMode } from "@/components/context/ThemeContext";
+import { Colors, Radius, Spacing } from "@/constants/theme";
 
 export function Input(props: TextInputProps) {
   const { resolvedTheme } = useThemeMode();
   const colors = Colors[resolvedTheme];
 
   return (
-    <ThemedView type="backgroundElement" style={styles.container}>
-      <TextInput
-        {...props}
-        placeholderTextColor={colors.text}
-        style={[styles.input, { color: colors.text }, props.style]}
-      />
-    </ThemedView>
+    <TextInput
+      {...props}
+      placeholderTextColor={colors.textSecondary}
+      selectionColor={colors.brand}
+      style={[
+        styles.input,
+        {
+          color: colors.text,
+          backgroundColor: colors.backgroundElement,
+          borderColor: colors.border,
+        },
+        props.style,
+      ]}
+    />
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.three,
-    borderRadius: Spacing.four,
-  },
-
   input: {
+    minHeight: 48,
+    paddingVertical: 12,
+    paddingHorizontal: Spacing.three,
+    borderRadius: Radius.medium,
+    borderWidth: 1,
     fontSize: 16,
   },
 });

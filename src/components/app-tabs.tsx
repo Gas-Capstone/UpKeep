@@ -1,4 +1,3 @@
-import { usePathname } from "expo-router";
 import {
   TabList,
   TabListProps,
@@ -18,12 +17,12 @@ import {
   useTheme,
 } from "react-native-paper";
 
-import { MaxContentWidth, Spacing } from "@/constants/theme";
-
-// ---- Config -----------------------------------------------------------
-// `icon` is a MaterialCommunityIcons name rendered via Paper's <Icon>.
-// No more ios/android/web split — one name per tab. `href` is typed
-// directly off TabTrigger's own prop, so no `as any` cast is needed.
+import {
+  MaxContentWidth,
+  Radius,
+  Spacing,
+  TabBarFloatMargin,
+} from "@/constants/theme";
 
 type TabHref = React.ComponentProps<typeof TabTrigger>["href"];
 
@@ -32,19 +31,11 @@ type TabConfig = {
   href: TabHref;
   label: string;
   icon: string;
-  // "bar"      — shown in the bottom bar (default).
-  // "hidden"   — route lives in (tabs) and still needs a TabTrigger to stay
-  //              navigable, but isn't drawn in the bar. Per the expo-router
-  //              docs, not rendering a trigger removes the route and its
-  //              navigation state entirely.
-  // "external" — route lives outside (tabs); listed only so the top badge can
-  //              label it. Rendering a trigger for it would point at a tab
-  //              route that doesn't exist.
-  placement?: "bar" | "hidden" | "external";
+  placement?: "bar" | "hidden";
 };
 
 const TABS: TabConfig[] = [
-  { name: "index", href: "/", label: "Home", icon: "home" },
+  { name: "index", href: "/", label: "Home", icon: "home-outline" },
   { name: "workouts", href: "/workouts", label: "Workouts", icon: "dumbbell" },
   {
     name: "meals",
@@ -52,16 +43,18 @@ const TABS: TabConfig[] = [
     label: "Meals",
     icon: "silverware-fork-knife",
   },
-  { name: "habits", href: "/habits", label: "Habits", icon: "timer-outline" },
-  { name: "profile", href: "/profile", label: "Profile", icon: "account" },
   {
-    name: "settings",
-    href: "/settings",
-    label: "Settings",
-    icon: "cog",
-    placement: "external",
+    name: "habits",
+    href: "/habits",
+    label: "Habits",
+    icon: "check-circle-outline",
   },
-  // Reached from the Meals page, not the bottom bar.
+  {
+    name: "profile",
+    href: "/profile",
+    label: "Profile",
+    icon: "account-outline",
+  },
   {
     name: "grocery",
     href: "/grocery",
@@ -73,30 +66,20 @@ const TABS: TabConfig[] = [
     name: "mealplan",
     href: "/mealplan",
     label: "Meal plan",
-    icon: "calendar-month",
+    icon: "calendar-month-outline",
     placement: "hidden",
   },
 ];
 
-// ---- Root ---------------------------------------------------------------
-
 export default function AppTabs() {
-  const pathname = usePathname() ?? "";
-  const activeTab =
-    TABS.find((t) =>
-      t.href === "/" ? pathname === "/" : pathname.startsWith(t.href as string),
-    ) ?? TABS[0];
-
   return (
     <View style={styles.root}>
       <Tabs>
         <TabSlot style={{ height: "100%" }} />
         <TabList asChild>
           <BottomBar>
-            {TABS.filter((t) => t.placement !== "external").map((tab) =>
+            {TABS.map((tab) =>
               tab.placement === "hidden" ? (
-                // Absolutely positioned so it keeps the route registered
-                // without taking a slot in the bar's space-evenly layout.
                 <TabTrigger
                   key={tab.name}
                   name={tab.name}
@@ -115,71 +98,48 @@ export default function AppTabs() {
                   href={tab.href}
                   asChild
                 >
-                  <TabIcon tab={tab} />
+                  <TabItem tab={tab} />
                 </TabTrigger>
               ),
             )}
           </BottomBar>
         </TabList>
       </Tabs>
-
-      <TopBadge activeTab={activeTab} />
     </View>
   );
 }
-
-// ---- Top badge: fixed at the very top of the screen ---------------------
-
-function TopBadge({ activeTab }: { activeTab: TabConfig }) {
-  const theme = useTheme();
-  const insets = useSafeAreaInsets();
-
-  return (
-    <View
-      pointerEvents="none"
-      style={[styles.topBadgeContainer, { top: insets.top + Spacing.two }]}
-    >
-      <Surface elevation={3} style={styles.topBadgeInner}>
-        <Icon
-          source={activeTab.icon}
-          size={14}
-          color={theme.colors.onSurface}
-        />
-        <Text variant="labelMedium" style={styles.topBadgeLabel}>
-          {activeTab.label}
-        </Text>
-      </Surface>
-    </View>
-  );
-}
-
-// ---- Bottom bar: TabList wrapper, holds one TabTrigger per tab ----------
 
 function BottomBar(props: TabListProps) {
   const insets = useSafeAreaInsets();
+  const theme = useTheme();
 
   return (
     <View
       {...props}
       style={[
         styles.bottomBarContainer,
-        { paddingBottom: (insets.bottom ?? 0) + Spacing.two },
+        {
+          paddingBottom:
+            Math.max(insets.bottom, Spacing.two) + TabBarFloatMargin,
+        },
       ]}
     >
-      <Surface elevation={4} style={styles.bottomBarInner}>
+      <Surface
+        elevation={2}
+        style={[
+          styles.bottomBarInner,
+          {
+            backgroundColor: theme.colors.surface,
+            borderColor: theme.colors.outlineVariant,
+          },
+        ]}
+      >
         {props.children}
       </Surface>
     </View>
   );
 }
 
-// ---- Individual tab icon: raises itself above the bar when focused -----
-
-// TabTriggerSlotProps (Pressable-style) allows `null` on its event
-// handlers/`disabled`; Paper's TouchableRipple only accepts `undefined`.
-// This strips `null` -> `undefined` at both the runtime and type level
-// for the whole props object at once, rather than patching one handler
-// at a time as TypeScript flags each one.
 type StripNull<T> = { [K in keyof T]: Exclude<T[K], null> };
 
 function stripNulls<T extends Record<string, unknown>>(obj: T): StripNull<T> {
@@ -190,74 +150,69 @@ function stripNulls<T extends Record<string, unknown>>(obj: T): StripNull<T> {
   return result as StripNull<T>;
 }
 
-function TabIcon({
+function TabItem({
   tab,
   isFocused,
   ...props
 }: TabTriggerSlotProps & { tab: TabConfig }) {
   const theme = useTheme();
   const rippleProps = stripNulls(props);
+  const activeColor = theme.colors.primary;
+  const inactiveColor = theme.colors.onSurfaceVariant;
 
   return (
     <TouchableRipple
       {...rippleProps}
       borderless
-      rippleColor={theme.colors.primary}
-      style={[styles.tabIconWrapper, isFocused && styles.tabIconWrapperRaised]}
+      rippleColor={theme.colors.primaryContainer}
+      style={styles.tabItem}
     >
-      <Surface
-        elevation={isFocused ? 4 : 0}
-        style={[
-          styles.tabIconInner,
-          isFocused && styles.tabIconInnerRaised,
-          {
-            backgroundColor: isFocused
-              ? theme.colors.secondaryContainer
-              : "transparent",
-          },
-        ]}
-      >
-        <Icon
-          source={tab.icon}
-          size={isFocused ? 22 : 18}
-          color={
-            isFocused
-              ? theme.colors.onSecondaryContainer
-              : theme.colors.onSurfaceVariant
-          }
-        />
-      </Surface>
+      <View style={styles.tabItemInner}>
+        <View
+          style={[
+            styles.iconPill,
+            isFocused && {
+              backgroundColor: theme.colors.primaryContainer,
+            },
+          ]}
+        >
+          <Icon
+            source={isFocused ? focusedIcon(tab.icon) : tab.icon}
+            size={21}
+            color={isFocused ? activeColor : inactiveColor}
+          />
+        </View>
+        <Text
+          numberOfLines={1}
+          style={[
+            styles.tabLabel,
+            {
+              color: isFocused ? activeColor : inactiveColor,
+              fontWeight: isFocused ? "700" : "500",
+            },
+          ]}
+        >
+          {tab.label}
+        </Text>
+      </View>
     </TouchableRipple>
   );
 }
 
-// ---- Styles ---------------------------------------------------------------
+function focusedIcon(icon: string) {
+  const replacements: Record<string, string> = {
+    "home-outline": "home",
+    "check-circle-outline": "check-circle",
+    "account-outline": "account",
+  };
+
+  return replacements[icon] ?? icon;
+}
 
 const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
-  // Top badge
-  topBadgeContainer: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    alignItems: "center",
-    zIndex: 10,
-  },
-  topBadgeInner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.one,
-    paddingVertical: Spacing.one,
-    paddingHorizontal: Spacing.three,
-    borderRadius: Spacing.five,
-  },
-  topBadgeLabel: {
-    marginLeft: Spacing.one,
-  },
-
-  // Bottom bar
   bottomBarContainer: {
     position: "absolute",
     bottom: 0,
@@ -265,34 +220,41 @@ const styles = StyleSheet.create({
     right: 0,
     alignItems: "center",
     paddingHorizontal: Spacing.three,
+    pointerEvents: "box-none",
   },
   bottomBarInner: {
     flexDirection: "row",
-    alignItems: "flex-end",
-    justifyContent: "space-evenly",
-    paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.three,
-    borderRadius: Spacing.five,
+    alignItems: "center",
+    justifyContent: "space-around",
     width: "100%",
     maxWidth: MaxContentWidth,
+    minHeight: 64,
+    paddingVertical: 7,
+    paddingHorizontal: Spacing.two,
+    borderRadius: Radius.large,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: "hidden",
   },
-
-  // Individual icons
-  tabIconWrapper: {
-    borderRadius: Spacing.four,
+  tabItem: {
+    flex: 1,
+    borderRadius: Radius.medium,
   },
-  tabIconWrapperRaised: {
-    transform: [{ translateY: -Spacing.four }],
-  },
-  tabIconInner: {
+  tabItemInner: {
+    minHeight: 50,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.two,
-    borderRadius: Spacing.four,
+    gap: 2,
   },
-  tabIconInnerRaised: {
-    paddingVertical: Spacing.three,
-    paddingHorizontal: Spacing.three,
+  iconPill: {
+    minWidth: 36,
+    height: 28,
+    paddingHorizontal: 8,
+    borderRadius: Radius.pill,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tabLabel: {
+    fontSize: 10,
+    lineHeight: 13,
   },
 });

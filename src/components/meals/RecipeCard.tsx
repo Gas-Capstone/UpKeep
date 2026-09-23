@@ -1,19 +1,19 @@
-import { View } from "react-native";
-import { Button, Card, Text, IconButton, useTheme } from "react-native-paper";
+import { StyleSheet, View } from "react-native";
+import { Button, Card, Icon, IconButton, Text } from "react-native-paper";
 
-import type { AppTheme } from "@/constants/paper-theme";
+import { useThemeMode } from "@/components/context/ThemeContext";
+import { BrandImagePlaceholder } from "@/components/ui/BrandImagePlaceholder";
+import { Colors, Radius, Spacing } from "@/constants/theme";
 import type { Recipe } from "@/lib/meals/meals";
+
 type RecipeCardProps = {
-  recipe: Recipe,
-  isFavorited: boolean,
-  missingNames: String[],
-  onToggleFavorite: () => void
-  // Queues this recipe's missing ingredients onto the grocery list.
+  recipe: Recipe;
+  isFavorited: boolean;
+  missingNames: string[];
+  onToggleFavorite: () => void;
   onQuickAdd?: () => void;
   adding?: boolean;
-  // Opens the day/meal picker to place this recipe on the plan.
   onAddToPlan?: () => void;
-  // Opens the full recipe page.
   onOpen?: () => void;
 };
 
@@ -27,91 +27,216 @@ export function RecipeCard({
   onAddToPlan,
   onOpen,
 }: RecipeCardProps) {
-  const theme = useTheme<AppTheme>();
+  const { resolvedTheme } = useThemeMode();
+  const colors = Colors[resolvedTheme];
   const ready = missingNames.length === 0;
 
   return (
-    // Card's own onPress covers the title and content; the star and the
-    // action buttons handle their own taps, so they don't trigger this.
-    <Card mode="contained" onPress={onOpen}>
-      <Card.Title
-        title={recipe.name}
-        subtitle={
-          recipe.prepTimeMin
-            ? `${recipe.prepTimeMin} min`
-            : "Prep time not set"
-        }
-        right={() => (
-          <IconButton
-            icon={isFavorited ? "star" : "star-outline"}
-            iconColor={
-              isFavorited ? theme.colors.primary : theme.colors.onSurfaceVariant
-            }
-            size={22}
-            onPress={onToggleFavorite}
-            accessibilityLabel={
-              isFavorited
-                ? `Remove ${recipe.name} from favorites`
-                : `Add ${recipe.name} to favorites`
-            }
-          />
-        )}
-      />
-      <Card.Content>
-        <Text
-          style={{
-            color: ready ? theme.colors.success : theme.colors.accentMeals,
-          }}
-        >
-          {ready
-            ? `You have all ${recipe.ingredientIds.length} ingredients`
-            : `Need ${missingNames.length}: ${missingNames.join(", ")}`}
-        </Text>
-      </Card.Content>
-      {(onQuickAdd || onAddToPlan) && (
-        <Card.Actions>
-          {/* Card.Actions right-aligns its children, so this row spans the
-              full width to push "Add to plan" to the left edge while Quick
-              add stays on the right. */}
-          <View
-            style={{
-              flex: 1,
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
-            {onAddToPlan ? (
-              <Button
-                mode="outlined"
-                icon="calendar-plus"
-                onPress={onAddToPlan}
-                style={{ borderRadius: 999 }}
-                accessibilityLabel={`Add ${recipe.name} to meal plan`}
-              >
-                Add to plan
-              </Button>
-            ) : (
-              // Keeps Quick add hard right when there's no left-hand button.
-              <View />
-            )}
+    <Card
+      mode="contained"
+      onPress={onOpen}
+      style={[
+        styles.card,
+        {
+          backgroundColor: colors.backgroundElement,
+          borderColor: colors.border,
+        },
+      ]}
+    >
+      <Card.Content style={styles.content}>
+        <BrandImagePlaceholder
+          label="Recipe photo"
+          icon="silverware-fork-knife"
+          style={styles.imageSlot}
+        />
 
-            {onQuickAdd && (
-              <Button
-                mode="contained"
-                icon="plus"
-                loading={adding}
-                disabled={adding}
-                onPress={onQuickAdd}
-                style={{ borderRadius: 999 }}
-                accessibilityLabel={`Add missing ingredients for ${recipe.name} to grocery list`}
+        <View style={styles.copy}>
+          <View style={styles.titleRow}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text
+                variant="titleMedium"
+                numberOfLines={2}
+                style={[styles.title, { color: colors.text }]}
               >
-                Quick add
-              </Button>
-            )}
+                {recipe.name}
+              </Text>
+
+              <View style={styles.metaRow}>
+                <Icon
+                  source="clock-outline"
+                  size={14}
+                  color={colors.textSecondary}
+                />
+                <Text
+                  variant="bodySmall"
+                  style={{ color: colors.textSecondary }}
+                >
+                  {recipe.prepTimeMin
+                    ? `${recipe.prepTimeMin} min`
+                    : "Prep time not set"}
+                </Text>
+              </View>
+            </View>
+
+            <IconButton
+              icon={isFavorited ? "star" : "star-outline"}
+              iconColor={isFavorited ? colors.warning : colors.textSecondary}
+              size={21}
+              onPress={onToggleFavorite}
+              style={styles.favoriteButton}
+              accessibilityLabel={
+                isFavorited
+                  ? `Remove ${recipe.name} from favorites`
+                  : `Add ${recipe.name} to favorites`
+              }
+            />
           </View>
+
+          <View
+            style={[
+              styles.statusPill,
+              {
+                backgroundColor: ready
+                  ? resolvedTheme === "dark"
+                    ? "#16382C"
+                    : "#E7F5EC"
+                  : resolvedTheme === "dark"
+                    ? "#3B2C16"
+                    : "#FFF1DE",
+              },
+            ]}
+          >
+            <Icon
+              source={ready ? "check-circle-outline" : "basket-outline"}
+              size={14}
+              color={ready ? colors.success : colors.warning}
+            />
+            <Text
+              variant="labelSmall"
+              style={{
+                color: ready ? colors.success : colors.warning,
+                fontWeight: "800",
+              }}
+            >
+              {ready
+                ? "Ready to cook"
+                : `Missing ${missingNames.length} ingredient${missingNames.length === 1 ? "" : "s"}`}
+            </Text>
+          </View>
+
+          {!ready ? (
+            <Text
+              variant="bodySmall"
+              numberOfLines={2}
+              style={{ color: colors.textSecondary }}
+            >
+              {missingNames.join(", ")}
+            </Text>
+          ) : (
+            <Text variant="bodySmall" style={{ color: colors.textSecondary }}>
+              You have all {recipe.ingredientIds.length} ingredients.
+            </Text>
+          )}
+        </View>
+      </Card.Content>
+
+      {(onQuickAdd || onAddToPlan) && (
+        <Card.Actions style={styles.actions}>
+          {onAddToPlan ? (
+            <Button
+              compact
+              mode="outlined"
+              icon="calendar-plus"
+              onPress={onAddToPlan}
+              textColor={colors.brandStrong}
+              style={[styles.actionButton, { borderColor: colors.border }]}
+              accessibilityLabel={`Add ${recipe.name} to meal plan`}
+            >
+              Plan
+            </Button>
+          ) : (
+            <View />
+          )}
+
+          {onQuickAdd ? (
+            <Button
+              compact
+              mode="contained"
+              icon="plus"
+              loading={adding}
+              disabled={adding}
+              onPress={onQuickAdd}
+              buttonColor={colors.brandStrong}
+              textColor="#FFFFFF"
+              style={styles.actionButton}
+              accessibilityLabel={`Add missing ingredients for ${recipe.name} to grocery list`}
+            >
+              Quick add
+            </Button>
+          ) : null}
         </Card.Actions>
       )}
     </Card>
   );
 }
+
+const styles = StyleSheet.create({
+  card: {
+    borderRadius: Radius.large,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: "hidden",
+  },
+  content: {
+    paddingHorizontal: Spacing.three,
+    paddingTop: Spacing.three,
+    paddingBottom: Spacing.two,
+    flexDirection: "row",
+    gap: Spacing.three,
+  },
+  imageSlot: {
+    width: 92,
+    minHeight: 104,
+    alignSelf: "stretch",
+  },
+  copy: {
+    flex: 1,
+    minWidth: 0,
+    gap: Spacing.two,
+  },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: Spacing.one,
+  },
+  title: {
+    fontWeight: "800",
+    lineHeight: 21,
+  },
+  favoriteButton: {
+    margin: -6,
+  },
+  metaRow: {
+    marginTop: 3,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  statusPill: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: 5,
+    borderRadius: Radius.pill,
+  },
+  actions: {
+    paddingHorizontal: Spacing.three,
+    paddingBottom: Spacing.three,
+    paddingTop: 0,
+    justifyContent: "space-between",
+  },
+  actionButton: {
+    borderRadius: Radius.pill,
+  },
+});

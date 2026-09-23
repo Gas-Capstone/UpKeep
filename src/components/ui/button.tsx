@@ -1,8 +1,8 @@
 import { Pressable, StyleSheet } from "react-native";
-import { ThemedView } from "@/components/themed-view";
-import { ThemedText } from "@/components/themed-text";
-import { Colors, Spacing } from "@/constants/theme";
+
 import { useThemeMode } from "@/components/context/ThemeContext";
+import { ThemedText } from "@/components/themed-text";
+import { Colors, Radius, Spacing } from "@/constants/theme";
 
 interface ButtonProps {
   children: string;
@@ -20,18 +20,22 @@ export function Button({ children, onPress, isDisabled }: ButtonProps) {
       disabled={isDisabled}
       style={({ pressed }) => [
         styles.wrapper,
+        {
+          backgroundColor: colors.brandStrong,
+          borderColor: colors.brandStrong,
+        },
         pressed && styles.pressed,
         isDisabled && styles.disabled,
       ]}
     >
-      <ThemedView
-        type="backgroundSelected"
-        style={[styles.inner, { backgroundColor: colors.backgroundSelected }]}
+      <ThemedText
+        type="smallBold"
+        style={{
+          color: resolvedTheme === "dark" ? Colors.dark.background : "#FFFFFF",
+        }}
       >
-        <ThemedText type="smallBold" style={{ color: colors.text }}>
-          {children}
-        </ThemedText>
-      </ThemedView>
+        {children}
+      </ThemedText>
     </Pressable>
   );
 }
@@ -39,21 +43,18 @@ export function Button({ children, onPress, isDisabled }: ButtonProps) {
 const styles = StyleSheet.create({
   wrapper: {
     width: "100%",
-  },
-
-  inner: {
-    paddingVertical: Spacing.three,
+    minHeight: 48,
+    paddingVertical: 12,
     paddingHorizontal: Spacing.four,
-    borderRadius: Spacing.four,
+    borderRadius: Radius.medium,
+    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
   },
-
   pressed: {
-    opacity: 0.7,
+    opacity: 0.82,
   },
-
   disabled: {
-    opacity: 0.4,
+    opacity: 0.45,
   },
 });
