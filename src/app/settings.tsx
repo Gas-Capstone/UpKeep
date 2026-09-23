@@ -1,5 +1,10 @@
-import { View, Image, Platform, ScrollView, KeyboardAvoidingView } from "react-native";
-import { useColorScheme } from "react-native";
+import {
+  View,
+  Image,
+  Platform,
+  ScrollView,
+  KeyboardAvoidingView,
+} from "react-native";
 import { router } from "expo-router";
 
 import { ThemedView } from "@/components/themed-view";
@@ -13,18 +18,26 @@ import { supabase } from "@/lib/supabaseClient";
 import { useState } from "react";
 
 import * as ImagePicker from "expo-image-picker";
+import * as FileSystem from "expo-file-system/legacy";
 import DateTimePicker from "@react-native-community/datetimepicker";
+
 import { useThemeMode } from "@/components/context/ThemeContext";
+import { useProfileData } from "@/components/context/profileDataContext";
 
 // `height` is stored as feet.inches (e.g. 5.11 = 5'11")
 function buildHeightValue(feetStr: string, inchesStr: string): number | null {
   const feet = Number(feetStr);
-  if (!feetStr || Number.isNaN(feet)) return null;
+
+  if (!feetStr || Number.isNaN(feet)) {
+    return null;
+  }
 
   const rawInches = Number(inchesStr);
+
   const inches = Number.isNaN(rawInches)
     ? 0
     : Math.min(Math.max(Math.round(rawInches), 0), 11);
+
   const inchesPadded = String(inches).padStart(2, "0");
 
   return Number(`${feet}.${inchesPadded}`);
@@ -33,6 +46,9 @@ function buildHeightValue(feetStr: string, inchesStr: string): number | null {
 export default function SettingsScreen() {
   const { theme, setTheme, resolvedTheme } = useThemeMode();
   const colors = Colors[resolvedTheme];
+
+  const { updateDisplayName, updateBirthdate, updateAvatar, updateBiometrics } =
+    useProfileData();
 
   const [newPassword, setNewPassword] = useState("");
   const [newDisplayName, setNewDisplayName] = useState("");
@@ -55,19 +71,46 @@ export default function SettingsScreen() {
   const [loading, setLoading] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  // -----------------------------
+  // AVATAR UPLOAD
+  // -----------------------------
   async function uploadAvatar(
     uri: string,
     userId: string,
   ): Promise<string | null> {
     try {
-      // Convert URI → Blob
-      const response = await fetch(uri);
-      const blob = await response.blob();
+      console.log("Starting avatar upload...");
+      console.log("Local URI:", uri);
 
-      // Upload to Supabase Storage
+      // Read the Expo local image as base64.
+      // `/legacy` is required for readAsStringAsync in newer Expo versions.
+      const base64 = await FileSystem.readAsStringAsync(uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      if (!base64) {
+        console.log("Could not read image as base64.");
+        return null;
+      }
+
+      console.log("Image successfully read as base64.");
+
+      // Convert base64 -> binary bytes
+      const binaryString = atob(base64);
+      const bytes = new Uint8Array(binaryString.length);
+
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+
+      const filePath = `public/${userId}.jpg`;
+
+      console.log("Uploading to:", filePath);
+
       const { error: uploadError } = await supabase.storage
         .from("avatars")
-        .upload(`public/${userId}.jpg`, blob, {
+        .upload(filePath, bytes.buffer, {
+          contentType: "image/jpeg",
           upsert: true,
         });
 
@@ -76,12 +119,23 @@ export default function SettingsScreen() {
         return null;
       }
 
-      // Get public URL
+      console.log("Image uploaded successfully.");
+
       const { data: urlData } = supabase.storage
         .from("avatars")
-        .getPublicUrl(`public/${userId}.jpg`);
+        .getPublicUrl(filePath);
 
-      return urlData.publicUrl;
+      if (!urlData?.publicUrl) {
+        console.log("Could not get public avatar URL.");
+        return null;
+      }
+
+      // Cache-busting makes sure the new avatar appears immediately.
+      const avatarUrl = `${urlData.publicUrl}?t=${Date.now()}`;
+
+      console.log("Avatar URL:", avatarUrl);
+
+      return avatarUrl;
     } catch (err) {
       console.log("Avatar upload failed:", err);
       return null;
@@ -95,12 +149,18 @@ export default function SettingsScreen() {
     setLoading(true);
     setError("");
 
-    const { error } = await supabase.rpc("delete_user_account");
+    try {
+      const { error } = await supabase.rpc("delete_user_account");
 
-    if (error) {
-      setError(error.message);
-    } else {
-      router.replace("/(auth)/login");
+      if (error) {
+        setError(error.message);
+      } else {
+        router.replace("/(auth)/login");
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to delete account.",
+      );
     }
 
     setLoading(false);
@@ -110,17 +170,28 @@ export default function SettingsScreen() {
   // CHANGE PASSWORD
   // -----------------------------
   async function handleChangePassword() {
+    if (!newPassword) {
+      setError("Please enter a new password.");
+      return;
+    }
+
     setLoading(true);
     setError("");
 
-    const { error } = await supabase.auth.updateUser({
-      password: newPassword,
-    });
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
 
-    if (error) {
-      setError(error.message);
-    } else {
-      setNewPassword("");
+      if (error) {
+        setError(error.message);
+      } else {
+        setNewPassword("");
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to change password.",
+      );
     }
 
     setLoading(false);
@@ -133,26 +204,19 @@ export default function SettingsScreen() {
     setLoading(true);
     setError("");
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError || !user) {
-      setError("You must be logged in to perform this action.");
+    if (!newDisplayName.trim()) {
+      setError("Please enter a display name.");
       setLoading(false);
       return;
     }
 
-    const { error } = await supabase
-      .from("profiles")
-      .update({ display_name: newDisplayName })
-      .eq("id", user.id);
-
-    if (error) {
-      setError(error.message);
-    } else {
+    try {
+      await updateDisplayName(newDisplayName.trim());
       setNewDisplayName("");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to update display name.",
+      );
     }
 
     setLoading(false);
@@ -165,33 +229,58 @@ export default function SettingsScreen() {
     setLoading(true);
     setError("");
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError || !user) {
-      setError("You must be logged in to perform this action.");
-      setLoading(false);
-      return;
-    }
-
     const formatted = newBirthdate
       ? newBirthdate.toISOString().split("T")[0]
       : null;
 
-    const { error } = await supabase
-      .from("profiles")
-      .update({ birthdate: formatted })
-      .eq("id", user.id);
-
-    if (error) {
-      setError(error.message);
-    } else {
+    try {
+      await updateBirthdate(formatted);
       setNewBirthdate(null);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to update birthdate.",
+      );
     }
 
     setLoading(false);
+  }
+
+  // -----------------------------
+  // PICK AVATAR
+  // -----------------------------
+  async function handlePickAvatar() {
+    setError("");
+
+    try {
+      const permission =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+      if (!permission.granted) {
+        setError("Permission to access your photos is required.");
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (result.canceled || result.assets.length === 0) {
+        return;
+      }
+
+      const selectedUri = result.assets[0].uri;
+
+      console.log("Selected avatar:", selectedUri);
+
+      setNewAvatarUri(selectedUri);
+    } catch (err) {
+      console.log("Image picker error:", err);
+
+      setError(err instanceof Error ? err.message : "Failed to select image.");
+    }
   }
 
   // -----------------------------
@@ -201,96 +290,89 @@ export default function SettingsScreen() {
     setLoading(true);
     setError("");
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError || !user) {
-      setError("You must be logged in to perform this action.");
+    if (!newAvatarUri) {
+      setError("Please select an avatar first.");
       setLoading(false);
       return;
     }
 
     try {
-      // Convert URI → Blob
-      const response = await fetch(newAvatarUri);
-      const blob = await response.blob();
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
 
-      // Upload to Supabase Storage
-      const { error: uploadError } = await supabase.storage
-        .from("avatars")
-        .upload(`public/${user.id}.jpg`, blob, {
-          upsert: true,
-        });
-
-      if (uploadError) {
-        setError(uploadError.message);
+      if (userError || !user) {
+        setError("You must be logged in to perform this action.");
         setLoading(false);
         return;
       }
 
-      // Get public URL
-      const { data: urlData } = supabase.storage
-        .from("avatars")
-        .getPublicUrl(`public/${user.id}.jpg`);
+      console.log("Uploading avatar for user:", user.id);
 
-      const avatarUrl = urlData.publicUrl;
+      const avatarUrl = await uploadAvatar(newAvatarUri, user.id);
 
-      // Save URL to profile
-      const { error } = await supabase
-        .from("profiles")
-        .update({ avatar_url: avatarUrl })
-        .eq("id", user.id);
-
-      if (error) {
-        setError(error.message);
-      } else {
-        setNewAvatarUri("");
+      if (!avatarUrl) {
+        setError("Failed to upload avatar.");
+        setLoading(false);
+        return;
       }
+
+      // Updates Supabase AND the shared profile context.
+      await updateAvatar(avatarUrl);
+
+      console.log("Avatar successfully updated!");
+
+      setNewAvatarUri("");
     } catch (err) {
-      setError("Failed to upload avatar.");
+      console.log("Avatar update error:", err);
+
+      setError(err instanceof Error ? err.message : "Failed to update avatar.");
     }
 
     setLoading(false);
   }
 
   // -----------------------------
-  // CHANGE CALORIE-GOAL BIOMETRICS (height/weight/age/sex)
+  // CHANGE CALORIE-GOAL BIOMETRICS
   // -----------------------------
   async function handleChangeBiometrics() {
     setLoading(true);
     setError("");
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
+    const height = buildHeightValue(heightFeet, heightInches);
 
-    if (userError || !user) {
-      setError("You must be logged in to perform this action.");
+    const weight = newWeight ? Number(newWeight) : null;
+
+    const age = newAge ? Number(newAge) : null;
+
+    const sex = newSex;
+
+    if (height === null && weight === null && age === null && sex === null) {
+      setError("Please enter at least one value.");
       setLoading(false);
       return;
     }
 
-    const { error } = await supabase
-      .from("profiles")
-      .update({
-        height: buildHeightValue(heightFeet, heightInches),
-        weight: newWeight ? Number(newWeight) : null,
-        age: newAge ? Number(newAge) : null,
-        sex: newSex,
-      })
-      .eq("id", user.id);
+    try {
+      await updateBiometrics({
+        height,
+        weight,
+        age,
+        sex,
+      });
 
-    if (error) {
-      setError(error.message);
-    } else {
       setHeightFeet("");
       setHeightInches("");
       setNewWeight("");
       setNewAge("");
       setNewSex(null);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to update calorie information.",
+      );
     }
 
     setLoading(false);
@@ -302,6 +384,7 @@ export default function SettingsScreen() {
   function cycleTheme() {
     const next =
       theme === "light" ? "dark" : theme === "dark" ? "system" : "light";
+
     setTheme(next);
   }
 
@@ -321,239 +404,347 @@ export default function SettingsScreen() {
         }}
         keyboardShouldPersistTaps="handled"
       >
-      <ThemedView
-        type="backgroundElement"
-        style={{
-          width: "100%",
-          maxWidth: MaxContentWidth,
-          padding: Spacing.four,
-          borderRadius: Spacing.five,
-          shadowColor: "#000",
-          shadowOpacity: 0.15,
-          shadowRadius: 8,
-          shadowOffset: { width: 0, height: 3 },
-        }}
-      >
-        <ThemedText type="title" style={{ marginBottom: Spacing.four }}>
-          Settings
-        </ThemedText>
-
-        {/* Theme Switcher */}
-        <ThemedText type="smallBold" style={{ marginBottom: Spacing.two }}>
-          Theme
-        </ThemedText>
-
-        <Button
-          onPress={() => setTheme(resolvedTheme === "light" ? "dark" : "light")}
+        <ThemedView
+          type="backgroundElement"
+          style={{
+            width: "100%",
+            maxWidth: MaxContentWidth,
+            padding: Spacing.four,
+            borderRadius: Spacing.five,
+            shadowColor: "#000",
+            shadowOpacity: 0.15,
+            shadowRadius: 8,
+            shadowOffset: {
+              width: 0,
+              height: 3,
+            },
+          }}
         >
-          {resolvedTheme === "light"
-            ? "Switch to Dark Mode"
-            : "Switch to Light Mode"}
-        </Button>
-
-        {error.length > 0 && (
           <ThemedText
-            type="smallBold"
-            style={{ color: "red", marginBottom: Spacing.four }}
-          >
-            {error}
-          </ThemedText>
-        )}
-
-        {/* Change Password */}
-        <Input
-          placeholder="New Password"
-          value={newPassword}
-          onChangeText={setNewPassword}
-          secureTextEntry
-          className="mb-4"
-        />
-
-        <View style={{ marginBottom: Spacing.four }}>
-          <Button
-            onPress={handleChangePassword}
-            isDisabled={loading || newPassword.length === 0}
-          >
-            Change Password
-          </Button>
-        </View>
-
-        {/* Display Name */}
-        <Input
-          placeholder="New Display Name"
-          value={newDisplayName}
-          onChangeText={setNewDisplayName}
-          className="mb-4"
-        />
-
-        <View style={{ marginBottom: Spacing.four }}>
-          <Button
-            onPress={handleChangeDisplayName}
-            isDisabled={loading || newDisplayName.length === 0}
-          >
-            Update Display Name
-          </Button>
-        </View>
-
-        {/* Birthdate Picker */}
-        <Button onPress={() => setShowDatePicker(true)}>
-          {newBirthdate
-            ? `Birthday: ${newBirthdate.toDateString()}`
-            : "Choose Birthdate"}
-        </Button>
-
-        {showDatePicker && (
-          <DateTimePicker
-            value={newBirthdate || new Date()}
-            mode="date"
-            display={Platform.OS === "ios" ? "spinner" : "calendar"}
-            onChange={(event, selectedDate) => {
-              setShowDatePicker(false);
-              if (selectedDate) setNewBirthdate(selectedDate);
-            }}
-          />
-        )}
-
-        <View style={{ marginBottom: Spacing.four }}>
-          <Button
-            onPress={handleChangeBirthdate}
-            isDisabled={loading || !newBirthdate}
-          >
-            Update Birthdate
-          </Button>
-        </View>
-
-        {/* Avatar Picker */}
-        <Button onPress={handleChangeAvatar}>
-          {newAvatarUri ? "Change Avatar" : "Pick Avatar"}
-        </Button>
-
-        {newAvatarUri.length > 0 && (
-          <Image
-            source={{ uri: newAvatarUri }}
+            type="title"
             style={{
-              width: 100,
-              height: 100,
-              borderRadius: 50,
               marginBottom: Spacing.four,
             }}
-          />
-        )}
-
-        <View style={{ marginBottom: Spacing.four }}>
-          <Button
-            onPress={handleChangeAvatar}
-            isDisabled={loading || newAvatarUri.length === 0}
           >
-            Update Avatar
-          </Button>
-        </View>
+            Settings
+          </ThemedText>
 
-        {/* Calorie Goal Info: Height/Weight/Age/Sex */}
-        <ThemedText type="smallBold" style={{ marginBottom: Spacing.two }}>
-          Height
-        </ThemedText>
-        <HStack space="sm" style={{ marginBottom: Spacing.four }}>
-          <Input
-            placeholder="Feet"
-            value={heightFeet}
-            onChangeText={setHeightFeet}
-            keyboardType="numeric"
-            style={{ flex: 1 }}
-          />
-          <Input
-            placeholder="Inches"
-            value={heightInches}
-            onChangeText={setHeightInches}
-            keyboardType="numeric"
-            style={{ flex: 1 }}
-          />
-        </HStack>
+          {/* Theme Switcher */}
+          <ThemedText
+            type="smallBold"
+            style={{
+              marginBottom: Spacing.two,
+            }}
+          >
+            Theme
+          </ThemedText>
 
-        <ThemedText type="smallBold" style={{ marginBottom: Spacing.two }}>
-          Weight (lbs)
-        </ThemedText>
-        <Input
-          placeholder="Weight in pounds"
-          value={newWeight}
-          onChangeText={setNewWeight}
-          keyboardType="numeric"
-          className="mb-4"
-        />
-
-        <ThemedText type="smallBold" style={{ marginBottom: Spacing.two }}>
-          Age
-        </ThemedText>
-        <Input
-          placeholder="Age"
-          value={newAge}
-          onChangeText={setNewAge}
-          keyboardType="numeric"
-          className="mb-4"
-        />
-
-        <ThemedText type="smallBold" style={{ marginBottom: Spacing.two }}>
-          Sex
-        </ThemedText>
-        <HStack space="sm" style={{ marginBottom: Spacing.four }}>
-          <View style={{ flex: 1 }}>
-            <Button onPress={() => setNewSex(true)}>
-              {newSex === true ? "✓ Male" : "Male"}
-            </Button>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Button onPress={() => setNewSex(false)}>
-              {newSex === false ? "✓ Female" : "Female"}
-            </Button>
-          </View>
-        </HStack>
-
-        <View style={{ marginBottom: Spacing.four }}>
           <Button
-            onPress={handleChangeBiometrics}
-            isDisabled={
-              loading ||
-              (!heightFeet && !newWeight && !newAge && newSex === null)
+            onPress={() =>
+              setTheme(resolvedTheme === "light" ? "dark" : "light")
             }
           >
-            Update Calorie Info
+            {resolvedTheme === "light"
+              ? "Switch to Dark Mode"
+              : "Switch to Light Mode"}
           </Button>
-        </View>
 
-        {/* Delete Account */}
-        {!confirmDelete ? (
-          <View style={{ marginBottom: Spacing.four }}>
-            <Button onPress={() => setConfirmDelete(true)} isDisabled={loading}>
-              Delete Account
-            </Button>
-          </View>
-        ) : (
-          <>
+          {/* Error */}
+          {error.length > 0 && (
             <ThemedText
               type="smallBold"
               style={{
                 color: "red",
                 marginBottom: Spacing.four,
-                textAlign: "center",
+                marginTop: Spacing.four,
               }}
             >
-              This action is permanent. Are you absolutely sure?
+              {error}
             </ThemedText>
+          )}
 
-            <View style={{ marginBottom: Spacing.four }}>
-              <Button onPress={handleDeleteAccount} isDisabled={loading}>
-                Yes, Delete My Account
+          {/* Change Password */}
+          <Input
+            placeholder="New Password"
+            value={newPassword}
+            onChangeText={setNewPassword}
+            secureTextEntry
+            className="mb-4"
+          />
+
+          <View
+            style={{
+              marginBottom: Spacing.four,
+            }}
+          >
+            <Button
+              onPress={handleChangePassword}
+              isDisabled={loading || newPassword.length === 0}
+            >
+              Change Password
+            </Button>
+          </View>
+
+          {/* Display Name */}
+          <Input
+            placeholder="New Display Name"
+            value={newDisplayName}
+            onChangeText={setNewDisplayName}
+            className="mb-4"
+          />
+
+          <View
+            style={{
+              marginBottom: Spacing.four,
+            }}
+          >
+            <Button
+              onPress={handleChangeDisplayName}
+              isDisabled={loading || newDisplayName.trim().length === 0}
+            >
+              Update Display Name
+            </Button>
+          </View>
+
+          {/* Birthdate Picker */}
+          <Button onPress={() => setShowDatePicker(true)}>
+            {newBirthdate
+              ? `Birthday: ${newBirthdate.toDateString()}`
+              : "Choose Birthdate"}
+          </Button>
+
+          {showDatePicker && (
+            <DateTimePicker
+              value={newBirthdate || new Date()}
+              mode="date"
+              display={Platform.OS === "ios" ? "spinner" : "calendar"}
+              onChange={(event, selectedDate) => {
+                setShowDatePicker(false);
+
+                if (selectedDate) {
+                  setNewBirthdate(selectedDate);
+                }
+              }}
+            />
+          )}
+
+          <View
+            style={{
+              marginBottom: Spacing.four,
+            }}
+          >
+            <Button
+              onPress={handleChangeBirthdate}
+              isDisabled={loading || !newBirthdate}
+            >
+              Update Birthdate
+            </Button>
+          </View>
+
+          {/* Avatar Picker */}
+          <Button onPress={handlePickAvatar} isDisabled={loading}>
+            {newAvatarUri ? "Change Avatar" : "Pick Avatar"}
+          </Button>
+
+          {/* Selected Avatar Preview */}
+          {newAvatarUri.length > 0 && (
+            <Image
+              source={{
+                uri: newAvatarUri,
+              }}
+              style={{
+                width: 100,
+                height: 100,
+                borderRadius: 50,
+                marginBottom: Spacing.four,
+                marginTop: Spacing.four,
+                alignSelf: "center",
+              }}
+            />
+          )}
+
+          <View
+            style={{
+              marginBottom: Spacing.four,
+            }}
+          >
+            <Button
+              onPress={handleChangeAvatar}
+              isDisabled={loading || newAvatarUri.length === 0}
+            >
+              Update Avatar
+            </Button>
+          </View>
+
+          {/* Calorie Goal Info */}
+          <ThemedText
+            type="smallBold"
+            style={{
+              marginBottom: Spacing.two,
+            }}
+          >
+            Height
+          </ThemedText>
+
+          <HStack
+            space="sm"
+            style={{
+              marginBottom: Spacing.four,
+            }}
+          >
+            <Input
+              placeholder="Feet"
+              value={heightFeet}
+              onChangeText={setHeightFeet}
+              keyboardType="numeric"
+              style={{
+                flex: 1,
+              }}
+            />
+
+            <Input
+              placeholder="Inches"
+              value={heightInches}
+              onChangeText={setHeightInches}
+              keyboardType="numeric"
+              style={{
+                flex: 1,
+              }}
+            />
+          </HStack>
+
+          <ThemedText
+            type="smallBold"
+            style={{
+              marginBottom: Spacing.two,
+            }}
+          >
+            Weight (lbs)
+          </ThemedText>
+
+          <Input
+            placeholder="Weight in pounds"
+            value={newWeight}
+            onChangeText={setNewWeight}
+            keyboardType="numeric"
+            className="mb-4"
+          />
+
+          <ThemedText
+            type="smallBold"
+            style={{
+              marginBottom: Spacing.two,
+            }}
+          >
+            Age
+          </ThemedText>
+
+          <Input
+            placeholder="Age"
+            value={newAge}
+            onChangeText={setNewAge}
+            keyboardType="numeric"
+            className="mb-4"
+          />
+
+          <ThemedText
+            type="smallBold"
+            style={{
+              marginBottom: Spacing.two,
+            }}
+          >
+            Sex
+          </ThemedText>
+
+          <HStack
+            space="sm"
+            style={{
+              marginBottom: Spacing.four,
+            }}
+          >
+            <View style={{ flex: 1 }}>
+              <Button onPress={() => setNewSex(true)}>
+                {newSex === true ? "✓ Male" : "Male"}
               </Button>
             </View>
 
-            <View style={{ marginBottom: Spacing.four }}>
-              <Button onPress={() => setConfirmDelete(false)}>Cancel</Button>
+            <View style={{ flex: 1 }}>
+              <Button onPress={() => setNewSex(false)}>
+                {newSex === false ? "✓ Female" : "Female"}
+              </Button>
             </View>
-          </>
-        )}
+          </HStack>
 
-        <Button onPress={() => router.back()}>Back</Button>
-      </ThemedView>
+          <View
+            style={{
+              marginBottom: Spacing.four,
+            }}
+          >
+            <Button
+              onPress={handleChangeBiometrics}
+              isDisabled={
+                loading ||
+                (!heightFeet &&
+                  !heightInches &&
+                  !newWeight &&
+                  !newAge &&
+                  newSex === null)
+              }
+            >
+              Update Calorie Info
+            </Button>
+          </View>
+
+          {/* Delete Account */}
+          {!confirmDelete ? (
+            <View
+              style={{
+                marginBottom: Spacing.four,
+              }}
+            >
+              <Button
+                onPress={() => setConfirmDelete(true)}
+                isDisabled={loading}
+              >
+                Delete Account
+              </Button>
+            </View>
+          ) : (
+            <>
+              <ThemedText
+                type="smallBold"
+                style={{
+                  color: "red",
+                  marginBottom: Spacing.four,
+                  textAlign: "center",
+                }}
+              >
+                This action is permanent. Are you absolutely sure?
+              </ThemedText>
+
+              <View
+                style={{
+                  marginBottom: Spacing.four,
+                }}
+              >
+                <Button onPress={handleDeleteAccount} isDisabled={loading}>
+                  Yes, Delete My Account
+                </Button>
+              </View>
+
+              <View
+                style={{
+                  marginBottom: Spacing.four,
+                }}
+              >
+                <Button onPress={() => setConfirmDelete(false)}>Cancel</Button>
+              </View>
+            </>
+          )}
+
+          {/* Back */}
+          <Button onPress={() => router.back()}>Back</Button>
+        </ThemedView>
       </ScrollView>
     </KeyboardAvoidingView>
   );

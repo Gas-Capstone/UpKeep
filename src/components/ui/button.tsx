@@ -2,7 +2,7 @@ import { Pressable, StyleSheet } from "react-native";
 import { ThemedView } from "@/components/themed-view";
 import { ThemedText } from "@/components/themed-text";
 import { Colors, Spacing } from "@/constants/theme";
-import { useColorScheme } from "react-native";
+import { useThemeMode } from "@/components/context/ThemeContext";
 
 interface ButtonProps {
   children: string;
@@ -11,8 +11,8 @@ interface ButtonProps {
 }
 
 export function Button({ children, onPress, isDisabled }: ButtonProps) {
-  const scheme = useColorScheme();
-  const colors = Colors[scheme === "dark" ? "dark" : "light"];
+  const { resolvedTheme } = useThemeMode();
+  const colors = Colors[resolvedTheme];
 
   return (
     <Pressable
@@ -40,6 +40,7 @@ const styles = StyleSheet.create({
   wrapper: {
     width: "100%",
   },
+
   inner: {
     paddingVertical: Spacing.three,
     paddingHorizontal: Spacing.four,
@@ -47,9 +48,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+
   pressed: {
     opacity: 0.7,
   },
+
   disabled: {
     opacity: 0.4,
   },

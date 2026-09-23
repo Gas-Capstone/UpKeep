@@ -7,12 +7,11 @@ import { ThemedView } from "@/components/themed-view";
 import { ThemedText } from "@/components/themed-text";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Colors, Spacing, MaxContentWidth } from "@/constants/theme";
+import { Spacing, MaxContentWidth } from "@/constants/theme";
 import { supabase } from "@/lib/supabaseClient";
 
 export default function Register() {
   const scheme = useColorScheme();
-  const colors = Colors[scheme === "dark" ? "dark" : "light"];
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -25,6 +24,16 @@ export default function Register() {
   async function handleRegister() {
     setError("");
 
+    if (!email.trim()) {
+      setError("Please enter your email.");
+      return;
+    }
+
+    if (!password) {
+      setError("Please enter a password.");
+      return;
+    }
+
     if (!passwordsMatch) {
       setError("Passwords do not match");
       return;
@@ -32,44 +41,48 @@ export default function Register() {
 
     setLoading(true);
 
-    // 1. Create user in Supabase Auth
-    const { data: signupData, error: signupError } = await supabase.auth.signUp(
-      {
-        email,
-        password,
-      },
-    );
+    try {
+      // Create the user in Supabase Auth.
+      //
+      // Your Supabase Auth hook/function will automatically
+      // create the corresponding profiles row.
+      const { data: signupData, error: signupError } =
+        await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+        });
 
-    if (signupError) {
-      setError(signupError.message);
+      if (signupError) {
+        console.error("SIGNUP ERROR MESSAGE:", signupError.message);
+        console.error("SIGNUP ERROR NAME:", signupError.name);
+        console.error("SIGNUP ERROR STATUS:", signupError.status);
+
+        setError(signupError.message);
+        return;
+      }
+
+      const user = signupData.user;
+
+      if (!user) {
+        setError("Registration succeeded but no user was returned.");
+        return;
+      }
+
+      // The profile is created automatically by Supabase
+      // through your handle_new_user function/Auth hook.
+
+      router.replace("/(auth)/setupProfileScreen");
+    } catch (err) {
+      console.error("REGISTRATION UNEXPECTED ERROR:", err);
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong while creating your account.",
+      );
+    } finally {
       setLoading(false);
-      return;
     }
-
-    const user = signupData.user;
-
-    if (!user) {
-      setError("Registration succeeded but no user returned.");
-      setLoading(false);
-      return;
-    }
-
-    // 2. Create profile row with onboarding flag
-    const { error: profileError } = await supabase.from("profiles").insert({
-      id: user.id,
-      onboarding_complete: false,
-    });
-
-    if (profileError) {
-      setError(profileError.message);
-      setLoading(false);
-      return;
-    }
-
-    // 3. Redirect to onboarding screen
-    router.replace("/(auth)/setupProfileScreen");
-
-    setLoading(false);
   }
 
   return (
@@ -102,6 +115,8 @@ export default function Register() {
           placeholder="Email"
           value={email}
           onChangeText={setEmail}
+          autoCapitalize="none"
+          keyboardType="email-address"
           style={{ marginBottom: Spacing.four }}
         />
 
@@ -133,7 +148,10 @@ export default function Register() {
         {error.length > 0 && (
           <ThemedText
             type="smallBold"
-            style={{ marginBottom: Spacing.two, color: "#ff4d4f" }}
+            style={{
+              marginBottom: Spacing.two,
+              color: "#ff4d4f",
+            }}
           >
             {error}
           </ThemedText>

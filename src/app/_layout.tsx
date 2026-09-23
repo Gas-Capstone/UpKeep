@@ -1,31 +1,29 @@
 import { router, Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
-import { useColorScheme } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { PaperProvider } from "react-native-paper";
-import { ThemeProvider, DarkTheme, DefaultTheme } from "expo-router";
 
 import { supabase } from "@/lib/supabaseClient";
+
 import { UserProvider } from "@/components/context/userContext";
 import { WorkoutSessionProvider } from "@/components/context/workoutSessionContext";
 import { WorkoutsDataProvider } from "@/components/context/workoutsDataContext";
 import { HabitsProvider } from "@/components/context/habitsContext";
 import { MealsDataProvider } from "@/components/context/mealsDataContext";
 import { ProfileDataProvider } from "@/components/context/profileDataContext";
+import { ThemeProvider, useThemeMode } from "@/components/context/ThemeContext";
+
 import { GluestackUIProvider } from "@/components/ui/gluestack-ui-provider";
+
 import { paperDarkTheme, paperLightTheme } from "@/constants/paper-theme";
+
 import "@/global.css";
 
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const [ready, setReady] = useState(false);
-
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === "dark";
-  const curTheme = isDark ? paperDarkTheme : paperLightTheme;
-  const themeProviderTheme = isDark ? DarkTheme : DefaultTheme;
 
   useEffect(() => {
     const init = async () => {
@@ -41,7 +39,7 @@ export default function RootLayout() {
         }
 
         setReady(true);
-        SplashScreen.hideAsync();
+        await SplashScreen.hideAsync();
       } catch (err) {
         throw err;
       }
@@ -51,6 +49,18 @@ export default function RootLayout() {
   }, []);
 
   if (!ready) return null;
+
+  return (
+    <ThemeProvider>
+      <RootContent />
+    </ThemeProvider>
+  );
+}
+
+function RootContent() {
+  const { resolvedTheme } = useThemeMode();
+
+  const curTheme = resolvedTheme === "dark" ? paperDarkTheme : paperLightTheme;
 
   return (
     <SafeAreaProvider>
@@ -63,15 +73,13 @@ export default function RootLayout() {
             <ProfileDataProvider>
               <HabitsProvider>
                 <WorkoutSessionProvider>
-                  <GluestackUIProvider mode="dark">
+                  <GluestackUIProvider mode={resolvedTheme}>
                     <PaperProvider theme={curTheme}>
-                      <ThemeProvider value={themeProviderTheme}>
-                        <Stack screenOptions={{ headerShown: false }}>
-                          <Stack.Screen name="(auth)" />
-                          <Stack.Screen name="(tabs)" />
-                          <Stack.Screen name="(subpages)" />
-                        </Stack>
-                      </ThemeProvider>
+                      <Stack screenOptions={{ headerShown: false }}>
+                        <Stack.Screen name="(auth)" />
+                        <Stack.Screen name="(tabs)" />
+                        <Stack.Screen name="(subpages)" />
+                      </Stack>
                     </PaperProvider>
                   </GluestackUIProvider>
                 </WorkoutSessionProvider>
