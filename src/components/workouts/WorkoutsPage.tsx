@@ -3,11 +3,11 @@ import type { NativeSyntheticEvent, NativeScrollEvent } from "react-native";
 import { useUserContext } from "../context/userContext";
 import { useWorkoutSessionContext } from "../context/workoutSessionContext";
 import { useWorkoutsData, Workout } from "../context/workoutsDataContext";
-import { setWorkoutComplete } from "@/lib/supabaseFunctions";
+import { deleteWorkoutPlan, setWorkoutComplete } from "@/lib/supabaseFunctions";
 import { WorkoutCard } from "./WorkoutCard";
 import { ScreenView } from "../ui/ScreenView";
 import { useRouter, usePathname, useFocusEffect } from "expo-router";
-import { Chip, Divider } from "react-native-paper";
+import { Chip, Dialog, Divider, Portal, Text } from "react-native-paper";
 import { styles } from "@/constants/styles";
 import { HStack } from "../ui/hstack";
 import { WorkoutFilterChip } from "./WorkoutFilterChip";
@@ -44,6 +44,36 @@ export default function WorkoutsPage() {
   const [createModalVisible, setCreateModalVisible] = useState(false);
   // null (rather than {}) so we can check "is a workout selected" with a plain truthiness check TS can narrow on.
   const [selectedWorkout, setSelectedWorkout] = useState<Workout | null>(null);
+  // Plan awaiting delete confirmation.
+  const [deleteTarget, setDeleteTarget] = useState<Workout | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [mutationError, setMutationError] = useState("");
+
+  // Seeded plans have a null created_by and belong to everyone, so only the
+  // author gets edit/delete.
+  const ownsPlan = (workout: Workout) =>
+    Boolean(user?.id) && workout.created_by === user?.id;
+
+  const openEditPlan = (workout: Workout) => {
+    router.navigate({
+      pathname: "/edit-workout",
+      params: { id: String(workout.id) },
+    });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setMutationError("");
+    setDeleting(true);
+    const ok = await deleteWorkoutPlan(String(deleteTarget.id));
+    setDeleting(false);
+    if (!ok) {
+      setMutationError("Couldn't delete that plan. Please try again.");
+      return;
+    }
+    setDeleteTarget(null);
+    refreshWorkouts();
+  };
 
   const onScroll = ({
     nativeEvent,
@@ -129,6 +159,43 @@ export default function WorkoutsPage() {
               availableWorkouts={availableWorkouts}
               onCreate={createPlan}
             />
+            <Portal>
+              <Dialog
+                visible={deleteTarget !== null}
+                onDismiss={() => setDeleteTarget(null)}
+              >
+                <Dialog.Title>Delete plan?</Dialog.Title>
+                <Dialog.Content>
+                  <Text>
+                    {deleteTarget?.name} and its exercises will be removed.
+                    Workouts you already completed stay in your history, but
+                    will no longer show the plan&apos;s name. This can&apos;t be
+                    undone.
+                  </Text>
+                  {mutationError !== "" && (
+                    <Text style={{ color: "#ff4d4f", marginTop: Spacing.two }}>
+                      {mutationError}
+                    </Text>
+                  )}
+                </Dialog.Content>
+                <Dialog.Actions>
+                  <Button
+                    onPress={() => setDeleteTarget(null)}
+                    disabled={deleting}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onPress={confirmDelete}
+                    loading={deleting}
+                    disabled={deleting}
+                    textColor="#ff4d4f"
+                  >
+                    Delete
+                  </Button>
+                </Dialog.Actions>
+              </Dialog>
+            </Portal>
           </>
         }
         header={
@@ -176,6 +243,12 @@ export default function WorkoutsPage() {
             onPress={() => handleStart(workout)}
             isFavorited={favoriteIds.has(String(workout.id))}
             onToggleFavorite={() => toggleFavorite(String(workout.id))}
+            {...(ownsPlan(workout)
+              ? {
+                  onEdit: () => openEditPlan(workout),
+                  onDelete: () => setDeleteTarget(workout),
+                }
+              : {})}
           />
         ))}
         </VStack>

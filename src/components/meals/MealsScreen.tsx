@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native";
 import { useRouter } from "expo-router";
-import { ActivityIndicator, Text, Button } from "react-native-paper";
+import { ActivityIndicator, Text, Button, Dialog, Portal } from "react-native-paper";
 
 import { HabitAnimatedFAB } from "@/components/habits/HabitAnimatedFAB";
 import { Center } from "@/components/ui/center";
@@ -13,10 +13,15 @@ import { Spacing, TopBadgeInset } from "@/constants/theme";
 import { useSession } from "@/hooks/use-session";
 import { useTheme } from "@/hooks/use-theme";
 import { Ingredient, Recipe, matchRecipes, recipeKey, sortFavoritesFirst } from "@/lib/meals/meals";
-import { addRecipeToGroceryList } from "@/lib/meals/queries";
+import {
+  addRecipeToGroceryList,
+  deleteCustomRecipe,
+  setMealPlanEntry,
+} from "@/lib/meals/queries";
 import { useMealsData } from "@/components/context/mealsDataContext";
 
 import { AddIngredientsModal } from "./AddIngredientsModal";
+import { AddToMealPlanModal } from "./AddToMealPlanModal";
 import { FridgeModal } from "./FridgeModal";
 import { RecipeCard } from "./RecipeCard";
 import { AddRecipeModal } from "./AddRecipeModal";
@@ -51,6 +56,28 @@ export default function MealsScreen() {
   const [fridgeModalVisible, setFridgeModalVisible] = useState(false);
   // Recipe currently being queued, so only that card shows a spinner.
   const [addingKey, setAddingKey] = useState<string | null>(null);
+  // Recipe queued for the meal plan, or null when the picker is closed.
+  const [planRecipe, setPlanRecipe] = useState<Recipe | null>(null);
+  // Recipe awaiting delete confirmation.
+  const [deleteTarget, setDeleteTarget] = useState<Recipe | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setMutationError("");
+    setDeleting(true);
+    try {
+      await deleteCustomRecipe(String(deleteTarget.id));
+      setDeleteTarget(null);
+      refreshCatalog();
+    } catch (error) {
+      setMutationError(
+        error instanceof Error ? error.message : "Couldn't delete that recipe",
+      );
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const openFridge = () => {
     // The catalog is otherwise only fetched when the provider mounts, so unit
@@ -65,6 +92,13 @@ export default function MealsScreen() {
       pathname: "/recipe",
       // Params serialise to strings, so isCustom is read back as "true"/"false".
       params: { id: String(recipe.id), isCustom: String(recipe.isCustom) },
+    });
+  };
+
+  const openEditRecipe = (recipe: Recipe) => {
+    router.navigate({
+      pathname: "/edit-recipe",
+      params: { id: String(recipe.id) },
     });
   };
 
@@ -191,6 +225,41 @@ export default function MealsScreen() {
             entries={fridgeEntries}
             onSave={saveFridge}
           />
+          <AddToMealPlanModal
+            visible={planRecipe !== null}
+            onDismiss={() => setPlanRecipe(null)}
+            recipeName={planRecipe?.name ?? ""}
+            onConfirm={(plannedDate, mealType) =>
+              setMealPlanEntry(user!.id, planRecipe!, plannedDate, mealType)
+            }
+          />
+          <Portal>
+            <Dialog
+              visible={deleteTarget !== null}
+              onDismiss={() => setDeleteTarget(null)}
+            >
+              <Dialog.Title>Delete recipe?</Dialog.Title>
+              <Dialog.Content>
+                <Text>
+                  {deleteTarget?.name} will be removed, along with anywhere it
+                  appears in your meal plan. This can&apos;t be undone.
+                </Text>
+              </Dialog.Content>
+              <Dialog.Actions>
+                <Button onPress={() => setDeleteTarget(null)} disabled={deleting}>
+                  Cancel
+                </Button>
+                <Button
+                  onPress={confirmDelete}
+                  loading={deleting}
+                  disabled={deleting}
+                  textColor={ERROR_COLOR}
+                >
+                  Delete
+                </Button>
+              </Dialog.Actions>
+            </Dialog>
+          </Portal>
         </>
       }>
       <VStack style={styles.columnContainer} space="md">
@@ -224,6 +293,13 @@ export default function MealsScreen() {
                     onQuickAdd={() => quickAdd(recipe)}
                     adding={addingKey === recipeKey(recipe)}
                     onOpen={() => openRecipe(recipe)}
+                    onAddToPlan={() => setPlanRecipe(recipe)}
+                    {...(recipe.isCustom
+                      ? {
+                          onEdit: () => openEditRecipe(recipe),
+                          onDelete: () => setDeleteTarget(recipe),
+                        }
+                      : {})}
                   />
                 ))
               ) : (
@@ -246,6 +322,13 @@ export default function MealsScreen() {
                     onQuickAdd={() => quickAdd(recipe)}
                     adding={addingKey === recipeKey(recipe)}
                     onOpen={() => openRecipe(recipe)}
+                    onAddToPlan={() => setPlanRecipe(recipe)}
+                    {...(recipe.isCustom
+                      ? {
+                          onEdit: () => openEditRecipe(recipe),
+                          onDelete: () => setDeleteTarget(recipe),
+                        }
+                      : {})}
                   />
                 ))
               ) : (

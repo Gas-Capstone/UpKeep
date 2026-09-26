@@ -20,6 +20,9 @@ export type Workout = {
   target: string;
   duration_min: number;
   goal_tags?: string[];
+  // null on seeded plans, the author's id on user-made ones. Only the author
+  // can edit or delete a plan, so the cards need this to decide what to offer.
+  created_by?: string | null;
 };
 
 // A logged completion record (from getCompletedWorkouts()) — different shape than Workout, has required completed_at.

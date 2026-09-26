@@ -1,8 +1,17 @@
-import { View } from "react-native";
 import { Button, Card, Text, IconButton, useTheme } from "react-native-paper";
 
+import { CardMenu } from "@/components/ui/CardMenu";
 import type { AppTheme } from "@/constants/paper-theme";
 import type { Recipe } from "@/lib/meals/meals";
+
+// Shared by the star and the menu so both corners inset identically. Paper's
+// own left/right slot defaults are not symmetric — see Card.Title below.
+const ICON_SLOT_INSET = 8;
+const ICON_SLOT = {
+  width: 40,
+  justifyContent: "center",
+  alignItems: "center",
+} as const;
 type RecipeCardProps = {
   recipe: Recipe,
   isFavorited: boolean,
@@ -13,6 +22,10 @@ type RecipeCardProps = {
   adding?: boolean;
   // Opens the full recipe page.
   onOpen?: () => void;
+  // Omitted for catalog recipes, which the user can't change.
+  onEdit?: () => void;
+  onDelete?: () => void;
+  onAddToPlan?: () => void;
 };
 
 export function RecipeCard({
@@ -23,6 +36,9 @@ export function RecipeCard({
   onQuickAdd,
   adding = false,
   onOpen,
+  onEdit,
+  onDelete,
+  onAddToPlan,
 }: RecipeCardProps) {
   const theme = useTheme<AppTheme>();
   const ready = missingNames.length === 0;
@@ -38,42 +54,14 @@ export function RecipeCard({
             ? `${recipe.prepTimeMin} min`
             : "Prep time not set"
         }
-        // Menu is a placeholder for now. The no-op press is deliberate: the
-        // whole Card is pressable, so without its own handler a tap here would
-        // fall through and open the recipe page.
-        right={() => (
-          <IconButton
-            icon="menu"
-            size={22}
-            iconColor={theme.colors.onSurfaceVariant}
-            onPress={() => {}}
-            accessibilityLabel={`More options for ${recipe.name}`}
-          />
-        )}
-      />
-      <Card.Content>
-        <Text
-          style={{
-            color: ready ? theme.colors.success : theme.colors.accentMeals,
-          }}
-        >
-          {ready
-            ? `You have all ${recipe.ingredientIds.length} ingredients`
-            : `Need ${missingNames.length}: ${missingNames.join(", ")}`}
-        </Text>
-      </Card.Content>
-      <Card.Actions>
-        {/* Card.Actions right-aligns its children, so this row spans the full
-            width to hold the star at the left edge while Quick add stays
-            right. */}
-        <View
-          style={{
-            flex: 1,
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
+        // Paper insets the left slot (container paddingLeft + a 40dp box) but
+        // gives the right slot no style at all, so the two corners end up
+        // asymmetric. Matching boxes and equal padding put the star and the
+        // menu the same distance from their edges.
+        style={{ paddingLeft: ICON_SLOT_INSET, paddingRight: ICON_SLOT_INSET }}
+        leftStyle={ICON_SLOT}
+        rightStyle={ICON_SLOT}
+        left={() => (
           <IconButton
             icon={isFavorited ? "star" : "star-outline"}
             iconColor={
@@ -88,22 +76,65 @@ export function RecipeCard({
                 : `Add ${recipe.name} to favorites`
             }
           />
-
-          {onQuickAdd && (
-            <Button
-              mode="contained"
-              icon="plus"
-              loading={adding}
-              disabled={adding}
-              onPress={onQuickAdd}
-              style={{ borderRadius: 999 }}
-              accessibilityLabel={`Add missing ingredients for ${recipe.name} to grocery list`}
-            >
-              Quick add
-            </Button>
-          )}
-        </View>
-      </Card.Actions>
+        )}
+        right={() => (
+          <CardMenu
+            accessibilityLabel={`More options for ${recipe.name}`}
+            actions={[
+              ...(onAddToPlan
+                ? [
+                    {
+                      key: "plan",
+                      label: "Add to meal plan",
+                      icon: "calendar-plus",
+                      onPress: onAddToPlan,
+                    },
+                  ]
+                : []),
+              ...(onEdit
+                ? [{ key: "edit", label: "Edit recipe", icon: "pencil", onPress: onEdit }]
+                : []),
+              ...(onDelete
+                ? [
+                    {
+                      key: "delete",
+                      label: "Delete recipe",
+                      icon: "delete",
+                      onPress: onDelete,
+                      destructive: true,
+                    },
+                  ]
+                : []),
+            ]}
+          />
+        )}
+      />
+      <Card.Content>
+        <Text
+          style={{
+            color: ready ? theme.colors.success : theme.colors.accentMeals,
+          }}
+        >
+          {ready
+            ? `You have all ${recipe.ingredientIds.length} ingredients`
+            : `Need ${missingNames.length}: ${missingNames.join(", ")}`}
+        </Text>
+      </Card.Content>
+      {onQuickAdd && (
+        <Card.Actions>
+          <Button
+            mode="contained"
+            icon="plus"
+            loading={adding}
+            disabled={adding}
+            onPress={onQuickAdd}
+            style={{ borderRadius: 999 }}
+            accessibilityLabel={`Add missing ingredients for ${recipe.name} to grocery list`}
+          >
+            Quick add
+          </Button>
+        </Card.Actions>
+      )}
     </Card>
   );
 }
