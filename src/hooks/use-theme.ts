@@ -1,14 +1,12 @@
+import { useThemeMode } from "@/components/context/ThemeContext";
+import { Colors } from "@/constants/theme";
+
 /**
- * Learn more about light and dark modes:
- * https://docs.expo.dev/guides/color-schemes/
+ * Returns the same resolved palette used by Paper, ThemedView and ThemedText.
+ * This replaces the old direct useColorScheme() path so the in-app theme
+ * setting cannot disagree with individual screens.
  */
-
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-
 export function useTheme() {
-  const scheme = useColorScheme();
-  const theme = scheme === 'unspecified' ? 'light' : scheme;
-
-  return Colors[theme];
+  const { resolvedTheme } = useThemeMode();
+  return Colors[resolvedTheme];
 }

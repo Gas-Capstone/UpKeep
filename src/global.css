@@ -3,92 +3,71 @@
 @import "tailwindcss/utilities.css";
 @import "nativewind/theme";
 
-/* ─── Theme: design tokens (light / dark) ─────────────────────────
-   1. :root              — light defaults (all platforms)
-   2. @media dark :root  — dark defaults; nativewind maps this to
-                           Appearance.getColorScheme() on native.
-   3. :root.dark / :root.light — higher specificity for web class toggle. */
+/* uK brand design tokens.
+   ThemeContext is the app-level source of truth. Gluestack applies the
+   resolved light/dark mode to native Appearance and the web root class. */
 @layer theme {
-  :root {
-    --primary: 23 23 23;
-    --primary-foreground: 250 250 250;
+  :root,
+  :root.light {
+    --primary: 22 124 118;
+    --primary-foreground: 255 255 255;
     --card: 255 255 255;
-    --secondary: 245 245 245;
-    --secondary-foreground: 23 23 23;
-    --background: 255 255 255;
+    --secondary: 223 244 241;
+    --secondary-foreground: 18 35 33;
+    --background: 247 250 249;
     --popover: 255 255 255;
-    --popover-foreground: 10 10 10;
-    --muted: 245 245 245;
-    --muted-foreground: 115 115 115;
-    --destructive: 231 0 11;
-    --foreground: 10 10 10;
-    --border: 229 229 229;
-    --input: 229 229 229;
-    --ring: 212 212 212;
-    --accent: 247 247 247;
-    --accent-foreground: 52 52 52;
+    --popover-foreground: 18 35 33;
+    --muted: 234 244 242;
+    --muted-foreground: 96 116 113;
+    --destructive: 180 35 47;
+    --foreground: 18 35 33;
+    --border: 215 231 228;
+    --input: 215 231 228;
+    --ring: 27 158 150;
+    --accent: 223 244 241;
+    --accent-foreground: 10 70 66;
   }
 
   @media (prefers-color-scheme: dark) {
     :root {
-      --primary: 255 245 245;
-      --primary-foreground: 23 23 23;
-      --card: 23 23 23;
-      --secondary: 38 38 38;
-      --secondary-foreground: 250 250 250;
-      --background: 10 10 10;
-      --popover: 23 23 23;
-      --popover-foreground: 250 250 250;
-      --muted: 38 38 38;
-      --muted-foreground: 161 161 161;
-      --destructive: 255 100 103;
-      --foreground: 250 250 250;
-      --border: 46 46 46;
-      --input: 46 46 46;
-      --accent: 38 38 38;
-      --accent-foreground: 250 250 250;
-      --ring: 115 115 115;
+      --primary: 74 203 193;
+      --primary-foreground: 6 44 41;
+      --card: 13 36 33;
+      --secondary: 22 78 74;
+      --secondary-foreground: 250 247 242;
+      --background: 7 26 24;
+      --popover: 13 36 33;
+      --popover-foreground: 250 247 242;
+      --muted: 21 51 47;
+      --muted-foreground: 174 194 190;
+      --destructive: 255 138 147;
+      --foreground: 250 247 242;
+      --border: 41 74 69;
+      --input: 41 74 69;
+      --ring: 74 203 193;
+      --accent: 22 78 74;
+      --accent-foreground: 214 248 244;
     }
   }
 
   :root.dark {
-    --primary: 255 245 245;
-    --primary-foreground: 23 23 23;
-    --card: 23 23 23;
-    --secondary: 38 38 38;
-    --secondary-foreground: 250 250 250;
-    --background: 10 10 10;
-    --popover: 23 23 23;
-    --popover-foreground: 250 250 250;
-    --muted: 38 38 38;
-    --muted-foreground: 161 161 161;
-    --destructive: 255 100 103;
-    --foreground: 250 250 250;
-    --border: 46 46 46;
-    --input: 46 46 46;
-    --accent: 38 38 38;
-    --accent-foreground: 250 250 250;
-    --ring: 115 115 115;
-  }
-
-  :root.light {
-    --primary: 23 23 23;
-    --primary-foreground: 250 250 250;
-    --card: 255 255 255;
-    --secondary: 245 245 245;
-    --secondary-foreground: 23 23 23;
-    --background: 255 255 255;
-    --popover: 255 255 255;
-    --popover-foreground: 10 10 10;
-    --muted: 245 245 245;
-    --muted-foreground: 115 115 115;
-    --destructive: 231 0 11;
-    --foreground: 10 10 10;
-    --border: 229 229 229;
-    --input: 229 229 229;
-    --ring: 212 212 212;
-    --accent: 247 247 247;
-    --accent-foreground: 52 52 52;
+    --primary: 74 203 193;
+    --primary-foreground: 6 44 41;
+    --card: 13 36 33;
+    --secondary: 22 78 74;
+    --secondary-foreground: 250 247 242;
+    --background: 7 26 24;
+    --popover: 13 36 33;
+    --popover-foreground: 250 247 242;
+    --muted: 21 51 47;
+    --muted-foreground: 174 194 190;
+    --destructive: 255 138 147;
+    --foreground: 250 247 242;
+    --border: 41 74 69;
+    --input: 41 74 69;
+    --ring: 74 203 193;
+    --accent: 22 78 74;
+    --accent-foreground: 214 248 244;
   }
 }
 

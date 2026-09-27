@@ -1,78 +1,62 @@
 import { router, Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
-import { useColorScheme } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { PaperProvider } from "react-native-paper";
-import { ThemeProvider, DarkTheme, DefaultTheme } from "expo-router";
 
-import { supabase } from "@/lib/supabaseClient";
-import { UserProvider } from "@/components/context/userContext";
-import { WorkoutSessionProvider } from "@/components/context/workoutSessionContext";
-import { WorkoutsDataProvider } from "@/components/context/workoutsDataContext";
 import { HabitsProvider } from "@/components/context/habitsContext";
 import { MealsDataProvider } from "@/components/context/mealsDataContext";
 import { ProfileDataProvider } from "@/components/context/profileDataContext";
+import { ThemeProvider, useThemeMode } from "@/components/context/ThemeContext";
+import { UserProvider } from "@/components/context/userContext";
+import { WorkoutSessionProvider } from "@/components/context/workoutSessionContext";
+import { WorkoutsDataProvider } from "@/components/context/workoutsDataContext";
+import { BirthdayCelebration } from "@/components/profile/BirthdayCelebration";
 import { GluestackUIProvider } from "@/components/ui/gluestack-ui-provider";
 import { paperDarkTheme, paperLightTheme } from "@/constants/paper-theme";
 import "@/lib/notifications";
+import { supabase } from "@/lib/supabaseClient";
 import "@/global.css";
 
-SplashScreen.preventAutoHideAsync();
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
-  const [ready, setReady] = useState(false);
+  return (
+    <ThemeProvider>
+      <RootContent />
+    </ThemeProvider>
+  );
+}
 
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === "dark";
-  const curTheme = isDark ? paperDarkTheme : paperLightTheme;
-  const themeProviderTheme = isDark ? DarkTheme : DefaultTheme;
-
-  useEffect(() => {
-    const init = async () => {
-      try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-
-        if (session) {
-          router.replace("/(tabs)");
-        } else {
-          router.replace("/(auth)/login");
-        }
-
-        setReady(true);
-        SplashScreen.hideAsync();
-      } catch (err) {
-        throw err;
-      }
-    };
-
-    init();
-  }, []);
-
-  if (!ready) return null;
+function RootContent() {
+  const { theme, resolvedTheme, ready: themeReady } = useThemeMode();
+  const curTheme = resolvedTheme === "dark" ? paperDarkTheme : paperLightTheme;
 
   return (
     <SafeAreaProvider>
       <UserProvider>
-        {/* WorkoutsDataProvider, MealsDataProvider, and ProfileDataProvider
-            all read the current user via userContext, so they must stay
-            nested inside UserProvider. */}
         <WorkoutsDataProvider>
           <MealsDataProvider>
             <ProfileDataProvider>
               <HabitsProvider>
                 <WorkoutSessionProvider>
-                  <GluestackUIProvider mode="dark">
+                  <GluestackUIProvider mode={theme}>
                     <PaperProvider theme={curTheme}>
-                      <ThemeProvider value={themeProviderTheme}>
-                        <Stack screenOptions={{ headerShown: false }}>
-                          <Stack.Screen name="(auth)" />
-                          <Stack.Screen name="(tabs)" />
-                          <Stack.Screen name="(subpages)" />
-                        </Stack>
-                      </ThemeProvider>
+                      <Stack
+                        screenOptions={{
+                          headerShown: false,
+                          contentStyle: {
+                            backgroundColor: curTheme.colors.background,
+                          },
+                        }}
+                      >
+                        <Stack.Screen name="(auth)" />
+                        <Stack.Screen name="(tabs)" />
+                        <Stack.Screen name="(subpages)" />
+                      </Stack>
+
+                      <AuthBootstrap themeReady={themeReady} />
+                      <BirthdayCelebration />
                     </PaperProvider>
                   </GluestackUIProvider>
                 </WorkoutSessionProvider>
@@ -83,4 +67,48 @@ export default function RootLayout() {
       </UserProvider>
     </SafeAreaProvider>
   );
+}
+
+function AuthBootstrap({ themeReady }: { themeReady: boolean }) {
+  const [authReady, setAuthReady] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+
+    const initialize = async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (!active) return;
+
+        router.replace(session ? "/(tabs)" : "/(auth)/login");
+      } catch (error) {
+        console.log("Session bootstrap failed:", error);
+
+        if (active) {
+          router.replace("/(auth)/login");
+        }
+      } finally {
+        if (active) setAuthReady(true);
+      }
+    };
+
+    initialize();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!authReady || !themeReady) return;
+
+    // The Stack is already mounted when this component runs, so navigation is
+    // ready and the native splash can safely disappear.
+    SplashScreen.hideAsync().catch(() => {});
+  }, [authReady, themeReady]);
+
+  return null;
 }
