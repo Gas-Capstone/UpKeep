@@ -110,8 +110,6 @@ export default function SettingsScreen() {
   const [password, setPassword] = useState("");
 
   const [showTimePicker, setShowTimePicker] = useState(false);
-  // iOS's inline spinner fires on every scroll tick, so edits go into a draft
-  // and are only saved when Done is tapped.
   const [draftTime, setDraftTime] = useState(summaryTime);
   const [sendingTest, setSendingTest] = useState(false);
 
@@ -813,9 +811,10 @@ export default function SettingsScreen() {
                         />
                         <ThemedText
                           type="smallBold"
-                          style={
-                            selected ? { color: colors.brandStrong } : undefined
-                          }
+                          style={[
+                            styles.goalLabel,
+                            selected && { color: colors.brandStrong },
+                          ]}
                         >
                           {item.label}
                         </ThemedText>
@@ -1317,7 +1316,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: Spacing.two,
+  },
+  goalLabel: {
+    flexShrink: 1,
+    textAlign: "center",
   },
   twoColumnRow: {
     flexDirection: "row",
