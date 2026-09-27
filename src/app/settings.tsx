@@ -1,5 +1,6 @@
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Ionicons } from "@expo/vector-icons";
+import { format } from "date-fns";
 import { router } from "expo-router";
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
@@ -15,8 +16,9 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ActivityIndicator, TextInput } from "react-native-paper";
+import { ActivityIndicator, Switch, TextInput } from "react-native-paper";
 
+import { useNotifications } from "@/components/context/notificationsContext";
 import { useProfileData } from "@/components/context/profileDataContext";
 import { useThemeMode } from "@/components/context/ThemeContext";
 import { ThemedText } from "@/components/themed-text";
@@ -77,6 +79,17 @@ export default function SettingsScreen() {
     updatePrimaryGoal,
     updateBiometrics,
   } = useProfileData();
+  const {
+    enabled: notificationsEnabled,
+    hour: summaryHour,
+    minute: summaryMinute,
+    setEnabled: setNotificationsEnabled,
+    setSummaryTime,
+    sendTestSummary,
+  } = useNotifications();
+
+  const summaryTime = new Date();
+  summaryTime.setHours(summaryHour, summaryMinute, 0, 0);
 
   const [openSection, setOpenSection] = useState<SectionKey>(null);
   const [error, setError] = useState("");
@@ -95,6 +108,12 @@ export default function SettingsScreen() {
   const [age, setAge] = useState("");
   const [sex, setSex] = useState<boolean | null>(null);
   const [password, setPassword] = useState("");
+
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  // iOS's inline spinner fires on every scroll tick, so edits go into a draft
+  // and are only saved when Done is tapped.
+  const [draftTime, setDraftTime] = useState(summaryTime);
+  const [sendingTest, setSendingTest] = useState(false);
 
   useEffect(() => {
     if (!profile) return;
@@ -122,6 +141,54 @@ export default function SettingsScreen() {
     clearMessages();
     setOpenSection((current) => (current === section ? null : section));
   };
+
+  async function toggleNotifications(value: boolean) {
+    clearMessages();
+    try {
+      await setNotificationsEnabled(value);
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Could not update notifications.",
+      );
+    }
+  }
+
+  function openTimePicker() {
+    setDraftTime(summaryTime);
+    setShowTimePicker(true);
+  }
+
+  function saveSummaryTime(time: Date) {
+    setSummaryTime(time.getHours(), time.getMinutes());
+    setShowTimePicker(false);
+  }
+
+  function handleTimeValueChange(_event: unknown, selectedTime: Date) {
+    if (Platform.OS === "android") {
+      saveSummaryTime(selectedTime);
+    } else {
+      setDraftTime(selectedTime);
+    }
+  }
+
+  async function sendTestNotification() {
+    clearMessages();
+    setSendingTest(true);
+    try {
+      await sendTestSummary();
+      setStatus("Test notification sent.");
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Could not send a test notification.",
+      );
+    } finally {
+      setSendingTest(false);
+    }
+  }
 
   async function uploadAvatar(uri: string, userId: string) {
     const base64 = await FileSystem.readAsStringAsync(uri, {
@@ -457,6 +524,115 @@ export default function SettingsScreen() {
                       </Pressable>
                     );
                   })}
+                </View>
+              </View>
+
+              <SectionLabel
+                title="Notifications"
+                subtitle="A morning rundown of your habits and meals"
+              />
+              <View
+                style={[
+                  styles.card,
+                  {
+                    backgroundColor: colors.backgroundElement,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <View style={styles.cardHeader}>
+                  <View
+                    style={[
+                      styles.cardIcon,
+                      { backgroundColor: colors.brandSoft },
+                    ]}
+                  >
+                    <Ionicons
+                      name="notifications-outline"
+                      size={20}
+                      color={colors.brand}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <ThemedText type="smallBold">Daily summary</ThemedText>
+                    <ThemedText type="small" themeColor="textSecondary">
+                      {notificationsEnabled
+                        ? `Every day at ${format(summaryTime, "h:mm aa")}`
+                        : "Off"}
+                    </ThemedText>
+                  </View>
+                  <Switch
+                    value={notificationsEnabled}
+                    onValueChange={toggleNotifications}
+                    color={colors.brand}
+                  />
+                </View>
+
+                <View
+                  style={[styles.editor, { borderTopColor: colors.border }]}
+                >
+                  <Pressable
+                    onPress={openTimePicker}
+                    style={({ pressed }) => [
+                      styles.fieldButton,
+                      {
+                        backgroundColor: colors.background,
+                        borderColor: colors.border,
+                      },
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <View style={styles.fieldButtonCopy}>
+                      <ThemedText type="small" themeColor="textSecondary">
+                        Summary time
+                      </ThemedText>
+                      <ThemedText type="smallBold">
+                        {format(summaryTime, "h:mm aa")}
+                      </ThemedText>
+                    </View>
+                    <Ionicons
+                      name="time-outline"
+                      size={20}
+                      color={colors.brand}
+                    />
+                  </Pressable>
+
+                  {showTimePicker ? (
+                    <View
+                      style={[
+                        styles.pickerWrap,
+                        { borderColor: colors.border },
+                      ]}
+                    >
+                      <DateTimePicker
+                        value={draftTime}
+                        mode="time"
+                        display={Platform.OS === "ios" ? "spinner" : "default"}
+                        is24Hour={false}
+                        onValueChange={handleTimeValueChange}
+                        onDismiss={() => setShowTimePicker(false)}
+                      />
+                      {Platform.OS === "ios" ? (
+                        <Pressable
+                          onPress={() => saveSummaryTime(draftTime)}
+                          style={styles.doneButton}
+                        >
+                          <ThemedText
+                            type="smallBold"
+                            style={{ color: colors.brand }}
+                          >
+                            Done
+                          </ThemedText>
+                        </Pressable>
+                      ) : null}
+                    </View>
+                  ) : null}
+
+                  <PrimaryAction
+                    label="Send test notification"
+                    onPress={sendTestNotification}
+                    disabled={sendingTest}
+                  />
                 </View>
               </View>
 

@@ -5,6 +5,7 @@ import { ActivityIndicator, Button, Icon, Text } from "react-native-paper";
 
 import { useThemeMode } from "@/components/context/ThemeContext";
 import { useMealsData } from "@/components/context/mealsDataContext";
+import { useNotifications } from "@/components/context/notificationsContext";
 import { Center } from "@/components/ui/center";
 import { ScreenView } from "@/components/ui/ScreenView";
 import { Colors, Radius, Spacing } from "@/constants/theme";
@@ -44,6 +45,7 @@ export default function MealsScreen() {
     createNewRecipe,
     toggleFridgeItem: toggleFridgeItemShared,
   } = useMealsData();
+  const { resync } = useNotifications();
 
   const [mutationError, setMutationError] = useState("");
   const [addIngredientsVisible, setAddIngredientsVisible] = useState(false);
@@ -156,9 +158,10 @@ export default function MealsScreen() {
             visible={planRecipe !== null}
             onDismiss={() => setPlanRecipe(null)}
             recipeName={planRecipe?.name ?? ""}
-            onConfirm={(plannedDate, mealType) =>
-              setMealPlanEntry(user!.id, planRecipe!, plannedDate, mealType)
-            }
+            onConfirm={async (plannedDate, mealType) => {
+              await setMealPlanEntry(user!.id, planRecipe!, plannedDate, mealType);
+              resync();
+            }}
           />
         </>
       }

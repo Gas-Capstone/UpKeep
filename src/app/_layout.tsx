@@ -6,6 +6,7 @@ import { PaperProvider } from "react-native-paper";
 
 import { HabitsProvider } from "@/components/context/habitsContext";
 import { MealsDataProvider } from "@/components/context/mealsDataContext";
+import { NotificationsProvider } from "@/components/context/notificationsContext";
 import { ProfileDataProvider } from "@/components/context/profileDataContext";
 import { ThemeProvider, useThemeMode } from "@/components/context/ThemeContext";
 import { UserProvider } from "@/components/context/userContext";
@@ -39,27 +40,29 @@ function RootContent() {
           <MealsDataProvider>
             <ProfileDataProvider>
               <HabitsProvider>
-                <WorkoutSessionProvider>
-                  <GluestackUIProvider mode={theme}>
-                    <PaperProvider theme={curTheme}>
-                      <Stack
-                        screenOptions={{
-                          headerShown: false,
-                          contentStyle: {
-                            backgroundColor: curTheme.colors.background,
-                          },
-                        }}
-                      >
-                        <Stack.Screen name="(auth)" />
-                        <Stack.Screen name="(tabs)" />
-                        <Stack.Screen name="(subpages)" />
-                      </Stack>
+                <NotificationsProvider>
+                  <WorkoutSessionProvider>
+                    <GluestackUIProvider mode={theme}>
+                      <PaperProvider theme={curTheme}>
+                        <Stack
+                          screenOptions={{
+                            headerShown: false,
+                            contentStyle: {
+                              backgroundColor: curTheme.colors.background,
+                            },
+                          }}
+                        >
+                          <Stack.Screen name="(auth)" />
+                          <Stack.Screen name="(tabs)" />
+                          <Stack.Screen name="(subpages)" />
+                        </Stack>
 
-                      <AuthBootstrap themeReady={themeReady} />
-                      <BirthdayCelebration />
-                    </PaperProvider>
-                  </GluestackUIProvider>
-                </WorkoutSessionProvider>
+                        <AuthBootstrap themeReady={themeReady} />
+                        <BirthdayCelebration />
+                      </PaperProvider>
+                    </GluestackUIProvider>
+                  </WorkoutSessionProvider>
+                </NotificationsProvider>
               </HabitsProvider>
             </ProfileDataProvider>
           </MealsDataProvider>

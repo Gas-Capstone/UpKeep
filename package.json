@@ -31,6 +31,7 @@
     "expo-system-ui": "~57.0.0",
     "expo-web-browser": "~57.0.0",
     "nativewind": "^5.0.0-preview.2",
+    "notifications": "^0.2.0",
     "pod-install": "^1.1.0",
     "react": "19.2.3",
     "react-aria": "^3.45.0",
