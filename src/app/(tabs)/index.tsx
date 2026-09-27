@@ -1,12 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
-import { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
-import { format } from "date-fns";
-import { useContext, useMemo, useState } from "react";
-import { Image, Platform, StyleSheet, View } from "react-native";
+import { useContext, useMemo } from "react";
+import { Image, StyleSheet, View } from "react-native";
 import {
   ActivityIndicator,
   Avatar,
-  Button,
   ProgressBar,
   Text,
   useTheme,
@@ -37,11 +34,6 @@ import {
   getWorkoutCategoryStats,
   WellnessComponent,
 } from "@/lib/wellnessScore";
-import { VStack } from "@/components/ui/vstack";
-import {
-  scheduleTimeNotification,
-  sendTestNotification,
-} from "@/lib/notifications";
 
 function getGreeting() {
   const hour = new Date().getHours();
@@ -397,10 +389,6 @@ export default function HomeScreen() {
   const theme = useTheme();
   const { resolvedTheme } = useThemeMode();
   const colors = Colors[resolvedTheme];
-  const [notificationTime, setNotificationTime] = useState(new Date());
-  const [notificationLoading, setNotificationLoading] = useState(false);
-  const [notificationMessage, setNotificationMessage] = useState("");
-  const [notificationError, setNotificationError] = useState("");
 
   const {
     completedWorkouts,
@@ -550,60 +538,6 @@ export default function HomeScreen() {
 
   const displayName = profileLoading ? "..." : profile?.display_name || "there";
   const isLoadingAnyData = workoutsLoading || profileLoading || mealsLoading;
-
-  function showNotificationTimePicker() {
-    if (Platform.OS !== "android") return;
-
-    DateTimePickerAndroid.open({
-      value: notificationTime,
-      onChange: (_event, selectedDate) => {
-        if (selectedDate) {
-          setNotificationTime(selectedDate);
-          void handleScheduleNotification(selectedDate);
-        }
-      },
-      mode: "time",
-      is24Hour: false,
-    });
-  }
-
-  async function handleTestNotification() {
-    setNotificationLoading(true);
-    setNotificationMessage("");
-    setNotificationError("");
-
-    try {
-      await sendTestNotification();
-      setNotificationMessage("Test notification sent.");
-    } catch (err) {
-      setNotificationError(
-        err instanceof Error ? err.message : "Failed to send notification.",
-      );
-    } finally {
-      setNotificationLoading(false);
-    }
-  }
-
-  async function handleScheduleNotification(time = notificationTime) {
-    setNotificationLoading(true);
-    setNotificationMessage("");
-    setNotificationError("");
-
-    try {
-      await scheduleTimeNotification(time);
-      setNotificationMessage(
-        `Notification scheduled for ${format(time, "h:mm aa")}.`,
-      );
-    } catch (err) {
-      setNotificationError(
-        err instanceof Error
-          ? err.message
-          : "Failed to schedule notification.",
-      );
-    } finally {
-      setNotificationLoading(false);
-    }
-  }
 
   const profileAvatar = profile?.avatar_url ? (
     <Avatar.Image size={46} source={{ uri: profile.avatar_url }} />
@@ -847,45 +781,6 @@ export default function HomeScreen() {
         rightItems={nutrientStats.possiblyMissing}
         emptyText="Add ingredients to your fridge to see nutrition patterns."
       />
-
-      <VStack space="sm" style={homeStyles.notificationSection}>
-        <Text variant="titleMedium">Notifications</Text>
-        <Button
-          onPress={handleTestNotification}
-          disabled={notificationLoading}
-          mode="contained"
-          style={homeStyles.notificationButton}
-        >
-          {notificationLoading ? "Sending..." : "Test Notification"}
-        </Button>
-        <Button
-          onPress={showNotificationTimePicker}
-          disabled={notificationLoading || Platform.OS !== "android"}
-          mode="contained"
-          style={homeStyles.notificationButton}
-        >
-          Set Notification Time
-        </Button>
-        <Text variant="bodyMedium">
-          Selected: {format(notificationTime, "h:mm aa")}
-        </Text>
-        {notificationMessage.length > 0 && (
-          <Text
-            variant="bodyMedium"
-            style={{ color: theme.colors.primary }}
-          >
-            {notificationMessage}
-          </Text>
-        )}
-        {notificationError.length > 0 && (
-          <Text
-            variant="bodyMedium"
-            style={{ color: theme.colors.error }}
-          >
-            {notificationError}
-          </Text>
-        )}
-      </VStack>
     </ScreenView>
   );
 }
@@ -1192,11 +1087,5 @@ const homeStyles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 17,
     fontWeight: "500",
-  },
-  notificationSection: {
-    alignSelf: "stretch",
-  },
-  notificationButton: {
-    width: "100%",
   },
 });
