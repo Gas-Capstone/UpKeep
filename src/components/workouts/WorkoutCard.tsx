@@ -4,6 +4,7 @@ import { Button, Icon, IconButton, Text } from "react-native-paper";
 import { useThemeMode } from "@/components/context/ThemeContext";
 import type { Workout } from "@/components/context/workoutsDataContext";
 import { BrandImagePlaceholder } from "@/components/ui/BrandImagePlaceholder";
+import { CardMenu } from "@/components/ui/CardMenu";
 import { Colors, Radius, Spacing } from "@/constants/theme";
 
 type WorkoutCardProps = {
@@ -11,6 +12,10 @@ type WorkoutCardProps = {
   onPress: () => void;
   isFavorited: boolean;
   onToggleFavorite: () => void;
+  // Omitted for seeded plans, which the user can't change — the card then
+  // renders no menu at all rather than disabled items.
+  onEdit?: () => void;
+  onDelete?: () => void;
 };
 
 export function WorkoutCard({
@@ -18,6 +23,8 @@ export function WorkoutCard({
   onPress,
   isFavorited,
   onToggleFavorite,
+  onEdit,
+  onDelete,
 }: WorkoutCardProps) {
   const { resolvedTheme } = useThemeMode();
   const colors = Colors[resolvedTheme];
@@ -74,6 +81,33 @@ export function WorkoutCard({
                 : `Add ${workout.name} to favorites`
             }
             style={{ margin: 0 }}
+          />
+
+          <CardMenu
+            accessibilityLabel={`More options for ${workout.name}`}
+            actions={[
+              ...(onEdit
+                ? [
+                    {
+                      key: "edit",
+                      label: "Edit plan",
+                      icon: "pencil",
+                      onPress: onEdit,
+                    },
+                  ]
+                : []),
+              ...(onDelete
+                ? [
+                    {
+                      key: "delete",
+                      label: "Delete plan",
+                      icon: "delete",
+                      onPress: onDelete,
+                      destructive: true,
+                    },
+                  ]
+                : []),
+            ]}
           />
         </View>
 

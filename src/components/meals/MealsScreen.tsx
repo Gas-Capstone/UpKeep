@@ -1,7 +1,14 @@
 import { useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { useRouter } from "expo-router";
-import { ActivityIndicator, Button, Icon, Text } from "react-native-paper";
+import {
+  ActivityIndicator,
+  Button,
+  Dialog,
+  Icon,
+  Portal,
+  Text,
+} from "react-native-paper";
 
 import { useThemeMode } from "@/components/context/ThemeContext";
 import { useMealsData } from "@/components/context/mealsDataContext";
@@ -17,7 +24,11 @@ import {
   recipeKey,
   sortFavoritesFirst,
 } from "@/lib/meals/meals";
-import { addRecipeToGroceryList, setMealPlanEntry } from "@/lib/meals/queries";
+import {
+  addRecipeToGroceryList,
+  deleteCustomRecipe,
+  setMealPlanEntry,
+} from "@/lib/meals/queries";
 
 import { AddIngredientsModal } from "./AddIngredientsModal";
 import { AddRecipeModal } from "./AddRecipeModal";
@@ -53,6 +64,33 @@ export default function MealsScreen() {
   const [fridgeModalVisible, setFridgeModalVisible] = useState(false);
   const [planRecipe, setPlanRecipe] = useState<Recipe | null>(null);
   const [addingKey, setAddingKey] = useState<string | null>(null);
+  // Recipe awaiting delete confirmation.
+  const [deleteTarget, setDeleteTarget] = useState<Recipe | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const openEditRecipe = (recipe: Recipe) => {
+    router.navigate({
+      pathname: "/edit-recipe",
+      params: { id: String(recipe.id) },
+    });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setMutationError("");
+    setDeleting(true);
+    try {
+      await deleteCustomRecipe(String(deleteTarget.id));
+      setDeleteTarget(null);
+      refreshCatalog();
+    } catch (error) {
+      setMutationError(
+        error instanceof Error ? error.message : "Couldn't delete that recipe",
+      );
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const openFridge = () => {
     refreshCatalog();
@@ -163,6 +201,34 @@ export default function MealsScreen() {
               resync();
             }}
           />
+
+          <Portal>
+            <Dialog
+              visible={deleteTarget !== null}
+              onDismiss={() => setDeleteTarget(null)}
+            >
+              <Dialog.Title>Delete recipe?</Dialog.Title>
+              <Dialog.Content>
+                <Text>
+                  {deleteTarget?.name} will be removed, along with anywhere it
+                  appears in your meal plan. This can&apos;t be undone.
+                </Text>
+              </Dialog.Content>
+              <Dialog.Actions>
+                <Button onPress={() => setDeleteTarget(null)} disabled={deleting}>
+                  Cancel
+                </Button>
+                <Button
+                  onPress={confirmDelete}
+                  loading={deleting}
+                  disabled={deleting}
+                  textColor={colors.danger}
+                >
+                  Delete
+                </Button>
+              </Dialog.Actions>
+            </Dialog>
+          </Portal>
         </>
       }
     >
@@ -330,6 +396,12 @@ export default function MealsScreen() {
                   adding={addingKey === recipeKey(recipe)}
                   onAddToPlan={() => setPlanRecipe(recipe)}
                   onOpen={() => openRecipe(recipe)}
+                  {...(recipe.isCustom
+                    ? {
+                        onEdit: () => openEditRecipe(recipe),
+                        onDelete: () => setDeleteTarget(recipe),
+                      }
+                    : {})}
                 />
               ))
             ) : (
@@ -362,6 +434,12 @@ export default function MealsScreen() {
                   adding={addingKey === recipeKey(recipe)}
                   onAddToPlan={() => setPlanRecipe(recipe)}
                   onOpen={() => openRecipe(recipe)}
+                  {...(recipe.isCustom
+                    ? {
+                        onEdit: () => openEditRecipe(recipe),
+                        onDelete: () => setDeleteTarget(recipe),
+                      }
+                    : {})}
                 />
               ))
             ) : (
