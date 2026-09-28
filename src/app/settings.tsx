@@ -876,6 +876,11 @@ export default function SettingsScreen() {
                   </View>
                 ) : null}
 
+                <PrimaryAction
+                  label="Send test notification"
+                  onPress={sendTestNotification}
+                  disabled={sendingTest}
+                />
               </ExpandableCard>
 
               <SectionLabel
