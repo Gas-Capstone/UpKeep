@@ -1,5 +1,5 @@
 import { StyleSheet, View } from "react-native";
-import { Button, Card, Icon, IconButton, Text } from "react-native-paper";
+import { Card, Icon, IconButton, Text } from "react-native-paper";
 
 import { useThemeMode } from "@/components/context/ThemeContext";
 import { BrandImagePlaceholder } from "@/components/ui/BrandImagePlaceholder";
@@ -99,7 +99,20 @@ export function RecipeCard({
 
             <CardMenu
               accessibilityLabel={`More options for ${recipe.name}`}
+              size={21}
+              anchorStyle={styles.favoriteButton}
               actions={[
+                ...(onQuickAdd
+                  ? [
+                      {
+                        key: "grocery",
+                        label: "Add ingredients to grocery list",
+                        icon: "cart-plus",
+                        onPress: onQuickAdd,
+                        disabled: adding,
+                      },
+                    ]
+                  : []),
                 ...(onAddToPlan
                   ? [
                       {
@@ -183,24 +196,6 @@ export function RecipeCard({
         </View>
       </Card.Content>
 
-      {onQuickAdd && (
-        <Card.Actions style={styles.actions}>
-          <Button
-            compact
-            mode="contained"
-            icon="plus"
-            loading={adding}
-            disabled={adding}
-            onPress={onQuickAdd}
-            buttonColor={colors.brandStrong}
-            textColor="#FFFFFF"
-            style={styles.actionButton}
-            accessibilityLabel={`Add missing ingredients for ${recipe.name} to grocery list`}
-          >
-            Quick add
-          </Button>
-        </Card.Actions>
-      )}
     </Card>
   );
 }
@@ -253,15 +248,6 @@ const styles = StyleSheet.create({
     gap: 5,
     paddingHorizontal: Spacing.two,
     paddingVertical: 5,
-    borderRadius: Radius.pill,
-  },
-  actions: {
-    paddingHorizontal: Spacing.three,
-    paddingBottom: Spacing.three,
-    paddingTop: 0,
-    justifyContent: "space-between",
-  },
-  actionButton: {
     borderRadius: Radius.pill,
   },
 });

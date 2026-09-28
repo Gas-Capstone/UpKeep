@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { StyleProp, ViewStyle } from "react-native";
 import { IconButton, Menu, useTheme } from "react-native-paper";
 
 export type CardMenuAction = {
@@ -8,11 +9,16 @@ export type CardMenuAction = {
   onPress: () => void;
   // Renders in the error color — used for delete.
   destructive?: boolean;
+  disabled?: boolean;
 };
 
 type CardMenuProps = {
   actions: CardMenuAction[];
   accessibilityLabel: string;
+  // Match these to the sibling the menu sits beside — cards give their star a
+  // negative margin, and the two only line up if this does the same.
+  size?: number;
+  anchorStyle?: StyleProp<ViewStyle>;
 };
 
 /**
@@ -22,7 +28,12 @@ type CardMenuProps = {
  * (seeded plans, catalog recipes with nothing to offer) simply have no menu
  * rather than one full of disabled items.
  */
-export function CardMenu({ actions, accessibilityLabel }: CardMenuProps) {
+export function CardMenu({
+  actions,
+  accessibilityLabel,
+  size = 22,
+  anchorStyle,
+}: CardMenuProps) {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
 
@@ -35,9 +46,9 @@ export function CardMenu({ actions, accessibilityLabel }: CardMenuProps) {
       anchor={
         <IconButton
           icon="menu"
-          size={22}
+          size={size}
           iconColor={theme.colors.onSurfaceVariant}
-          style={{ margin: 0 }}
+          style={anchorStyle ?? { margin: 0 }}
           // Cards can be pressable themselves, so this has to claim the tap
           // rather than letting it fall through to the card.
           onPress={() => setOpen(true)}
@@ -50,6 +61,7 @@ export function CardMenu({ actions, accessibilityLabel }: CardMenuProps) {
           key={action.key}
           leadingIcon={action.icon}
           title={action.label}
+          disabled={action.disabled}
           titleStyle={
             action.destructive ? { color: theme.colors.error } : undefined
           }
