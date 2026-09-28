@@ -83,6 +83,7 @@ export default function MealsScreen() {
       await deleteCustomRecipe(String(deleteTarget.id));
       setDeleteTarget(null);
       refreshCatalog();
+      resync();
     } catch (error) {
       setMutationError(
         error instanceof Error ? error.message : "Couldn't delete that recipe",
