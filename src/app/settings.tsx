@@ -26,7 +26,13 @@ import { ThemedView } from "@/components/themed-view";
 import { Colors, MaxContentWidth, Radius, Spacing } from "@/constants/theme";
 import { supabase } from "@/lib/supabaseClient";
 
-type SectionKey = "profile" | "goal" | "wellness" | "security" | null;
+type SectionKey =
+  | "profile"
+  | "goal"
+  | "wellness"
+  | "notifications"
+  | "security"
+  | null;
 
 const GOALS = [
   { key: "muscle", label: "Build muscle", icon: "barbell-outline" },
@@ -469,7 +475,7 @@ export default function SettingsScreen() {
 
               <SectionLabel
                 title="Appearance"
-                subtitle="Choose how Upkeep looks on this device"
+                subtitle="Choose how UpKeep looks on this device"
               />
               <View
                 style={[
@@ -522,115 +528,6 @@ export default function SettingsScreen() {
                       </Pressable>
                     );
                   })}
-                </View>
-              </View>
-
-              <SectionLabel
-                title="Notifications"
-                subtitle="A morning rundown of your habits and meals"
-              />
-              <View
-                style={[
-                  styles.card,
-                  {
-                    backgroundColor: colors.backgroundElement,
-                    borderColor: colors.border,
-                  },
-                ]}
-              >
-                <View style={styles.cardHeader}>
-                  <View
-                    style={[
-                      styles.cardIcon,
-                      { backgroundColor: colors.brandSoft },
-                    ]}
-                  >
-                    <Ionicons
-                      name="notifications-outline"
-                      size={20}
-                      color={colors.brand}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <ThemedText type="smallBold">Daily summary</ThemedText>
-                    <ThemedText type="small" themeColor="textSecondary">
-                      {notificationsEnabled
-                        ? `Every day at ${format(summaryTime, "h:mm aa")}`
-                        : "Off"}
-                    </ThemedText>
-                  </View>
-                  <Switch
-                    value={notificationsEnabled}
-                    onValueChange={toggleNotifications}
-                    color={colors.brand}
-                  />
-                </View>
-
-                <View
-                  style={[styles.editor, { borderTopColor: colors.border }]}
-                >
-                  <Pressable
-                    onPress={openTimePicker}
-                    style={({ pressed }) => [
-                      styles.fieldButton,
-                      {
-                        backgroundColor: colors.background,
-                        borderColor: colors.border,
-                      },
-                      pressed && styles.pressed,
-                    ]}
-                  >
-                    <View style={styles.fieldButtonCopy}>
-                      <ThemedText type="small" themeColor="textSecondary">
-                        Summary time
-                      </ThemedText>
-                      <ThemedText type="smallBold">
-                        {format(summaryTime, "h:mm aa")}
-                      </ThemedText>
-                    </View>
-                    <Ionicons
-                      name="time-outline"
-                      size={20}
-                      color={colors.brand}
-                    />
-                  </Pressable>
-
-                  {showTimePicker ? (
-                    <View
-                      style={[
-                        styles.pickerWrap,
-                        { borderColor: colors.border },
-                      ]}
-                    >
-                      <DateTimePicker
-                        value={draftTime}
-                        mode="time"
-                        display={Platform.OS === "ios" ? "spinner" : "default"}
-                        is24Hour={false}
-                        onValueChange={handleTimeValueChange}
-                        onDismiss={() => setShowTimePicker(false)}
-                      />
-                      {Platform.OS === "ios" ? (
-                        <Pressable
-                          onPress={() => saveSummaryTime(draftTime)}
-                          style={styles.doneButton}
-                        >
-                          <ThemedText
-                            type="smallBold"
-                            style={{ color: colors.brand }}
-                          >
-                            Done
-                          </ThemedText>
-                        </Pressable>
-                      ) : null}
-                    </View>
-                  ) : null}
-
-                  <PrimaryAction
-                    label="Send test notification"
-                    onPress={sendTestNotification}
-                    disabled={sendingTest}
-                  />
                 </View>
               </View>
 
@@ -901,6 +798,92 @@ export default function SettingsScreen() {
               </ExpandableCard>
 
               <SectionLabel
+                title="Notifications"
+                subtitle="A rundown of your habits and meals"
+              />
+              <ExpandableCard
+                icon="notifications-outline"
+                title="Daily summary"
+                summary={
+                  notificationsEnabled
+                    ? `Every day at ${format(summaryTime, "h:mm aa")}`
+                    : "Off"
+                }
+                open={openSection === "notifications"}
+                onPress={() => {
+                  setShowTimePicker(false);
+                  toggleSection("notifications");
+                }}
+                headerAction={
+                  <Switch
+                    value={notificationsEnabled}
+                    onValueChange={toggleNotifications}
+                    color={colors.brand}
+                  />
+                }
+              >
+                <Pressable
+                  onPress={openTimePicker}
+                  style={({ pressed }) => [
+                    styles.fieldButton,
+                    {
+                      backgroundColor: colors.background,
+                      borderColor: colors.border,
+                    },
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <View style={styles.fieldButtonCopy}>
+                    <ThemedText type="small" themeColor="textSecondary">
+                      Summary time
+                    </ThemedText>
+                    <ThemedText type="smallBold">
+                      {format(summaryTime, "h:mm aa")}
+                    </ThemedText>
+                  </View>
+                  <Ionicons
+                    name="time-outline"
+                    size={20}
+                    color={colors.brand}
+                  />
+                </Pressable>
+
+                {showTimePicker ? (
+                  <View
+                    style={[styles.pickerWrap, { borderColor: colors.border }]}
+                  >
+                    <DateTimePicker
+                      value={draftTime}
+                      mode="time"
+                      display={Platform.OS === "ios" ? "spinner" : "default"}
+                      is24Hour={false}
+                      onValueChange={handleTimeValueChange}
+                      onDismiss={() => setShowTimePicker(false)}
+                    />
+                    {Platform.OS === "ios" ? (
+                      <Pressable
+                        onPress={() => saveSummaryTime(draftTime)}
+                        style={styles.doneButton}
+                      >
+                        <ThemedText
+                          type="smallBold"
+                          style={{ color: colors.brand }}
+                        >
+                          Done
+                        </ThemedText>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                ) : null}
+
+                <PrimaryAction
+                  label="Send test notification"
+                  onPress={sendTestNotification}
+                  disabled={sendingTest}
+                />
+              </ExpandableCard>
+
+              <SectionLabel
                 title="Security"
                 subtitle="Keep your account protected"
               />
@@ -999,6 +982,7 @@ function ExpandableCard({
   summary,
   open,
   onPress,
+  headerAction,
   children,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
@@ -1006,6 +990,7 @@ function ExpandableCard({
   summary: string;
   open: boolean;
   onPress: () => void;
+  headerAction?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const { resolvedTheme } = useThemeMode();
@@ -1021,25 +1006,41 @@ function ExpandableCard({
         },
       ]}
     >
-      <Pressable
-        onPress={onPress}
-        style={({ pressed }) => [styles.cardHeader, pressed && styles.pressed]}
-      >
-        <View style={[styles.cardIcon, { backgroundColor: colors.brandSoft }]}>
-          <Ionicons name={icon} size={20} color={colors.brand} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <ThemedText type="smallBold">{title}</ThemedText>
-          <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
-            {summary}
-          </ThemedText>
-        </View>
-        <Ionicons
-          name={open ? "chevron-up" : "chevron-down"}
-          size={20}
-          color={colors.textSecondary}
-        />
-      </Pressable>
+      <View style={styles.cardHeader}>
+        <Pressable
+          onPress={onPress}
+          style={({ pressed }) => [
+            styles.cardHeaderMain,
+            pressed && styles.pressed,
+          ]}
+        >
+          <View style={[styles.cardIcon, { backgroundColor: colors.brandSoft }]}>
+            <Ionicons name={icon} size={20} color={colors.brand} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <ThemedText type="smallBold">{title}</ThemedText>
+            <ThemedText
+              type="small"
+              themeColor="textSecondary"
+              numberOfLines={1}
+            >
+              {summary}
+            </ThemedText>
+          </View>
+        </Pressable>
+        {headerAction}
+        <Pressable
+          onPress={onPress}
+          hitSlop={8}
+          style={({ pressed }) => pressed && styles.pressed}
+        >
+          <Ionicons
+            name={open ? "chevron-up" : "chevron-down"}
+            size={20}
+            color={colors.textSecondary}
+          />
+        </Pressable>
+      </View>
 
       {open ? (
         <View style={[styles.editor, { borderTopColor: colors.border }]}>
@@ -1223,6 +1224,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: Spacing.three,
     padding: Spacing.three,
+  },
+  cardHeaderMain: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.three,
   },
   cardIcon: {
     width: 40,

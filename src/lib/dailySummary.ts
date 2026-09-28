@@ -50,5 +50,5 @@ export function formatSummaryBody(summary: DailySummary): string | null {
   if (summary.habits > 0) parts.push(countLabel(summary.habits, "habit"));
   if (summary.meals > 0) parts.push(countLabel(summary.meals, "meal"));
   if (parts.length === 0) return null;
-  return `Today: ${parts.join(" and ")} planned.`;
+  return `Today, you have ${parts.join(" and ")} planned.`;
 }
