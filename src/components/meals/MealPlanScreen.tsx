@@ -125,7 +125,11 @@ export default function MealPlanScreen() {
     setLoading(true);
     // Fetch both weeks at once so toggling doesn't re-hit the network.
     const all = [...getWeekDays(0), ...getWeekDays(1)];
-    fetchMealPlanEntries(user.id, toDateKey(all[0]), toDateKey(all[all.length - 1]))
+    fetchMealPlanEntries(
+      user.id,
+      toDateKey(all[0]),
+      toDateKey(all[all.length - 1]),
+    )
       .then(setEntries)
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
@@ -153,7 +157,9 @@ export default function MealPlanScreen() {
       );
       refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't update your meal plan");
+      setError(
+        err instanceof Error ? err.message : "Couldn't update your meal plan",
+      );
       throw err;
     }
   };
@@ -166,7 +172,9 @@ export default function MealPlanScreen() {
       await removeMealPlanEntry(entry.id);
     } catch (err) {
       setEntries(previous);
-      setError(err instanceof Error ? err.message : "Couldn't remove that meal");
+      setError(
+        err instanceof Error ? err.message : "Couldn't remove that meal",
+      );
     }
   };
 
@@ -193,7 +201,8 @@ export default function MealPlanScreen() {
         mode="contained"
         // Dimming the whole card (text, rows, controls) is what marks the day
         // as gone — cheaper and more consistent than restyling each child.
-        style={[{ alignSelf: "stretch" }, isPast && { opacity: 0.5 }]}>
+        style={[{ alignSelf: "stretch" }, isPast && { opacity: 0.5 }]}
+      >
         <Card.Title
           title={format(day, "EEEE")}
           subtitle={format(day, "MMM d")}
@@ -202,11 +211,18 @@ export default function MealPlanScreen() {
             isToday ? (
               <Text
                 variant="labelSmall"
-                style={{ color: theme.accentMeals, marginRight: Spacing.four }}>
+                numberOfLines={1}
+                style={{ color: theme.accentMeals }}
+              >
                 Today
               </Text>
             ) : null
           }
+          rightStyle={{
+            minWidth: 64,
+            paddingRight: Spacing.four,
+            alignItems: "flex-end",
+          }}
         />
         <Card.Content>
           {/* Only filled slots are rendered, so a card is as tall as the day
@@ -225,18 +241,24 @@ export default function MealPlanScreen() {
                     style={{
                       alignItems: "center",
                       paddingVertical: Spacing.one,
-                    }}>
+                    }}
+                  >
                     {/* Sized to its own text rather than a fixed column, so
                         "Breakfast" and "Snack" each take only what they need. */}
                     <Text
                       variant="labelMedium"
-                      style={{ color: theme.textSecondary, marginRight: Spacing.two }}>
+                      style={{
+                        color: theme.textSecondary,
+                        marginRight: Spacing.two,
+                      }}
+                    >
                       {MEAL_TYPE_LABELS[mealType]}
                     </Text>
                     <Text
                       variant="bodyMedium"
                       numberOfLines={1}
-                      style={{ flex: 1, minWidth: 0 }}>
+                      style={{ flex: 1, minWidth: 0 }}
+                    >
                       {recipeName}
                     </Text>
                     <IconButton
@@ -262,14 +284,18 @@ export default function MealPlanScreen() {
                 appears only once "Add meal" is tapped, and only offers slots
                 this day still has free. */}
             {isPast ? null : addingDate === dateKey ? (
-              <HStack space="sm" style={{ flexWrap: "wrap", paddingTop: Spacing.two }}>
+              <HStack
+                space="sm"
+                style={{ flexWrap: "wrap", paddingTop: Spacing.two }}
+              >
                 {free.map((mealType) => (
                   <Chip
                     key={mealType}
                     onPress={() => {
                       setPendingSlot({ date: dateKey, mealType });
                       setAddingDate(null);
-                    }}>
+                    }}
+                  >
                     {MEAL_TYPE_LABELS[mealType]}
                   </Chip>
                 ))}
@@ -284,7 +310,8 @@ export default function MealPlanScreen() {
                   icon="plus"
                   onPress={() => setAddingDate(dateKey)}
                   style={{ alignSelf: "flex-start" }}
-                  accessibilityLabel={`Add a meal to ${format(day, "EEEE")}`}>
+                  accessibilityLabel={`Add a meal to ${format(day, "EEEE")}`}
+                >
                   Add meal
                 </Button>
               )
@@ -305,7 +332,8 @@ export default function MealPlanScreen() {
             paddingHorizontal: Spacing.four,
             paddingTop: TopBadgeInset,
             paddingBottom: Spacing.two,
-          }}>
+          }}
+        >
           <HStack style={{ alignItems: "center" }}>
             <IconButton
               icon="arrow-left"
@@ -314,7 +342,10 @@ export default function MealPlanScreen() {
               onPress={() => router.navigate("/meals")}
               accessibilityLabel="Back to meals"
             />
-            <Text variant="titleLarge" style={{ marginLeft: Spacing.two, flex: 1 }}>
+            <Text
+              variant="titleLarge"
+              style={{ marginLeft: Spacing.two, flex: 1 }}
+            >
               Meal plan
             </Text>
           </HStack>
@@ -324,14 +355,16 @@ export default function MealPlanScreen() {
               mode={weekOffset === 0 ? "contained" : "outlined"}
               style={{ flex: 1 }}
               onPress={() => setWeekOffset(0)}
-              accessibilityState={{ selected: weekOffset === 0 }}>
+              accessibilityState={{ selected: weekOffset === 0 }}
+            >
               This week
             </Button>
             <Button
               mode={weekOffset === 1 ? "contained" : "outlined"}
               style={{ flex: 1 }}
               onPress={() => setWeekOffset(1)}
-              accessibilityState={{ selected: weekOffset === 1 }}>
+              accessibilityState={{ selected: weekOffset === 1 }}
+            >
               Next week
             </Button>
           </HStack>
@@ -341,7 +374,8 @@ export default function MealPlanScreen() {
             icon="cart-plus"
             loading={addingAll}
             disabled={addingAll || upcomingEntries.length === 0}
-            onPress={addAllToGroceryList}>
+            onPress={addAllToGroceryList}
+          >
             Add all to grocery list
           </Button>
         </VStack>
@@ -358,7 +392,8 @@ export default function MealPlanScreen() {
           }
           onPick={assignRecipe}
         />
-      }>
+      }
+    >
       <VStack space="md" style={{ alignSelf: "stretch" }}>
         {sessionLoading || loading ? (
           <Center style={{ paddingVertical: Spacing.five }}>
@@ -366,7 +401,9 @@ export default function MealPlanScreen() {
           </Center>
         ) : (
           <>
-            {error !== "" && <Text style={{ color: ERROR_COLOR }}>{error}</Text>}
+            {error !== "" && (
+              <Text style={{ color: ERROR_COLOR }}>{error}</Text>
+            )}
             {status !== "" && (
               <Text style={{ color: theme.accentMeals }}>{status}</Text>
             )}

@@ -1,31 +1,24 @@
-import { Button, Card, Text, IconButton, useTheme } from "react-native-paper";
+import { StyleSheet, View } from "react-native";
+import { Button, Card, Icon, IconButton, Text } from "react-native-paper";
 
+import { useThemeMode } from "@/components/context/ThemeContext";
+import { BrandImagePlaceholder } from "@/components/ui/BrandImagePlaceholder";
 import { CardMenu } from "@/components/ui/CardMenu";
-import type { AppTheme } from "@/constants/paper-theme";
+import { Colors, Radius, Spacing } from "@/constants/theme";
 import type { Recipe } from "@/lib/meals/meals";
 
-// Shared by the star and the menu so both corners inset identically. Paper's
-// own left/right slot defaults are not symmetric — see Card.Title below.
-const ICON_SLOT_INSET = 8;
-const ICON_SLOT = {
-  width: 40,
-  justifyContent: "center",
-  alignItems: "center",
-} as const;
 type RecipeCardProps = {
-  recipe: Recipe,
-  isFavorited: boolean,
-  missingNames: String[],
-  onToggleFavorite: () => void
-  // Queues this recipe's missing ingredients onto the grocery list.
+  recipe: Recipe;
+  isFavorited: boolean;
+  missingNames: string[];
+  onToggleFavorite: () => void;
   onQuickAdd?: () => void;
   adding?: boolean;
-  // Opens the full recipe page.
+  onAddToPlan?: () => void;
   onOpen?: () => void;
   // Omitted for catalog recipes, which the user can't change.
   onEdit?: () => void;
   onDelete?: () => void;
-  onAddToPlan?: () => void;
 };
 
 export function RecipeCard({
@@ -35,100 +28,173 @@ export function RecipeCard({
   isFavorited,
   onQuickAdd,
   adding = false,
+  onAddToPlan,
   onOpen,
   onEdit,
   onDelete,
-  onAddToPlan,
 }: RecipeCardProps) {
-  const theme = useTheme<AppTheme>();
+  const { resolvedTheme } = useThemeMode();
+  const colors = Colors[resolvedTheme];
   const ready = missingNames.length === 0;
 
   return (
-    // Card's own onPress covers the title and content; the star and the
-    // action buttons handle their own taps, so they don't trigger this.
-    <Card mode="contained" onPress={onOpen}>
-      <Card.Title
-        title={recipe.name}
-        subtitle={
-          recipe.prepTimeMin
-            ? `${recipe.prepTimeMin} min`
-            : "Prep time not set"
-        }
-        // Paper insets the left slot (container paddingLeft + a 40dp box) but
-        // gives the right slot no style at all, so the two corners end up
-        // asymmetric. Matching boxes and equal padding put the star and the
-        // menu the same distance from their edges.
-        style={{ paddingLeft: ICON_SLOT_INSET, paddingRight: ICON_SLOT_INSET }}
-        leftStyle={ICON_SLOT}
-        rightStyle={ICON_SLOT}
-        left={() => (
-          <IconButton
-            icon={isFavorited ? "star" : "star-outline"}
-            iconColor={
-              isFavorited ? theme.colors.primary : theme.colors.onSurfaceVariant
-            }
-            size={22}
-            style={{ margin: 0 }}
-            onPress={onToggleFavorite}
-            accessibilityLabel={
-              isFavorited
-                ? `Remove ${recipe.name} from favorites`
-                : `Add ${recipe.name} to favorites`
-            }
-          />
-        )}
-        right={() => (
-          <CardMenu
-            accessibilityLabel={`More options for ${recipe.name}`}
-            actions={[
-              ...(onAddToPlan
-                ? [
-                    {
-                      key: "plan",
-                      label: "Add to meal plan",
-                      icon: "calendar-plus",
-                      onPress: onAddToPlan,
-                    },
-                  ]
-                : []),
-              ...(onEdit
-                ? [{ key: "edit", label: "Edit recipe", icon: "pencil", onPress: onEdit }]
-                : []),
-              ...(onDelete
-                ? [
-                    {
-                      key: "delete",
-                      label: "Delete recipe",
-                      icon: "delete",
-                      onPress: onDelete,
-                      destructive: true,
-                    },
-                  ]
-                : []),
+    <Card
+      mode="contained"
+      onPress={onOpen}
+      style={[
+        styles.card,
+        {
+          backgroundColor: colors.backgroundElement,
+          borderColor: colors.border,
+        },
+      ]}
+    >
+      <Card.Content style={styles.content}>
+        <BrandImagePlaceholder
+          label="Recipe photo"
+          icon="silverware-fork-knife"
+          style={styles.imageSlot}
+        />
+
+        <View style={styles.copy}>
+          <View style={styles.titleRow}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text
+                variant="titleMedium"
+                numberOfLines={2}
+                style={[styles.title, { color: colors.text }]}
+              >
+                {recipe.name}
+              </Text>
+
+              <View style={styles.metaRow}>
+                <Icon
+                  source="clock-outline"
+                  size={14}
+                  color={colors.textSecondary}
+                />
+                <Text
+                  variant="bodySmall"
+                  style={{ color: colors.textSecondary }}
+                >
+                  {recipe.prepTimeMin
+                    ? `${recipe.prepTimeMin} min`
+                    : "Prep time not set"}
+                </Text>
+              </View>
+            </View>
+
+            <IconButton
+              icon={isFavorited ? "star" : "star-outline"}
+              iconColor={isFavorited ? colors.warning : colors.textSecondary}
+              size={21}
+              onPress={onToggleFavorite}
+              style={styles.favoriteButton}
+              accessibilityLabel={
+                isFavorited
+                  ? `Remove ${recipe.name} from favorites`
+                  : `Add ${recipe.name} to favorites`
+              }
+            />
+
+            <CardMenu
+              accessibilityLabel={`More options for ${recipe.name}`}
+              actions={[
+                ...(onAddToPlan
+                  ? [
+                      {
+                        key: "plan",
+                        label: "Add to meal plan",
+                        icon: "calendar-plus",
+                        onPress: onAddToPlan,
+                      },
+                    ]
+                  : []),
+                ...(onEdit
+                  ? [
+                      {
+                        key: "edit",
+                        label: "Edit recipe",
+                        icon: "pencil",
+                        onPress: onEdit,
+                      },
+                    ]
+                  : []),
+                ...(onDelete
+                  ? [
+                      {
+                        key: "delete",
+                        label: "Delete recipe",
+                        icon: "delete",
+                        onPress: onDelete,
+                        destructive: true,
+                      },
+                    ]
+                  : []),
+              ]}
+            />
+          </View>
+
+          <View
+            style={[
+              styles.statusPill,
+              {
+                backgroundColor: ready
+                  ? resolvedTheme === "dark"
+                    ? "#16382C"
+                    : "#E7F5EC"
+                  : resolvedTheme === "dark"
+                    ? "#3B2C16"
+                    : "#FFF1DE",
+              },
             ]}
-          />
-        )}
-      />
-      <Card.Content>
-        <Text
-          style={{
-            color: ready ? theme.colors.success : theme.colors.accentMeals,
-          }}
-        >
-          {ready
-            ? `You have all ${recipe.ingredientIds.length} ingredients`
-            : `Need ${missingNames.length}: ${missingNames.join(", ")}`}
-        </Text>
+          >
+            <Icon
+              source={ready ? "check-circle-outline" : "basket-outline"}
+              size={14}
+              color={ready ? colors.success : colors.warning}
+            />
+            <Text
+              variant="labelSmall"
+              style={{
+                color: ready ? colors.success : colors.warning,
+                fontWeight: "800",
+              }}
+            >
+              {ready
+                ? "Ready to cook"
+                : `Missing ${missingNames.length} ingredient${missingNames.length === 1 ? "" : "s"}`}
+            </Text>
+          </View>
+
+          {!ready ? (
+            <Text
+              variant="bodySmall"
+              numberOfLines={2}
+              style={{ color: colors.textSecondary }}
+            >
+              {missingNames.join(", ")}
+            </Text>
+          ) : (
+            <Text variant="bodySmall" style={{ color: colors.textSecondary }}>
+              You have all {recipe.ingredientIds.length} ingredients.
+            </Text>
+          )}
+        </View>
       </Card.Content>
+
       {onQuickAdd && (
-        <Card.Actions>
+        <Card.Actions style={styles.actions}>
           <Button
+            compact
             mode="contained"
             icon="plus"
             loading={adding}
             disabled={adding}
             onPress={onQuickAdd}
-            style={{ borderRadius: 999 }}
+            buttonColor={colors.brandStrong}
+            textColor="#FFFFFF"
+            style={styles.actionButton}
             accessibilityLabel={`Add missing ingredients for ${recipe.name} to grocery list`}
           >
             Quick add
@@ -138,3 +204,64 @@ export function RecipeCard({
     </Card>
   );
 }
+
+const styles = StyleSheet.create({
+  card: {
+    borderRadius: Radius.large,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: "hidden",
+  },
+  content: {
+    paddingHorizontal: Spacing.three,
+    paddingTop: Spacing.three,
+    paddingBottom: Spacing.two,
+    flexDirection: "row",
+    gap: Spacing.three,
+  },
+  imageSlot: {
+    width: 92,
+    minHeight: 104,
+    alignSelf: "stretch",
+  },
+  copy: {
+    flex: 1,
+    minWidth: 0,
+    gap: Spacing.two,
+  },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: Spacing.one,
+  },
+  title: {
+    fontWeight: "800",
+    lineHeight: 21,
+  },
+  favoriteButton: {
+    margin: -6,
+  },
+  metaRow: {
+    marginTop: 3,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  statusPill: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: 5,
+    borderRadius: Radius.pill,
+  },
+  actions: {
+    paddingHorizontal: Spacing.three,
+    paddingBottom: Spacing.three,
+    paddingTop: 0,
+    justifyContent: "space-between",
+  },
+  actionButton: {
+    borderRadius: Radius.pill,
+  },
+});

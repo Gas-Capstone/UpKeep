@@ -1,21 +1,13 @@
-import { Card, Text, Button, Chip, IconButton, useTheme } from "react-native-paper";
-import { HStack } from "../ui/hstack";
-import { VStack } from "../ui/vstack";
-import { styles } from "@/constants/styles";
-import { CardMenu } from "../ui/CardMenu";
-import type { Workout } from "../context/workoutsDataContext";
+import { StyleSheet, View } from "react-native";
+import { Button, Icon, IconButton, Text } from "react-native-paper";
 
-// Shared by the star and the menu so both corners inset identically. Paper's
-// own left/right slot defaults are not symmetric — see Card.Title below.
-const ICON_SLOT_INSET = 8;
-const ICON_SLOT = {
-  width: 40,
-  justifyContent: "center",
-  alignItems: "center",
-} as const;
+import { useThemeMode } from "@/components/context/ThemeContext";
+import type { Workout } from "@/components/context/workoutsDataContext";
+import { BrandImagePlaceholder } from "@/components/ui/BrandImagePlaceholder";
+import { CardMenu } from "@/components/ui/CardMenu";
+import { Colors, Radius, Spacing } from "@/constants/theme";
 
-// `user` was previously a required-but-unused prop, which caused the "Property 'user' is missing" error.
-type workoutCardProps = {
+type WorkoutCardProps = {
   workout: Workout;
   onPress: () => void;
   isFavorited: boolean;
@@ -33,50 +25,76 @@ export function WorkoutCard({
   onToggleFavorite,
   onEdit,
   onDelete,
-}: workoutCardProps) {
-  const theme = useTheme();
-  // User-created plans can leave target blank, and older rows may have a null
-  // difficulty — guard both so a missing value hides the chip instead of
-  // throwing on .charAt of undefined.
+}: WorkoutCardProps) {
+  const { resolvedTheme } = useThemeMode();
+  const colors = Colors[resolvedTheme];
+
   const difficultyDisplay = workout.difficulty
     ? workout.difficulty.charAt(0).toUpperCase() + workout.difficulty.slice(1)
-    : "";
+    : null;
+
   return (
-    <Card mode="contained" style={{ width: "100%", alignSelf: "stretch" }}>
-      <Card.Title
-        title={<Text variant="titleMedium">{workout.name}</Text>}
-        // Paper insets the left slot (container paddingLeft + a 40dp box) but
-        // gives the right slot no style at all, so the two corners end up
-        // asymmetric. Matching boxes and equal padding put the star and the
-        // menu the same distance from their edges.
-        style={{ paddingLeft: ICON_SLOT_INSET, paddingRight: ICON_SLOT_INSET }}
-        leftStyle={ICON_SLOT}
-        rightStyle={ICON_SLOT}
-        left={() => (
+    <View
+      style={[
+        styles.card,
+        {
+          backgroundColor: colors.backgroundElement,
+          borderColor: colors.border,
+        },
+      ]}
+    >
+      <BrandImagePlaceholder
+        label="Workout photo"
+        icon="dumbbell"
+        style={styles.imageSlot}
+      />
+
+      <View style={styles.body}>
+        <View style={styles.titleRow}>
+          <View style={{ flex: 1 }}>
+            <Text
+              variant="titleLarge"
+              numberOfLines={2}
+              style={{ color: colors.text, fontWeight: "800" }}
+            >
+              {workout.name}
+            </Text>
+            {workout.target ? (
+              <Text
+                variant="bodySmall"
+                numberOfLines={1}
+                style={{ color: colors.textSecondary, marginTop: 2 }}
+              >
+                {workout.target}
+              </Text>
+            ) : null}
+          </View>
+
           <IconButton
             icon={isFavorited ? "star" : "star-outline"}
-            iconColor={
-              isFavorited ? theme.colors.primary : theme.colors.onSurfaceVariant
-            }
+            iconColor={isFavorited ? colors.warning : colors.textSecondary}
             size={22}
-            style={{ margin: 0 }}
             onPress={onToggleFavorite}
             accessibilityLabel={
               isFavorited
                 ? `Remove ${workout.name} from favorites`
                 : `Add ${workout.name} to favorites`
             }
+            style={{ margin: 0 }}
           />
-        )}
-        // Card.Title's `right` slot puts this in the card's top-right corner
-        // without absolute positioning fighting the title layout. Menu is a
-        // placeholder for now — no handler wired up yet.
-        right={() => (
+
           <CardMenu
             accessibilityLabel={`More options for ${workout.name}`}
             actions={[
               ...(onEdit
-                ? [{ key: "edit", label: "Edit plan", icon: "pencil", onPress: onEdit }]
+                ? [
+                    {
+                      key: "edit",
+                      label: "Edit plan",
+                      icon: "pencil",
+                      onPress: onEdit,
+                    },
+                  ]
                 : []),
               ...(onDelete
                 ? [
@@ -91,28 +109,104 @@ export function WorkoutCard({
                 : []),
             ]}
           />
-        )}
-      />
-      <Card.Content>
-        <HStack style={{ width: "100%", flexWrap: "wrap" }} space="sm">
-          <Chip mode="outlined" compact>
-            <Text variant="labelSmall">{workout.duration_min} mins</Text>
-          </Chip>
-          {difficultyDisplay !== "" && (
-            <Chip mode="outlined" compact>
-              <Text variant="labelSmall">{difficultyDisplay}</Text>
-            </Chip>
-          )}
-          {workout.target ? (
-            <Chip mode="outlined" compact>
-              <Text variant="labelSmall">{workout.target}</Text>
-            </Chip>
+        </View>
+
+        <View style={styles.metaRow}>
+          <MetaPill
+            icon="clock-outline"
+            label={`${workout.duration_min} min`}
+            backgroundColor={colors.brandSoft}
+            textColor={colors.text}
+            iconColor={colors.brand}
+          />
+
+          {difficultyDisplay ? (
+            <MetaPill
+              icon="signal"
+              label={difficultyDisplay}
+              backgroundColor={colors.brandSoft}
+              textColor={colors.text}
+              iconColor={colors.brand}
+            />
           ) : null}
-        </HStack>
-      </Card.Content>
-      <Card.Actions>
-        <Button onPress={onPress}>Start Workout</Button>
-      </Card.Actions>
-    </Card>
+        </View>
+
+        <Button
+          mode="contained"
+          icon="play"
+          onPress={onPress}
+          buttonColor={colors.brandStrong}
+          textColor="#FFFFFF"
+          contentStyle={{ minHeight: 44 }}
+          style={{ borderRadius: Radius.pill }}
+        >
+          Start Workout
+        </Button>
+      </View>
+    </View>
   );
 }
+
+type MetaPillProps = {
+  icon: string;
+  label: string;
+  backgroundColor: string;
+  textColor: string;
+  iconColor: string;
+};
+
+function MetaPill({
+  icon,
+  label,
+  backgroundColor,
+  textColor,
+  iconColor,
+}: MetaPillProps) {
+  return (
+    <View style={[styles.metaPill, { backgroundColor }]}>
+      <Icon source={icon} size={15} color={iconColor} />
+      <Text
+        variant="labelMedium"
+        style={{ color: textColor, fontWeight: "600" }}
+      >
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  card: {
+    width: "100%",
+    borderRadius: Radius.large,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: "hidden",
+  },
+  imageSlot: {
+    minHeight: 132,
+    borderWidth: 0,
+    borderRadius: 0,
+  },
+  body: {
+    padding: Spacing.three,
+    gap: Spacing.three,
+  },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: Spacing.two,
+  },
+  metaRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.two,
+  },
+  metaPill: {
+    minHeight: 30,
+    borderRadius: Radius.pill,
+    paddingHorizontal: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+});
