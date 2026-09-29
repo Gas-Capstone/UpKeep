@@ -12,6 +12,7 @@ import {
 } from "react-native-paper";
 
 import { useMealsData } from "@/components/context/mealsDataContext";
+import { useNotifications } from "@/components/context/notificationsContext";
 import { Center } from "@/components/ui/center";
 import { HStack } from "@/components/ui/hstack";
 import { ScreenView } from "@/components/ui/ScreenView";
@@ -48,6 +49,7 @@ export default function MealPlanScreen() {
   const router = useRouter();
   const { user, loading: sessionLoading } = useSession();
   const { recipes } = useMealsData();
+  const { resync } = useNotifications();
 
   const [weekOffset, setWeekOffset] = useState(0);
   const [entries, setEntries] = useState<MealPlanEntry[]>([]);
@@ -156,6 +158,7 @@ export default function MealPlanScreen() {
         pendingSlot.mealType,
       );
       refresh();
+      resync();
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Couldn't update your meal plan",
@@ -170,6 +173,7 @@ export default function MealPlanScreen() {
     setEntries((current) => current.filter((e) => e.id !== entry.id));
     try {
       await removeMealPlanEntry(entry.id);
+      resync();
     } catch (err) {
       setEntries(previous);
       setError(

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
-import { Button, Icon, Text } from "react-native-paper";
+import { Button, Dialog, Icon, Portal, Text } from "react-native-paper";
 import { useFocusEffect, useRouter } from "expo-router";
 
 import { useThemeMode } from "@/components/context/ThemeContext";
@@ -12,6 +12,7 @@ import {
 } from "@/components/context/workoutsDataContext";
 import { ScreenView } from "@/components/ui/ScreenView";
 import { Colors, Radius, Spacing } from "@/constants/theme";
+import { deleteWorkoutPlan } from "@/lib/supabaseFunctions";
 import { getWorkoutsWithTag, sortFavoritesFirst } from "@/lib/workouts";
 
 import { CompletedWorkoutsModal } from "./CompletedWorkoutsModal";
@@ -33,6 +34,7 @@ export default function WorkoutsPage() {
     favoriteIds,
     availableWorkouts,
     loading,
+    refreshWorkouts,
     refreshCompletedWorkouts,
     toggleFavorite,
     createPlan,
@@ -44,6 +46,36 @@ export default function WorkoutsPage() {
   const [startModalVisible, setStartModalVisible] = useState(false);
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [selectedWorkout, setSelectedWorkout] = useState<Workout | null>(null);
+  // Plan awaiting delete confirmation.
+  const [deleteTarget, setDeleteTarget] = useState<Workout | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+
+  // Seeded plans have a null created_by and belong to everyone, so only the
+  // author gets edit and delete.
+  const ownsPlan = (workout: Workout) =>
+    Boolean(user?.id) && workout.created_by === user?.id;
+
+  const openEditPlan = (workout: Workout) => {
+    router.navigate({
+      pathname: "/edit-workout",
+      params: { id: String(workout.id) },
+    });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleteError("");
+    setDeleting(true);
+    const ok = await deleteWorkoutPlan(String(deleteTarget.id));
+    setDeleting(false);
+    if (!ok) {
+      setDeleteError("Couldn't delete that plan. Please try again.");
+      return;
+    }
+    setDeleteTarget(null);
+    refreshWorkouts();
+  };
 
   useEffect(() => {
     const tags = [
@@ -108,6 +140,40 @@ export default function WorkoutsPage() {
             availableWorkouts={availableWorkouts}
             onCreate={createPlan}
           />
+
+          <Portal>
+            <Dialog
+              visible={deleteTarget !== null}
+              onDismiss={() => setDeleteTarget(null)}
+            >
+              <Dialog.Title>Delete plan?</Dialog.Title>
+              <Dialog.Content>
+                <Text>
+                  {deleteTarget?.name} and its exercises will be removed.
+                  Workouts you already completed stay in your history, but will
+                  no longer show the plan&apos;s name. This can&apos;t be undone.
+                </Text>
+                {deleteError !== "" && (
+                  <Text style={{ color: colors.danger, marginTop: Spacing.two }}>
+                    {deleteError}
+                  </Text>
+                )}
+              </Dialog.Content>
+              <Dialog.Actions>
+                <Button onPress={() => setDeleteTarget(null)} disabled={deleting}>
+                  Cancel
+                </Button>
+                <Button
+                  onPress={confirmDelete}
+                  loading={deleting}
+                  disabled={deleting}
+                  textColor={colors.danger}
+                >
+                  Delete
+                </Button>
+              </Dialog.Actions>
+            </Dialog>
+          </Portal>
         </>
       }
     >
@@ -270,6 +336,12 @@ export default function WorkoutsPage() {
               onPress={() => handleStart(workout)}
               isFavorited={favoriteIds.has(String(workout.id))}
               onToggleFavorite={() => toggleFavorite(String(workout.id))}
+              {...(ownsPlan(workout)
+                ? {
+                    onEdit: () => openEditPlan(workout),
+                    onDelete: () => setDeleteTarget(workout),
+                  }
+                : {})}
             />
           ))
         )}

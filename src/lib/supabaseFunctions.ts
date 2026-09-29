@@ -117,8 +117,85 @@ export async function getCompletedWorkouts(user: UserRef) {
     id: session.id,
     duration_min: session.duration_min,
     completed_at: session.completed_at,
-    name: (session.workout_plans as any)?.name,
+    // workout_plan_id is ON DELETE SET NULL, so a session outlives the plan it
+    // was logged against and the embed comes back null. The workout still
+    // happened — keep the row, just say what's missing.
+    name: (session.workout_plans as any)?.name ?? "Deleted plan",
   }));
+}
+
+/* --------------
+    PLAN EDITING
+------------- */
+export async function updateWorkoutPlan(
+    planId: string,
+    plan: { name: string; difficulty: string; target: string; duration_min: number },
+) {
+    const { error } = await supabase
+        .from("workout_plans")
+        .update({
+            name: plan.name,
+            difficulty: plan.difficulty,
+            target: plan.target,
+            duration_min: plan.duration_min,
+        })
+        .eq("id", planId)
+    if (error) {
+        console.log("Error updating workout plan: ", error)
+        return false
+    }
+    return true
+}
+
+/**
+ * Replaces a plan's exercise list wholesale. Simpler and less error-prone than
+ * diffing adds/removes/reorders, and the lists are small enough that the extra
+ * write costs nothing.
+ */
+export async function replacePlanExercises(
+    planId: string,
+    selections: { workout_id: string; sets: number; reps: number }[],
+) {
+    const { error: deleteError } = await supabase
+        .from("workout_plan_workouts")
+        .delete()
+        .eq("workout_plan_id", planId)
+    if (deleteError) {
+        console.log("Error clearing plan exercises: ", deleteError)
+        return false
+    }
+
+    if (selections.length === 0) return true
+
+    const rows = selections.map((selection, index) => ({
+        workout_plan_id: planId,
+        workout_id: selection.workout_id,
+        sets: selection.sets,
+        reps: selection.reps,
+        position: index,
+    }))
+    const { error: insertError } = await supabase
+        .from("workout_plan_workouts")
+        .insert(rows)
+    if (insertError) {
+        console.log("Error saving plan exercises: ", insertError)
+        return false
+    }
+    return true
+}
+
+// Rows in workout_plan_workouts, favorites and meal/session references cascade
+// from the plan's own foreign keys, so only the plan row is deleted here.
+export async function deleteWorkoutPlan(planId: string) {
+    const { error } = await supabase
+        .from("workout_plans")
+        .delete()
+        .eq("id", planId)
+    if (error) {
+        console.log("Error deleting workout plan: ", error)
+        return false
+    }
+    return true
 }
 
 /* --------------

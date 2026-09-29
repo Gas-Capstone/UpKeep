@@ -18,6 +18,14 @@ export default function SubpagesLayout() {
           presentation: "card",
         }}
       />
+      <Stack.Screen
+        name="edit-recipe"
+        options={{ title: "Edit Recipe", presentation: "card" }}
+      />
+      <Stack.Screen
+        name="edit-workout"
+        options={{ title: "Edit Plan", presentation: "card" }}
+      />
     </Stack>
   );
 }

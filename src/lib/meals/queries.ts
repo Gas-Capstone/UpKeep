@@ -162,6 +162,65 @@ export async function fetchRecipeDetail(
   };
 }
 
+/* --------------
+    CUSTOM RECIPE EDITING
+------------- */
+
+export async function updateCustomRecipe(
+  recipeId: string,
+  recipe: { name: string; prep_time_min: number },
+): Promise<void> {
+  const { error } = await supabase
+    .from("custom_recipes")
+    .update({ name: recipe.name, prep_time_min: recipe.prep_time_min })
+    .eq("id", recipeId);
+
+  if (error) throw error;
+}
+
+/**
+ * Replaces a recipe's ingredient list wholesale, rather than diffing adds and
+ * removes. The lists are small, and custom_recipe_ingredients has no surrogate
+ * id to address rows by individually.
+ */
+export async function replaceCustomRecipeIngredients(
+  recipeId: string,
+  items: { ingredient_id: string; quantity: number | null; unit: string | null }[],
+): Promise<void> {
+  const { error: deleteError } = await supabase
+    .from("custom_recipe_ingredients")
+    .delete()
+    .eq("custom_recipe_id", recipeId);
+
+  if (deleteError) throw deleteError;
+
+  if (items.length === 0) return;
+
+  const { error: insertError } = await supabase
+    .from("custom_recipe_ingredients")
+    .insert(
+      items.map((item) => ({
+        custom_recipe_id: recipeId,
+        ingredient_id: item.ingredient_id,
+        quantity: item.quantity,
+        unit: item.unit,
+      })),
+    );
+
+  if (insertError) throw insertError;
+}
+
+// Ingredient rows, favorites and meal plan entries cascade from their own
+// foreign keys, so only the recipe row is deleted here.
+export async function deleteCustomRecipe(recipeId: string): Promise<void> {
+  const { error } = await supabase
+    .from("custom_recipes")
+    .delete()
+    .eq("id", recipeId);
+
+  if (error) throw error;
+}
+
 export async function fetchFridgeItemIds(userId: string): Promise<string[]> {
   const { data, error } = await supabase
     .from("fridge_items")
