@@ -5,6 +5,7 @@ import React, {
   useEffect,
   useState,
 } from "react";
+import { differenceInYears, parseISO } from "date-fns";
 import { supabase } from "@/lib/supabaseClient";
 import { userContext } from "./userContext";
 
@@ -21,8 +22,22 @@ export type Profile = {
   height: number | null; // feet.inches, e.g. 5.11 = 5'11"
   weight: number | null; // lbs
   sex: boolean | null; // true = male, false = female
+  // Legacy: age used to be typed in by hand. Nothing writes it anymore — read
+  // it through getAge(), which only falls back to it when there's no birthdate.
   age: number | null;
 };
+
+/**
+ * The user's age, worked out from their birthdate so it stays current. Users
+ * who saved an age before birthdates were required may have no birthdate, so
+ * their stored age is used until they add one.
+ */
+export function getAge(profile: Profile | null): number | null {
+  if (profile?.birthdate) {
+    return differenceInYears(new Date(), parseISO(profile.birthdate));
+  }
+  return profile?.age ?? null;
+}
 
 export type ProfileDataContextType = {
   profile: Profile | null;
@@ -40,7 +55,6 @@ export type ProfileDataContextType = {
   updateBiometrics: (data: {
     height?: number | null;
     weight?: number | null;
-    age?: number | null;
     sex?: boolean | null;
   }) => Promise<void>;
 };
@@ -273,12 +287,10 @@ export const ProfileDataProvider = ({ children }: ProfileDataProviderProps) => {
     async ({
       height,
       weight,
-      age,
       sex,
     }: {
       height?: number | null;
       weight?: number | null;
-      age?: number | null;
       sex?: boolean | null;
     }) => {
       if (!user?.id) return;
@@ -293,7 +305,6 @@ export const ProfileDataProvider = ({ children }: ProfileDataProviderProps) => {
       const updates: {
         height?: number | null;
         weight?: number | null;
-        age?: number | null;
         sex?: boolean | null;
       } = {};
 
@@ -303,10 +314,6 @@ export const ProfileDataProvider = ({ children }: ProfileDataProviderProps) => {
 
       if (weight !== undefined) {
         updates.weight = weight;
-      }
-
-      if (age !== undefined) {
-        updates.age = age;
       }
 
       if (sex !== undefined) {

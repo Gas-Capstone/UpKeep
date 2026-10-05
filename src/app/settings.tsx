@@ -118,7 +118,6 @@ export default function SettingsScreen() {
   const [heightFeet, setHeightFeet] = useState("");
   const [heightInches, setHeightInches] = useState("");
   const [weight, setWeight] = useState("");
-  const [age, setAge] = useState("");
   const [sex, setSex] = useState<boolean | null>(null);
   const [password, setPassword] = useState("");
 
@@ -139,7 +138,6 @@ export default function SettingsScreen() {
     setHeightFeet(storedHeight.feet);
     setHeightInches(storedHeight.inches);
     setWeight(profile.weight?.toString() ?? "");
-    setAge(profile.age?.toString() ?? "");
     setSex(profile.sex);
   }, [profile]);
 
@@ -264,7 +262,9 @@ export default function SettingsScreen() {
     try {
       await updateDisplayName(cleanedName);
       await updateBirthdate(
-        birthdate ? birthdate.toISOString().split("T")[0] : null,
+        // Formatted locally: toISOString() would shift the day for anyone
+        // east of UTC, and age is worked out from this date.
+        birthdate ? format(birthdate, "yyyy-MM-dd") : null,
       );
 
       if (avatarUri) {
@@ -324,7 +324,6 @@ export default function SettingsScreen() {
     try {
       const height = buildHeightValue(heightFeet, heightInches);
       const parsedWeight = weight.trim() ? Number(weight) : null;
-      const parsedAge = age.trim() ? Number(age) : null;
 
       if (
         weight.trim() &&
@@ -332,17 +331,10 @@ export default function SettingsScreen() {
       ) {
         throw new Error("Enter a valid weight.");
       }
-      if (
-        age.trim() &&
-        (!Number.isFinite(parsedAge) || (parsedAge ?? 0) <= 0)
-      ) {
-        throw new Error("Enter a valid age.");
-      }
 
       await updateBiometrics({
         height,
         weight: parsedWeight,
-        age: parsedAge,
         sex,
       });
 
@@ -740,7 +732,7 @@ export default function SettingsScreen() {
               <ExpandableCard
                 icon="fitness-outline"
                 title="Wellness details"
-                summary="Height, weight, age, and sex"
+                summary="Height, weight, and sex"
                 open={openSection === "wellness"}
                 onPress={() => toggleSection("wellness")}
               >
@@ -773,16 +765,6 @@ export default function SettingsScreen() {
                   value={weight}
                   onChangeText={setWeight}
                   keyboardType="decimal-pad"
-                  outlineColor={colors.border}
-                  activeOutlineColor={colors.brand}
-                />
-
-                <TextInput
-                  label="Age"
-                  mode="outlined"
-                  value={age}
-                  onChangeText={setAge}
-                  keyboardType="number-pad"
                   outlineColor={colors.border}
                   activeOutlineColor={colors.brand}
                 />

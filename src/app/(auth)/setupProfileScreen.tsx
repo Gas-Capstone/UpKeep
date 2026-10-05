@@ -3,6 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
+import { format } from "date-fns";
 import { useState } from "react";
 import {
   Image,
@@ -64,7 +65,6 @@ export default function SetupProfileScreen() {
   const [heightFeet, setHeightFeet] = useState("");
   const [heightInches, setHeightInches] = useState("");
   const [weight, setWeight] = useState("");
-  const [age, setAge] = useState("");
   const [sex, setSex] = useState<boolean | null>(null);
 
   const [error, setError] = useState("");
@@ -172,11 +172,12 @@ export default function SetupProfileScreen() {
         .from("profiles")
         .update({
           display_name: displayName.trim() || null,
-          birthdate: birthdate ? birthdate.toISOString().split("T")[0] : null,
+          // Formatted locally: toISOString() would shift the day for anyone
+          // east of UTC, and age is worked out from this date.
+          birthdate: birthdate ? format(birthdate, "yyyy-MM-dd") : null,
           avatar_url: avatarUrl,
           height: buildHeightValue(heightFeet, heightInches),
           weight: weight ? Number(weight) : null,
-          age: age ? Number(age) : null,
           sex,
           onboarding_complete: true,
         })
@@ -488,37 +489,22 @@ export default function SetupProfileScreen() {
                   </View>
                 </View>
 
-                <View style={styles.twoColumnRow}>
-                  <View style={styles.column}>
-                    <FieldLabel>Weight</FieldLabel>
-                    <View style={styles.inputWithSuffixWrap}>
-                      <Input
-                        placeholder="Weight"
-                        value={weight}
-                        onChangeText={setWeight}
-                        keyboardType="decimal-pad"
-                        style={styles.inputWithSuffix}
-                      />
-                      <ThemedText
-                        type="small"
-                        themeColor="textSecondary"
-                        style={styles.inputSuffix}
-                      >
-                        lb
-                      </ThemedText>
-                    </View>
-                  </View>
-
-                  <View style={styles.column}>
-                    <FieldLabel>Age</FieldLabel>
-                    <Input
-                      placeholder="Age"
-                      value={age}
-                      onChangeText={setAge}
-                      keyboardType="number-pad"
-                      maxLength={3}
-                    />
-                  </View>
+                <FieldLabel>Weight</FieldLabel>
+                <View style={[styles.inputWithSuffixWrap, styles.inputSpacing]}>
+                  <Input
+                    placeholder="Weight"
+                    value={weight}
+                    onChangeText={setWeight}
+                    keyboardType="decimal-pad"
+                    style={styles.inputWithSuffix}
+                  />
+                  <ThemedText
+                    type="small"
+                    themeColor="textSecondary"
+                    style={styles.inputSuffix}
+                  >
+                    lb
+                  </ThemedText>
                 </View>
 
                 <FieldLabel>Sex</FieldLabel>

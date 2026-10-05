@@ -12,6 +12,7 @@ import {
 import { habitsContext } from "@/components/context/habitsContext";
 import { mealsDataContext } from "@/components/context/mealsDataContext";
 import {
+  getAge,
   profileDataContext,
   Profile,
 } from "@/components/context/profileDataContext";
@@ -84,10 +85,11 @@ function hasWorkoutToday(completedWorkouts: CompletedWorkout[]) {
 }
 
 function getCalorieGoal(profile: Profile | null): number | null {
+  const age = getAge(profile);
   if (
     !profile?.height ||
     !profile?.weight ||
-    !profile?.age ||
+    !age ||
     profile.sex === null ||
     profile.sex === undefined
   ) {
@@ -98,7 +100,7 @@ function getCalorieGoal(profile: Profile | null): number | null {
     heightFeet: profile.height,
     weightLbs: profile.weight,
     sex: profile.sex,
-    age: profile.age,
+    age,
   });
 }
 
@@ -640,7 +642,7 @@ export default function HomeScreen() {
               <Text
                 style={[homeStyles.goalNote, { color: colors.textSecondary }]}
               >
-                Add height, weight, age, and sex in Settings to calculate it.
+                Add your birthday, height, weight, and sex in Settings to calculate it.
               </Text>
             </>
           )}
