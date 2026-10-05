@@ -41,6 +41,11 @@ npx expo start
 - Habits page allows you to create, schedule, and keep track of habits you want to keep
 	- Habits can be scheduled for separate weekdays (i.e. only M/W/F)
  - Settings page allows changing of display name, profile picture, date of birth, and switch between light and dark modes
+- Notifications, each turned on separately in Settings > Notifications
+	- Daily summary of the day's planned habits and meals, at a time you choose
+	- Habit reminders at each habit's scheduled time, skipping habits already checked off that day
+	- Meal reminders for meals on your meal plan (breakfast 8:00 AM, lunch 12:00 PM, snack 3:00 PM, dinner 6:00 PM)
+	- Reminders are scheduled a week ahead and refreshed whenever the app is opened or your habits/meal plan change
 ### Planned features
 - Integrate habits page with backend
 - Add more features to profile page such as name change, profile picture

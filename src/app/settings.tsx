@@ -18,7 +18,10 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ActivityIndicator, Switch, TextInput } from "react-native-paper";
 
-import { useNotifications } from "@/components/context/notificationsContext";
+import {
+  useNotifications,
+  type NotificationToggle,
+} from "@/components/context/notificationsContext";
 import { useProfileData } from "@/components/context/profileDataContext";
 import { useThemeMode } from "@/components/context/ThemeContext";
 import { ThemedText } from "@/components/themed-text";
@@ -31,6 +34,8 @@ type SectionKey =
   | "goal"
   | "wellness"
   | "notifications"
+  | "habitReminders"
+  | "mealReminders"
   | "security"
   | null;
 
@@ -89,7 +94,9 @@ export default function SettingsScreen() {
     enabled: notificationsEnabled,
     hour: summaryHour,
     minute: summaryMinute,
-    setEnabled: setNotificationsEnabled,
+    habitReminders,
+    mealReminders,
+    setToggle: setNotificationToggle,
     setSummaryTime,
     sendTestSummary,
   } = useNotifications();
@@ -146,10 +153,13 @@ export default function SettingsScreen() {
     setOpenSection((current) => (current === section ? null : section));
   };
 
-  async function toggleNotifications(value: boolean) {
+  async function toggleNotifications(
+    toggle: NotificationToggle,
+    value: boolean,
+  ) {
     clearMessages();
     try {
-      await setNotificationsEnabled(value);
+      await setNotificationToggle(toggle, value);
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -799,7 +809,7 @@ export default function SettingsScreen() {
 
               <SectionLabel
                 title="Notifications"
-                subtitle="A rundown of your habits and meals"
+                subtitle="Summaries and reminders for your habits and meals"
               />
               <ExpandableCard
                 icon="notifications-outline"
@@ -817,7 +827,9 @@ export default function SettingsScreen() {
                 headerAction={
                   <Switch
                     value={notificationsEnabled}
-                    onValueChange={toggleNotifications}
+                    onValueChange={(value) =>
+                      toggleNotifications("enabled", value)
+                    }
                     color={colors.brand}
                   />
                 }
@@ -881,6 +893,52 @@ export default function SettingsScreen() {
                   onPress={sendTestNotification}
                   disabled={sendingTest}
                 />
+              </ExpandableCard>
+
+              <ExpandableCard
+                icon="checkmark-circle-outline"
+                title="Habit reminders"
+                summary={habitReminders ? "At each habit's time" : "Off"}
+                open={openSection === "habitReminders"}
+                onPress={() => toggleSection("habitReminders")}
+                headerAction={
+                  <Switch
+                    value={habitReminders}
+                    onValueChange={(value) =>
+                      toggleNotifications("habitReminders", value)
+                    }
+                    color={colors.brand}
+                  />
+                }
+              >
+                <ThemedText type="small" themeColor="textSecondary">
+                  Get a reminder at the time you set for each habit, on the
+                  days it&apos;s scheduled. Habits you&apos;ve already checked
+                  off are skipped.
+                </ThemedText>
+              </ExpandableCard>
+
+              <ExpandableCard
+                icon="restaurant-outline"
+                title="Meal reminders"
+                summary={mealReminders ? "For meals on your plan" : "Off"}
+                open={openSection === "mealReminders"}
+                onPress={() => toggleSection("mealReminders")}
+                headerAction={
+                  <Switch
+                    value={mealReminders}
+                    onValueChange={(value) =>
+                      toggleNotifications("mealReminders", value)
+                    }
+                    color={colors.brand}
+                  />
+                }
+              >
+                <ThemedText type="small" themeColor="textSecondary">
+                  Get a reminder for each meal on your meal plan: breakfast at
+                  8:00 AM, lunch at 12:00 PM, snack at 3:00 PM, and dinner at
+                  6:00 PM.
+                </ThemedText>
               </ExpandableCard>
 
               <SectionLabel
