@@ -37,7 +37,7 @@ npx expo start
 	- Completed workouts can be viewed from this page
    	- Users can create their own workout plans
 - Meal planner page keeps track of ingredients you currently have, and suggests meals to make
-  	- Users can create their own recipes
+  	- Users can create their own recipes, including their own steps. Steps can be added, edited, reordered, and removed when creating or editing a custom recipe (catalog recipes are shared, so their steps can't be changed). Editing a recipe's steps resets any cooking in progress for it
   	- Users can create a weekly mealplan
   	- Users can cook a recipe step by step: "Start cooking" on a recipe opens a checklist of its steps. Checked steps are saved on the device, so leaving the screen pauses cooking and the button changes to "Resume cooking". Checking every step shows a finished message, and "Done" clears the progress for next time
 - Habits page allows you to create, schedule, and keep track of habits you want to keep
