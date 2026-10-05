@@ -39,6 +39,7 @@ npx expo start
 - Meal planner page keeps track of ingredients you currently have, and suggests meals to make
   	- Users can create their own recipes
   	- Users can create a weekly mealplan
+  	- Users can cook a recipe step by step: "Start cooking" on a recipe opens a checklist of its steps. Checked steps are saved on the device, so leaving the screen pauses cooking and the button changes to "Resume cooking". Checking every step shows a finished message, and "Done" clears the progress for next time
 - Habits page allows you to create, schedule, and keep track of habits you want to keep
 	- Habits can be scheduled for separate weekdays (i.e. only M/W/F)
  - Settings page allows changing of display name, profile picture, date of birth, and switch between light and dark modes
