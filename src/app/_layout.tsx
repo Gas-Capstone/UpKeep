@@ -9,6 +9,7 @@ import { MealsDataProvider } from "@/components/context/mealsDataContext";
 import { NotificationsProvider } from "@/components/context/notificationsContext";
 import { ProfileDataProvider } from "@/components/context/profileDataContext";
 import { ThemeProvider, useThemeMode } from "@/components/context/ThemeContext";
+import { TourProvider } from "@/components/context/tourContext";
 import { UserProvider } from "@/components/context/userContext";
 import { WorkoutSessionProvider } from "@/components/context/workoutSessionContext";
 import { WorkoutsDataProvider } from "@/components/context/workoutsDataContext";
@@ -42,25 +43,27 @@ function RootContent() {
               <HabitsProvider>
                 <NotificationsProvider>
                   <WorkoutSessionProvider>
-                    <GluestackUIProvider mode={theme}>
-                      <PaperProvider theme={curTheme}>
-                        <Stack
-                          screenOptions={{
-                            headerShown: false,
-                            contentStyle: {
-                              backgroundColor: curTheme.colors.background,
-                            },
-                          }}
-                        >
-                          <Stack.Screen name="(auth)" />
-                          <Stack.Screen name="(tabs)" />
-                          <Stack.Screen name="(subpages)" />
-                        </Stack>
+                    <TourProvider>
+                      <GluestackUIProvider mode={theme}>
+                        <PaperProvider theme={curTheme}>
+                          <Stack
+                            screenOptions={{
+                              headerShown: false,
+                              contentStyle: {
+                                backgroundColor: curTheme.colors.background,
+                              },
+                            }}
+                          >
+                            <Stack.Screen name="(auth)" />
+                            <Stack.Screen name="(tabs)" />
+                            <Stack.Screen name="(subpages)" />
+                          </Stack>
 
-                        <AuthBootstrap themeReady={themeReady} />
-                        <BirthdayCelebration />
-                      </PaperProvider>
-                    </GluestackUIProvider>
+                          <AuthBootstrap themeReady={themeReady} />
+                          <BirthdayCelebration />
+                        </PaperProvider>
+                      </GluestackUIProvider>
+                    </TourProvider>
                   </WorkoutSessionProvider>
                 </NotificationsProvider>
               </HabitsProvider>

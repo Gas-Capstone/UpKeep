@@ -17,6 +17,7 @@ import {
   useTheme,
 } from "react-native-paper";
 
+import { AppTourModal } from "@/components/tour/AppTourModal";
 import {
   MaxContentWidth,
   Radius,
@@ -105,6 +106,7 @@ export default function AppTabs() {
           </BottomBar>
         </TabList>
       </Tabs>
+      <AppTourModal />
     </View>
   );
 }
