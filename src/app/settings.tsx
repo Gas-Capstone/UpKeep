@@ -16,7 +16,12 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ActivityIndicator, Switch, TextInput } from "react-native-paper";
+import {
+  ActivityIndicator,
+  List,
+  Switch,
+  TextInput,
+} from "react-native-paper";
 
 import {
   useNotifications,
@@ -24,6 +29,7 @@ import {
 } from "@/components/context/notificationsContext";
 import { useProfileData } from "@/components/context/profileDataContext";
 import { useThemeMode } from "@/components/context/ThemeContext";
+import { useTour } from "@/components/context/tourContext";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Colors, MaxContentWidth, Radius, Spacing } from "@/constants/theme";
@@ -100,6 +106,7 @@ export default function SettingsScreen() {
     setSummaryTime,
     sendTestSummary,
   } = useNotifications();
+  const { startTour } = useTour();
 
   const summaryTime = new Date();
   summaryTime.setHours(summaryHour, summaryMinute, 0, 0);
@@ -917,9 +924,9 @@ export default function SettingsScreen() {
                 }
               >
                 <ThemedText type="small" themeColor="textSecondary">
-                  Get a reminder for each meal on your meal plan: breakfast at
-                  8:00 AM, lunch at 12:00 PM, snack at 3:00 PM, and dinner at
-                  6:00 PM.
+                  Get a reminder at the time set for each planned meal, on the
+                  days it&apos;s scheduled. Meals you&apos;ve already checked
+                  off are skipped.
                 </ThemedText>
               </ExpandableCard>
 
@@ -949,6 +956,30 @@ export default function SettingsScreen() {
                   disabled={saving}
                 />
               </ExpandableCard>
+
+              <SectionLabel
+                title="Help"
+                subtitle="Get reacquainted with UpKeep"
+              />
+              <View
+                style={[
+                  styles.card,
+                  {
+                    backgroundColor: colors.backgroundElement,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <List.Item
+                  title="Replay app tour"
+                  description="A quick walkthrough of each tab"
+                  left={(props) => (
+                    <List.Icon {...props} icon="map-marker-path" />
+                  )}
+                  right={(props) => <List.Icon {...props} icon="chevron-right" />}
+                  onPress={startTour}
+                />
+              </View>
 
               <SectionLabel
                 title="Account"

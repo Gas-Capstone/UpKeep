@@ -1,9 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useContext, useMemo } from "react";
+import { useContext, useMemo, useState } from "react";
 import { Image, StyleSheet, View } from "react-native";
 import {
   ActivityIndicator,
   Avatar,
+  IconButton,
   ProgressBar,
   Text,
   useTheme,
@@ -20,6 +21,7 @@ import {
   CompletedWorkout,
   workoutsDataContext,
 } from "@/components/context/workoutsDataContext";
+import { WellnessScoreInfoModal } from "@/components/home/WellnessScoreInfoModal";
 import { ScreenView } from "@/components/ui/ScreenView";
 import { CircleTimer } from "@/components/ui/CircleTimer";
 import { useThemeMode } from "@/components/context/ThemeContext";
@@ -538,6 +540,8 @@ export default function HomeScreen() {
     [habitStats.rate, workoutStats.weeklyRate, calorieReadiness],
   );
 
+  const [showScoreInfo, setShowScoreInfo] = useState(false);
+
   const displayName = profileLoading ? "..." : profile?.display_name || "there";
   const isLoadingAnyData = workoutsLoading || profileLoading || mealsLoading;
 
@@ -583,6 +587,12 @@ export default function HomeScreen() {
         </View>
       }
       contentContainerStyle={homeStyles.content}
+      overlay={
+        <WellnessScoreInfoModal
+          visible={showScoreInfo}
+          onDismiss={() => setShowScoreInfo(false)}
+        />
+      }
     >
       <View style={homeStyles.metricRow}>
         <MetricTile
@@ -701,6 +711,15 @@ export default function HomeScreen() {
           },
         ]}
       >
+        <IconButton
+          icon="information-outline"
+          size={18}
+          iconColor={colors.textSecondary}
+          onPress={() => setShowScoreInfo(true)}
+          accessibilityLabel="How the wellness score is calculated"
+          style={homeStyles.infoButton}
+        />
+
         <View style={homeStyles.scoreWrap}>
           {isLoadingAnyData && wellnessScore === null ? (
             <View style={homeStyles.scoreLoader}>
@@ -975,9 +994,17 @@ const homeStyles = StyleSheet.create({
     borderRadius: Radius.large,
     borderWidth: StyleSheet.hairlineWidth,
     padding: Spacing.three,
+    paddingTop: Spacing.four,
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.three,
+  },
+  infoButton: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    margin: 0,
+    zIndex: 1,
   },
   scoreWrap: {
     width: 116,

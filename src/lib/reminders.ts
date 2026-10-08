@@ -12,7 +12,12 @@ import {
   isHabitDone,
   timeToMinutes,
 } from "@/lib/habits/habits";
-import { MEAL_TYPE_LABELS, MealPlanEntry, MealType, toDateKey } from "@/lib/meals/mealPlan";
+import {
+  MEAL_TYPE_LABELS,
+  MealPlanEntry,
+  getMealsForDate,
+  toDateKey,
+} from "@/lib/meals/mealPlan";
 
 export type Reminder = {
   // Unique within its kind; lib/notifications.ts prefixes it with the kind.
@@ -20,15 +25,6 @@ export type Reminder = {
   title: string;
   body: string;
   date: Date;
-};
-
-// meal_plan_entries has no time column, so each meal type gets a fixed one.
-// ponytail: fixed times, make them a setting if users ask to move them.
-export const MEAL_REMINDER_MINUTES: Record<MealType, number> = {
-  breakfast: 8 * 60,
-  lunch: 12 * 60,
-  snack: 15 * 60,
-  dinner: 18 * 60,
 };
 
 function atMinutes(dateKey: string, minutes: number): Date {
@@ -80,14 +76,30 @@ export function buildHabitReminders(
   });
 }
 
+// Planned meals share the habits schedule model (a time, plus repeating
+// weekdays or a single date), so this mirrors buildHabitReminders: one
+// reminder per occurrence, skipping meals already checked off that day.
 export function buildMealReminders(
+  days: Date[],
   entries: MealPlanEntry[],
+  completions: CompletionsByDate,
   recipeName: (entry: MealPlanEntry) => string,
 ): Reminder[] {
-  return entries.map((entry) => ({
-    key: entry.id,
-    title: `${MEAL_TYPE_LABELS[entry.mealType]} reminder`,
-    body: `On your meal plan: ${recipeName(entry)}`,
-    date: atMinutes(entry.plannedDate, MEAL_REMINDER_MINUTES[entry.mealType]),
-  }));
+  return days.flatMap((day) => {
+    const dateKey = toDateKey(day);
+    return getMealsForDate(entries, dateKey).flatMap((entry) => {
+      const minutes = timeToMinutes(entry.time);
+      if (Number.isNaN(minutes) || isHabitDone(entry.id, dateKey, completions)) {
+        return [];
+      }
+      return [
+        {
+          key: `${dateKey}:${entry.id}`,
+          title: `${MEAL_TYPE_LABELS[entry.mealType]} reminder`,
+          body: `On your meal plan: ${recipeName(entry)}`,
+          date: atMinutes(dateKey, minutes),
+        },
+      ];
+    });
+  });
 }

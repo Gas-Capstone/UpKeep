@@ -9,7 +9,9 @@ import {
   type Recipe,
   type RecipeDetail,
 } from "./meals";
-import type { MealPlanEntry, MealType } from "./mealPlan";
+import type { Weekday } from "@/lib/habits/habits";
+
+import type { MealPlanEntry, MealSchedule, MealType } from "./mealPlan";
 
 type IngredientRow = {
   id: string;
@@ -501,58 +503,103 @@ type MealPlanEntryRow = {
   id: string;
   recipe_id: string | null;
   custom_recipe_id: string | null;
-  planned_date: string;
+  planned_date: string | null;
   meal_type: MealType;
+  meal_time: string;
+  weekdays: Weekday[] | null;
 };
 
-/** Entries between two ISO dates, inclusive. */
-export async function fetchMealPlanEntries(
-  userId: string,
-  fromDate: string,
-  toDate: string,
-): Promise<MealPlanEntry[]> {
-  const { data, error } = await supabase
-    .from("meal_plan_entries")
-    .select("id, recipe_id, custom_recipe_id, planned_date, meal_type")
-    .eq("user_id", userId)
-    .gte("planned_date", fromDate)
-    .lte("planned_date", toDate)
-    .returns<MealPlanEntryRow[]>();
+const MEAL_PLAN_COLUMNS =
+  "id, recipe_id, custom_recipe_id, planned_date, meal_type, meal_time, weekdays";
 
-  if (error) throw error;
-
-  return data.map((row) => ({
+function toMealPlanEntry(row: MealPlanEntryRow): MealPlanEntry {
+  return {
     id: row.id,
     // Exactly one of the two id columns is set; isCustom records which, so
     // the entry can be matched back against the right recipe list.
     recipeId: (row.custom_recipe_id ?? row.recipe_id) as string,
     isCustom: row.custom_recipe_id !== null,
-    plannedDate: row.planned_date,
     mealType: row.meal_type,
-  }));
+    time: row.meal_time,
+    weekdays: row.weekdays,
+    plannedDate: row.planned_date,
+  };
 }
 
 /**
- * Places a recipe in a slot. The table's unique (user_id, planned_date,
- * meal_type) constraint means one recipe per slot, so an upsert replaces
- * whatever was there rather than erroring.
+ * All of a user's planned meals. Repeating entries have no date, so there's
+ * no range to filter on — callers pick out a day with getMealsForDate().
  */
-export async function setMealPlanEntry(
+export async function fetchMealPlanEntries(
+  userId: string,
+): Promise<MealPlanEntry[]> {
+  const { data, error } = await supabase
+    .from("meal_plan_entries")
+    .select(MEAL_PLAN_COLUMNS)
+    .eq("user_id", userId)
+    .returns<MealPlanEntryRow[]>();
+
+  if (error) throw error;
+  return data.map(toMealPlanEntry);
+}
+
+export async function createMealPlanEntry(
   userId: string,
   recipe: Pick<Recipe, "id" | "isCustom">,
-  plannedDate: string,
-  mealType: MealType,
-): Promise<void> {
-  const { error } = await supabase.from("meal_plan_entries").upsert(
-    {
+  schedule: MealSchedule,
+): Promise<MealPlanEntry> {
+  const { data, error } = await supabase
+    .from("meal_plan_entries")
+    .insert({
       user_id: userId,
       recipe_id: recipe.isCustom ? null : recipe.id,
       custom_recipe_id: recipe.isCustom ? recipe.id : null,
-      planned_date: plannedDate,
-      meal_type: mealType,
-    },
-    { onConflict: "user_id,planned_date,meal_type" },
-  );
+      meal_type: schedule.mealType,
+      meal_time: schedule.time,
+      weekdays: schedule.weekdays,
+      planned_date: schedule.plannedDate,
+    })
+    .select(MEAL_PLAN_COLUMNS)
+    .single<MealPlanEntryRow>();
+
+  if (error) throw error;
+  return toMealPlanEntry(data);
+}
+
+/** Check-offs as { entry_id, completed_on } rows, like habit_completions. */
+export async function fetchMealCompletions(
+  userId: string,
+): Promise<{ entry_id: string; completed_on: string }[]> {
+  const { data, error } = await supabase
+    .from("meal_plan_completions")
+    .select("entry_id, completed_on")
+    .eq("user_id", userId);
+
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function completeMeal(
+  userId: string,
+  entryId: string,
+  date: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from("meal_plan_completions")
+    .insert({ user_id: userId, entry_id: entryId, completed_on: date });
+
+  if (error) throw error;
+}
+
+export async function uncompleteMeal(
+  entryId: string,
+  date: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from("meal_plan_completions")
+    .delete()
+    .eq("entry_id", entryId)
+    .eq("completed_on", date);
 
   if (error) throw error;
 }

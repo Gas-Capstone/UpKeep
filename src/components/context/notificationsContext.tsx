@@ -20,8 +20,6 @@ import {
   getSummaryDays,
 } from "@/lib/dailySummary";
 import { recipeKey } from "@/lib/meals/meals";
-import { toDateKey } from "@/lib/meals/mealPlan";
-import { fetchMealPlanEntries } from "@/lib/meals/queries";
 import {
   replaceScheduled,
   requestNotificationPermission,
@@ -78,7 +76,7 @@ type NotificationsProviderProps = {
 export const NotificationsProvider = ({ children }: NotificationsProviderProps) => {
   const { user } = useUserContext();
   const { habitArray, habitCompletions } = useHabitsContext();
-  const { recipes } = useMealsData();
+  const { recipes, mealPlanEntries, mealCompletions } = useMealsData();
   const [settings, setSettings] = useState<NotificationSettings>(DEFAULT_SETTINGS);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
 
@@ -105,16 +103,10 @@ export const NotificationsProvider = ({ children }: NotificationsProviderProps) 
     });
   }, []);
 
+  // Changes to habits or planned meals rebuild this, which re-runs resync.
   const loadSummaries = useCallback(
-    async (userId: string, days: Date[]) => {
-      const mealEntries = await fetchMealPlanEntries(
-        userId,
-        toDateKey(days[0]),
-        toDateKey(days[days.length - 1]),
-      );
-      return buildDailySummaries(days, habitArray, mealEntries);
-    },
-    [habitArray],
+    async (days: Date[]) => buildDailySummaries(days, habitArray, mealPlanEntries),
+    [habitArray, mealPlanEntries],
   );
 
   // Keyed by recipeKey — catalog and custom recipe ids can collide.
@@ -136,24 +128,13 @@ export const NotificationsProvider = ({ children }: NotificationsProviderProps) 
         const mealsOn = Boolean(user) && settings.mealReminders;
 
         const days = getSummaryDays();
-        const mealEntries =
-          user && (summaryOn || mealsOn)
-            ? await fetchMealPlanEntries(
-                user.id,
-                toDateKey(days[0]),
-                toDateKey(days[days.length - 1]),
-              )
-            : [];
+        const summaries = await loadSummaries(days);
         if (run !== latestRun.current) return;
 
         await replaceScheduled(
           "daily-summary",
           summaryOn
-            ? buildSummaryReminders(
-                buildDailySummaries(days, habitArray, mealEntries),
-                settings.hour,
-                settings.minute,
-              )
+            ? buildSummaryReminders(summaries, settings.hour, settings.minute)
             : [],
         );
         await replaceScheduled(
@@ -164,7 +145,9 @@ export const NotificationsProvider = ({ children }: NotificationsProviderProps) 
           "meal",
           mealsOn
             ? buildMealReminders(
-                mealEntries,
+                days,
+                mealPlanEntries,
+                mealCompletions,
                 (entry) =>
                   recipeNameByKey.get(
                     recipeKey({ id: entry.recipeId, isCustom: entry.isCustom }),
@@ -176,7 +159,17 @@ export const NotificationsProvider = ({ children }: NotificationsProviderProps) 
       .catch((err) => console.log("Error syncing notifications: ", err));
 
     return queue.current;
-  }, [user, settings, settingsLoaded, habitArray, habitCompletions, recipeNameByKey]);
+  }, [
+    user,
+    settings,
+    settingsLoaded,
+    loadSummaries,
+    habitArray,
+    habitCompletions,
+    mealPlanEntries,
+    mealCompletions,
+    recipeNameByKey,
+  ]);
 
   const setToggle = useCallback(
     async (toggle: NotificationToggle, value: boolean) => {
@@ -197,7 +190,7 @@ export const NotificationsProvider = ({ children }: NotificationsProviderProps) 
 
   const sendTestSummary = useCallback(async () => {
     if (!user) throw new Error("You must be logged in.");
-    const [today] = await loadSummaries(user.id, getSummaryDays().slice(0, 1));
+    const [today] = await loadSummaries(getSummaryDays().slice(0, 1));
     await sendNotificationNow(SUMMARY_TITLE, formatSummaryBody(today) ?? EMPTY_SUMMARY_BODY);
   }, [user, loadSummaries]);
 

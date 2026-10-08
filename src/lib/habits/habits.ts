@@ -52,9 +52,14 @@ export function removeHabitFromList(habits: Habit[], habitId: string) {
     return habits.filter((habit) => habit.id !== habitId)
 }
 
+// Shared by habits and repeating planned meals: an empty list means every day.
+export function isOnWeekdays(weekdays: Weekday[], date: string){
+    if (weekdays.length === 0) return true;
+    return weekdays.includes(getDay(parseISO(date)) as Weekday)
+}
+
 export function isHabitOnDate(habit: Habit, date: string){
-    if (!habit.weekdays || habit.weekdays.length === 0) return true;
-    return habit.weekdays.includes(getDay(parseISO(date)) as Weekday)
+    return isOnWeekdays(habit.weekdays ?? [], date)
 }
 
 export function timeToMinutes(time: string){

@@ -313,7 +313,7 @@ export default function SetupProfileScreen() {
                       Your profile
                     </ThemedText>
                     <ThemedText type="small" themeColor="textSecondary">
-                      Choose how you'll appear in the app.
+                      {"Choose how you'll appear in the app."}
                     </ThemedText>
                   </View>
                 </View>

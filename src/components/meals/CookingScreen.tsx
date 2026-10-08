@@ -42,18 +42,15 @@ export default function CookingScreen() {
 
   const [recipe, setRecipe] = useState<RecipeDetail | null>(null);
   const [checked, setChecked] = useState<ReadonlySet<number>>(new Set());
-  const [loading, setLoading] = useState(true);
+  // No id means nothing to load; the "couldn't be found" message shows instead.
+  const [loading, setLoading] = useState(Boolean(id));
   const [error, setError] = useState("");
 
   const steps = parseInstructionSteps(recipe?.instructions ?? null);
   const finished = steps.length > 0 && checked.size === steps.length;
 
   useEffect(() => {
-    if (!id) {
-      setError("That recipe couldn't be found.");
-      setLoading(false);
-      return;
-    }
+    if (!id) return;
     let cancelled = false;
     fetchRecipeDetail(id, isCustom === "true")
       .then(async (detail) => {

@@ -4,14 +4,35 @@ import { format, isToday, parseISO } from "date-fns";
 import { Button, Icon, ProgressBar, Text } from "react-native-paper";
 
 import { useHabitsContext } from "@/components/context/habitsContext";
+import { useMealsData } from "@/components/context/mealsDataContext";
 import { useThemeMode } from "@/components/context/ThemeContext";
 import { ScreenView } from "@/components/ui/ScreenView";
 import { Colors, Radius, Spacing } from "@/constants/theme";
-import { getHabitsForDate, isHabitDone } from "@/lib/habits/habits";
+import {
+  Habit,
+  getHabitsForDate,
+  isHabitDone,
+  timeToMinutes,
+} from "@/lib/habits/habits";
+import { recipeKey } from "@/lib/meals/meals";
+import {
+  MEAL_TYPE_LABELS,
+  MealPlanEntry,
+  getMealsForDate,
+} from "@/lib/meals/mealPlan";
 
 import { AddHabitModal } from "./AddHabitModal";
-import { HabitCard } from "./HabitCard";
+import { HabitCard, getScheduleLabel } from "./HabitCard";
 import { WeekStrip } from "./WeekStrip";
+
+// Habits and planned meals share one timeline for the selected day.
+type DayItem =
+  | { kind: "habit"; habit: Habit }
+  | { kind: "meal"; entry: MealPlanEntry };
+
+function itemTime(item: DayItem) {
+  return item.kind === "habit" ? item.habit.time : item.entry.time;
+}
 
 export default function HabitsScreen() {
   const { resolvedTheme } = useThemeMode();
@@ -25,6 +46,14 @@ export default function HabitsScreen() {
     removeHabit,
     toggleHabit,
   } = useHabitsContext();
+  const {
+    recipes,
+    mealPlanEntries,
+    mealCompletions,
+    addMealPlanEntry,
+    removeMealPlanEntry,
+    toggleMeal,
+  } = useMealsData();
 
   const [modalVisible, setModalVisible] = useState(false);
 
@@ -33,15 +62,23 @@ export default function HabitsScreen() {
     [habitArray, selectedDate],
   );
 
-  const habitsComplete = useMemo(
-    () =>
-      habitsForDay.filter((habit) =>
-        isHabitDone(habit.id, selectedDate, habitCompletions),
-      ).length,
-    [habitsForDay, selectedDate, habitCompletions],
-  );
+  const recipeNameByKey = new Map(recipes.map((r) => [recipeKey(r), r.name]));
 
-  const total = habitsForDay.length;
+  const itemsForDay: DayItem[] = [
+    ...habitsForDay.map((habit) => ({ kind: "habit" as const, habit })),
+    ...getMealsForDate(mealPlanEntries, selectedDate).map((entry) => ({
+      kind: "meal" as const,
+      entry,
+    })),
+  ].sort((a, b) => timeToMinutes(itemTime(a)) - timeToMinutes(itemTime(b)));
+
+  const isItemDone = (item: DayItem) =>
+    item.kind === "habit"
+      ? isHabitDone(item.habit.id, selectedDate, habitCompletions)
+      : isHabitDone(item.entry.id, selectedDate, mealCompletions);
+
+  const habitsComplete = itemsForDay.filter(isItemDone).length;
+  const total = itemsForDay.length;
   const progress = total > 0 ? habitsComplete / total : 0;
   const selectedDateObject = parseISO(selectedDate);
   const selectedLabel = isToday(selectedDateObject)
@@ -52,11 +89,16 @@ export default function HabitsScreen() {
     <ScreenView
       contentContainerStyle={styles.content}
       overlay={
-        <AddHabitModal
-          visible={modalVisible}
-          onDismiss={() => setModalVisible(false)}
-          onSave={addHabit}
-        />
+        // Mounted only while open so it picks up the selected day each time.
+        modalVisible ? (
+          <AddHabitModal
+            visible
+            onDismiss={() => setModalVisible(false)}
+            onSave={addHabit}
+            onSaveMeal={addMealPlanEntry}
+            defaultDate={selectedDate}
+          />
+        ) : null
       }
       header={
         <View style={styles.header}>
@@ -82,7 +124,7 @@ export default function HabitsScreen() {
                 variant="bodyMedium"
                 style={{ color: colors.textSecondary }}
               >
-                Small routines, kept consistent.
+                Routines and meals, scheduled through your day.
               </Text>
             </View>
           </View>
@@ -109,7 +151,7 @@ export default function HabitsScreen() {
                   style={[styles.progressValue, { color: colors.text }]}
                 >
                   {total === 0
-                    ? "No habits"
+                    ? "Nothing planned"
                     : `${habitsComplete}/${total} complete`}
                 </Text>
               </View>
@@ -156,25 +198,55 @@ export default function HabitsScreen() {
           <Text variant="bodySmall" style={{ color: colors.textSecondary }}>
             {total === 0
               ? "Nothing scheduled for this day yet."
-              : `${total} ${total === 1 ? "habit" : "habits"} scheduled`}
+              : `${total} ${total === 1 ? "item" : "items"} scheduled`}
           </Text>
         </View>
       </View>
 
       <View style={styles.list}>
-        {habitsForDay.map((habit) => (
-          <HabitCard
-            key={habit.id}
-            title={habit.title}
-            time={habit.time}
-            weekdays={habit.weekdays}
-            isDone={isHabitDone(habit.id, selectedDate, habitCompletions)}
-            onToggle={() =>
-              toggleHabit({ habitId: habit.id, habitDate: selectedDate })
-            }
-            onDelete={() => removeHabit(habit.id)}
-          />
-        ))}
+        {itemsForDay.map((item) =>
+          item.kind === "habit" ? (
+            <HabitCard
+              key={`habit-${item.habit.id}`}
+              title={item.habit.title}
+              time={item.habit.time}
+              scheduleLabel={getScheduleLabel(item.habit.weekdays)}
+              isDone={isItemDone(item)}
+              onToggle={() =>
+                toggleHabit({ habitId: item.habit.id, habitDate: selectedDate })
+              }
+              onDelete={() => removeHabit(item.habit.id)}
+            />
+          ) : (
+            <HabitCard
+              key={`meal-${item.entry.id}`}
+              title={
+                recipeNameByKey.get(
+                  recipeKey({
+                    id: item.entry.recipeId,
+                    isCustom: item.entry.isCustom,
+                  }),
+                ) ?? "Unknown recipe"
+              }
+              time={item.entry.time}
+              scheduleLabel={
+                item.entry.weekdays
+                  ? getScheduleLabel(item.entry.weekdays)
+                  : "Once"
+              }
+              tag={{
+                icon: "silverware-fork-knife",
+                label: MEAL_TYPE_LABELS[item.entry.mealType],
+              }}
+              deleteLabel="Remove from plan"
+              isDone={isItemDone(item)}
+              onToggle={() =>
+                toggleMeal({ entryId: item.entry.id, date: selectedDate })
+              }
+              onDelete={() => removeMealPlanEntry(item.entry.id)}
+            />
+          ),
+        )}
 
         {total === 0 ? (
           <View
@@ -205,7 +277,7 @@ export default function HabitsScreen() {
               variant="bodyMedium"
               style={[styles.emptyCopy, { color: colors.textSecondary }]}
             >
-              Add a habit and choose the days you want it to appear.
+              Add a habit or plan a meal, and choose when it happens.
             </Text>
           </View>
         ) : null}
@@ -220,7 +292,7 @@ export default function HabitsScreen() {
         contentStyle={styles.addButtonContent}
         style={styles.addButton}
       >
-        Add habit
+        Add habit or meal
       </Button>
     </ScreenView>
   );
