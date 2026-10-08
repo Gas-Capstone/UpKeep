@@ -6,7 +6,6 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
 import { useEffect, useState } from "react";
 import {
-  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -29,6 +28,7 @@ import { useThemeMode } from "@/components/context/ThemeContext";
 import { useTour } from "@/components/context/tourContext";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Colors, MaxContentWidth, Radius, Spacing } from "@/constants/theme";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -125,6 +125,7 @@ export default function SettingsScreen() {
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [draftTime, setDraftTime] = useState(summaryTime);
   const [sendingTest, setSendingTest] = useState(false);
+  const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
 
   useEffect(() => {
     if (!profile) return;
@@ -384,36 +385,23 @@ export default function SettingsScreen() {
     }
   }
 
-  function confirmDeleteAccount() {
-    Alert.alert(
-      "Delete account?",
-      "This permanently deletes your account and cannot be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete account",
-          style: "destructive",
-          onPress: async () => {
-            setSaving(true);
-            clearMessages();
-            try {
-              const { error: deleteError } = await supabase.rpc(
-                "delete_user_account",
-              );
-              if (deleteError) throw deleteError;
-              router.replace("/(auth)/login");
-            } catch (caught) {
-              setError(
-                caught instanceof Error
-                  ? caught.message
-                  : "Could not delete your account.",
-              );
-              setSaving(false);
-            }
-          },
-        },
-      ],
-    );
+  async function deleteAccount() {
+    setSaving(true);
+    clearMessages();
+    try {
+      const { error: deleteError } = await supabase.rpc("delete_user_account");
+      if (deleteError) throw deleteError;
+      setDeleteDialogVisible(false);
+      router.replace("/(auth)/login");
+    } catch (caught) {
+      setDeleteDialogVisible(false);
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Could not delete your account.",
+      );
+      setSaving(false);
+    }
   }
 
   const avatarSource = avatarUri || profile?.avatar_url || "";
@@ -946,7 +934,7 @@ export default function SettingsScreen() {
                 subtitle="Permanent account actions"
               />
               <Pressable
-                onPress={confirmDeleteAccount}
+                onPress={() => setDeleteDialogVisible(true)}
                 disabled={saving}
                 style={({ pressed }) => [
                   styles.deleteCard,
@@ -986,6 +974,16 @@ export default function SettingsScreen() {
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      <ConfirmDialog
+        visible={deleteDialogVisible}
+        title="Delete account?"
+        message="This permanently deletes your account and cannot be undone."
+        confirmLabel="Delete account"
+        onConfirm={deleteAccount}
+        onDismiss={() => setDeleteDialogVisible(false)}
+        loading={saving}
+      />
     </ThemedView>
   );
 }

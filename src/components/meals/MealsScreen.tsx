@@ -4,9 +4,7 @@ import { useRouter } from "expo-router";
 import {
   ActivityIndicator,
   Button,
-  Dialog,
   Icon,
-  Portal,
   Text,
 } from "react-native-paper";
 
@@ -15,6 +13,7 @@ import { useMealsData } from "@/components/context/mealsDataContext";
 import { useNotifications } from "@/components/context/notificationsContext";
 import { AddHabitModal } from "@/components/habits/AddHabitModal";
 import { Center } from "@/components/ui/center";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { ScreenView } from "@/components/ui/ScreenView";
 import { Colors, Radius, Spacing } from "@/constants/theme";
 import { useSession } from "@/hooks/use-session";
@@ -251,33 +250,15 @@ export default function MealsScreen() {
             />
           ) : null}
 
-          <Portal>
-            <Dialog
-              visible={deleteTarget !== null}
-              onDismiss={() => setDeleteTarget(null)}
-            >
-              <Dialog.Title>Delete recipe?</Dialog.Title>
-              <Dialog.Content>
-                <Text>
-                  {deleteTarget?.name} will be removed, along with anywhere it
-                  appears in your meal plan. This can&apos;t be undone.
-                </Text>
-              </Dialog.Content>
-              <Dialog.Actions>
-                <Button onPress={() => setDeleteTarget(null)} disabled={deleting}>
-                  Cancel
-                </Button>
-                <Button
-                  onPress={confirmDelete}
-                  loading={deleting}
-                  disabled={deleting}
-                  textColor={colors.danger}
-                >
-                  Delete
-                </Button>
-              </Dialog.Actions>
-            </Dialog>
-          </Portal>
+          <ConfirmDialog
+            visible={deleteTarget !== null}
+            title="Delete recipe?"
+            message={`${deleteTarget?.name ?? "This recipe"} will be removed, along with anywhere it appears in your meal plan. This can't be undone.`}
+            confirmLabel="Delete"
+            onConfirm={confirmDelete}
+            onDismiss={() => setDeleteTarget(null)}
+            loading={deleting}
+          />
         </>
       }
     >
