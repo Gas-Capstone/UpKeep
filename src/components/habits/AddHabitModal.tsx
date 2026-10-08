@@ -1,4 +1,3 @@
-import DateTimePicker from "@react-native-community/datetimepicker";
 import { format, parse, parseISO } from "date-fns";
 import { useMemo, useState } from "react";
 import {
@@ -18,6 +17,7 @@ import {
   Text,
   TextInput,
 } from "react-native-paper";
+import { DatePickerModal, TimePickerModal } from "react-native-paper-dates";
 
 import { useMealsData } from "@/components/context/mealsDataContext";
 import { useThemeMode } from "@/components/context/ThemeContext";
@@ -149,18 +149,11 @@ export function AddHabitModal({
     });
   };
 
-  const handleTimeValueChange = (_event: unknown, selectedDate: Date) => {
-    setTime(selectedDate);
-    if (Platform.OS === "android") {
-      setShowPicker(false);
-    }
-  };
-
-  const handleDateValueChange = (_event: unknown, selectedDate: Date) => {
-    setMealDate(selectedDate);
-    if (Platform.OS === "android") {
-      setShowDatePicker(false);
-    }
+  const confirmTime = ({ hours, minutes }: { hours: number; minutes: number }) => {
+    const next = new Date(time);
+    next.setHours(hours, minutes, 0, 0);
+    setTime(next);
+    setShowPicker(false);
   };
 
   const handleSave = async () => {
@@ -401,31 +394,15 @@ export function AddHabitModal({
                   {format(time, "h:mm aa")}
                 </Button>
 
-                {showPicker ? (
-                  <View
-                    style={[
-                      styles.pickerWrap,
-                      {
-                        backgroundColor: colors.background,
-                        borderColor: colors.border,
-                      },
-                    ]}
-                  >
-                    <DateTimePicker
-                      value={time}
-                      mode="time"
-                      display={Platform.OS === "ios" ? "spinner" : "default"}
-                      is24Hour={false}
-                      onValueChange={handleTimeValueChange}
-                      onDismiss={() => setShowPicker(false)}
-                    />
-                    {Platform.OS === "ios" ? (
-                      <Button compact onPress={() => setShowPicker(false)}>
-                        Done
-                      </Button>
-                    ) : null}
-                  </View>
-                ) : null}
+                <TimePickerModal
+                  visible={showPicker}
+                  locale="en"
+                  use24HourClock={false}
+                  hours={time.getHours()}
+                  minutes={time.getMinutes()}
+                  onDismiss={() => setShowPicker(false)}
+                  onConfirm={confirmTime}
+                />
               </View>
 
               <View
@@ -533,34 +510,18 @@ export function AddHabitModal({
                       {format(mealDate, "EEEE, MMM d")}
                     </Button>
 
-                    {showDatePicker ? (
-                      <View
-                        style={[
-                          styles.pickerWrap,
-                          {
-                            backgroundColor: colors.background,
-                            borderColor: colors.border,
-                          },
-                        ]}
-                      >
-                        <DateTimePicker
-                          value={mealDate}
-                          mode="date"
-                          minimumDate={parseISO(getTodaysDate())}
-                          display={Platform.OS === "ios" ? "inline" : "default"}
-                          onValueChange={handleDateValueChange}
-                          onDismiss={() => setShowDatePicker(false)}
-                        />
-                        {Platform.OS === "ios" ? (
-                          <Button
-                            compact
-                            onPress={() => setShowDatePicker(false)}
-                          >
-                            Done
-                          </Button>
-                        ) : null}
-                      </View>
-                    ) : null}
+                    <DatePickerModal
+                      mode="single"
+                      locale="en"
+                      visible={showDatePicker}
+                      date={mealDate}
+                      validRange={{ startDate: parseISO(getTodaysDate()) }}
+                      onDismiss={() => setShowDatePicker(false)}
+                      onConfirm={({ date }) => {
+                        if (date) setMealDate(date);
+                        setShowDatePicker(false);
+                      }}
+                    />
                   </>
                 )}
               </View>
@@ -695,11 +656,6 @@ const styles = StyleSheet.create({
   timeButtonContent: {
     minHeight: 48,
     justifyContent: "flex-start",
-  },
-  pickerWrap: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: Radius.medium,
-    padding: Spacing.two,
   },
   weekdayRow: {
     flexDirection: "row",

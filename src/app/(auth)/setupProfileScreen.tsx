@@ -1,4 +1,3 @@
-import DateTimePicker from "@react-native-community/datetimepicker";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as FileSystem from "expo-file-system/legacy";
@@ -13,6 +12,7 @@ import {
   StyleSheet,
   View,
 } from "react-native";
+import { DatePickerModal } from "react-native-paper-dates";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useThemeMode } from "@/components/context/ThemeContext";
@@ -411,32 +411,20 @@ export default function SetupProfileScreen() {
                   />
                 </Pressable>
 
-                {showDatePicker && (
-                  <DateTimePicker
-                    value={birthdate || new Date()}
-                    mode="date"
-                    maximumDate={new Date()}
-                    display={Platform.OS === "ios" ? "spinner" : "calendar"}
-                    onValueChange={(_event, selectedDate) => {
-                      setBirthdate(selectedDate);
-                    }}
-                    onDismiss={() => setShowDatePicker(false)}
-                  />
-                )}
-
-                {showDatePicker && Platform.OS === "ios" && (
-                  <Pressable
-                    onPress={() => setShowDatePicker(false)}
-                    style={styles.doneDate}
-                  >
-                    <ThemedText
-                      type="smallBold"
-                      style={{ color: colors.brand }}
-                    >
-                      Done
-                    </ThemedText>
-                  </Pressable>
-                )}
+                <DatePickerModal
+                  mode="single"
+                  locale="en"
+                  visible={showDatePicker}
+                  date={birthdate ?? undefined}
+                  startYear={1900}
+                  endYear={new Date().getFullYear()}
+                  validRange={{ endDate: new Date() }}
+                  onDismiss={() => setShowDatePicker(false)}
+                  onConfirm={({ date }) => {
+                    if (date) setBirthdate(date);
+                    setShowDatePicker(false);
+                  }}
+                />
               </ThemedView>
 
               <ThemedView
@@ -757,12 +745,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-  },
-  doneDate: {
-    alignSelf: "flex-end",
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-    marginBottom: Spacing.two,
   },
   twoColumnRow: {
     flexDirection: "row",
