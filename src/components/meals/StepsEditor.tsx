@@ -54,6 +54,9 @@ export function StepsEditor({ steps, onChange }: StepsEditorProps) {
               value={step}
               onChangeText={(text) => update(index, text)}
               style={{ flex: 1, minWidth: 0 }}
+              // Paper pins multiline text to the top of the box; centre it so
+              // a one-line step sits in the middle like a normal field.
+              contentStyle={{ textAlignVertical: "center" }}
               accessibilityLabel={`Step ${index + 1}`}
             />
             <VStack>

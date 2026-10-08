@@ -148,11 +148,14 @@ export default function CookingScreen() {
 
             {finished && (
               <Card mode="contained">
-                <Card.Title
-                  title="Finished!"
-                  subtitle={`You made ${recipe.name}. Enjoy your meal.`}
-                  titleVariant="titleLarge"
-                />
+                <Card.Title title="Finished!" titleVariant="titleLarge" />
+                {/* In the body rather than Card.Title's subtitle, which is
+                    cut to one line and truncates longer recipe names. */}
+                <Card.Content>
+                  <Text variant="bodyMedium">
+                    You made {recipe.name}. Enjoy your meal.
+                  </Text>
+                </Card.Content>
                 <Card.Actions>
                   <Button mode="contained" onPress={finishCooking}>
                     Done

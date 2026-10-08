@@ -47,6 +47,7 @@ npx expo start
 	- Daily summary of the day's planned habits and meals, at a time you choose
 	- Habit reminders at each habit's scheduled time, skipping habits already checked off that day
 	- Meal reminders at each planned meal's time, on the days it's scheduled, skipping meals already checked off that day
+	- Habit and meal reminders pop up as a banner but are silent, like the daily summary
 	- Reminders are scheduled a week ahead and refreshed whenever the app is opened or your habits/meal plan change
 ### Planned features
 - Integrate habits page with backend

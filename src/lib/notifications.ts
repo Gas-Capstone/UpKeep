@@ -4,9 +4,10 @@ import type { Reminder } from "@/lib/reminders";
 
 const NOTIFICATION_CHANNEL_ID = "silent";
 // Habit and meal reminders are time-sensitive, so they get their own channel
-// that pops up and makes a sound. Android locks a channel's importance once
-// it's created, which is why this is a new channel rather than a change to
-// the silent one.
+// that pops up as a banner (high importance). Like everything else in the app
+// they stay silent. Android locks a channel's importance and sound once it's
+// created, which is why this is a new channel rather than a change to the
+// silent one.
 const REMINDER_CHANNEL_ID = "reminders";
 
 // Each kind is scheduled and cleared independently. The identifier is
@@ -16,9 +17,8 @@ export type ReminderKind = "daily-summary" | "habit" | "meal";
 
 if (Platform.OS !== "web") {
   Notifications.setNotificationHandler({
-    handleNotification: async (notification) => ({
-      shouldPlaySound:
-        notification.request.content.data?.kind !== "daily-summary",
+    handleNotification: async () => ({
+      shouldPlaySound: false,
       shouldSetBadge: false,
       shouldShowBanner: true,
       shouldShowList: true,
@@ -45,7 +45,7 @@ async function ensureNotificationChannel() {
   await Notifications.setNotificationChannelAsync(REMINDER_CHANNEL_ID, {
     name: "Reminders",
     importance: Notifications.AndroidImportance.HIGH,
-    sound: "default",
+    sound: null,
   });
 }
 
