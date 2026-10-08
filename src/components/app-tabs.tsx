@@ -17,6 +17,7 @@ import {
   useTheme,
 } from "react-native-paper";
 
+import { AppTourModal } from "@/components/tour/AppTourModal";
 import {
   MaxContentWidth,
   Radius,
@@ -62,13 +63,6 @@ const TABS: TabConfig[] = [
     icon: "cart-outline",
     placement: "hidden",
   },
-  {
-    name: "mealplan",
-    href: "/mealplan",
-    label: "Meal plan",
-    icon: "calendar-month-outline",
-    placement: "hidden",
-  },
 ];
 
 export default function AppTabs() {
@@ -105,6 +99,7 @@ export default function AppTabs() {
           </BottomBar>
         </TabList>
       </Tabs>
+      <AppTourModal />
     </View>
   );
 }

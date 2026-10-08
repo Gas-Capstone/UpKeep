@@ -19,8 +19,6 @@ import {
   formatSummaryBody,
   getSummaryDays,
 } from "@/lib/dailySummary";
-import { toDateKey } from "@/lib/meals/mealPlan";
-import { fetchMealPlanEntries } from "@/lib/meals/queries";
 import {
   cancelDailySummaries,
   requestNotificationPermission,
@@ -28,6 +26,7 @@ import {
   sendNotificationNow,
 } from "@/lib/notifications";
 import { useHabitsContext } from "./habitsContext";
+import { useMealsData } from "./mealsDataContext";
 import { useUserContext } from "./userContext";
 
 const SETTINGS_STORAGE_KEY = "wellness-app-notification-settings";
@@ -63,6 +62,7 @@ type NotificationsProviderProps = {
 export const NotificationsProvider = ({ children }: NotificationsProviderProps) => {
   const { user } = useUserContext();
   const { habitArray } = useHabitsContext();
+  const { mealPlanEntries } = useMealsData();
   const [settings, setSettings] = useState<NotificationSettings>(DEFAULT_SETTINGS);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
 
@@ -89,16 +89,10 @@ export const NotificationsProvider = ({ children }: NotificationsProviderProps) 
     });
   }, []);
 
+  // Changes to habits or planned meals rebuild this, which re-runs resync.
   const loadSummaries = useCallback(
-    async (userId: string, days: Date[]) => {
-      const mealEntries = await fetchMealPlanEntries(
-        userId,
-        toDateKey(days[0]),
-        toDateKey(days[days.length - 1]),
-      );
-      return buildDailySummaries(days, habitArray, mealEntries);
-    },
-    [habitArray],
+    async (days: Date[]) => buildDailySummaries(days, habitArray, mealPlanEntries),
+    [habitArray, mealPlanEntries],
   );
 
   const resync = useCallback(() => {
@@ -113,7 +107,7 @@ export const NotificationsProvider = ({ children }: NotificationsProviderProps) 
           return;
         }
 
-        const summaries = await loadSummaries(user.id, getSummaryDays());
+        const summaries = await loadSummaries(getSummaryDays());
         if (run !== latestRun.current) return;
 
         await scheduleDailySummaries(summaries, settings.hour, settings.minute);
@@ -142,7 +136,7 @@ export const NotificationsProvider = ({ children }: NotificationsProviderProps) 
 
   const sendTestSummary = useCallback(async () => {
     if (!user) throw new Error("You must be logged in.");
-    const [today] = await loadSummaries(user.id, getSummaryDays().slice(0, 1));
+    const [today] = await loadSummaries(getSummaryDays().slice(0, 1));
     await sendNotificationNow(SUMMARY_TITLE, formatSummaryBody(today) ?? EMPTY_SUMMARY_BODY);
   }, [user, loadSummaries]);
 

@@ -9,7 +9,11 @@ import type { Weekday } from "@/lib/habits/habits";
 type HabitCardProps = {
   title: string;
   time: string;
-  weekdays: Weekday[];
+  // Shown after the time, e.g. "Mon, Wed" or "Once". Planned meals pass their own.
+  scheduleLabel: string;
+  // Small label before the title, e.g. a planned meal's "Dinner".
+  tag?: { icon: string; label: string };
+  deleteLabel?: string;
   isDone?: boolean;
   onToggle: () => void;
   onDelete: () => void;
@@ -17,7 +21,7 @@ type HabitCardProps = {
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 
-function getScheduleLabel(weekdays: Weekday[]) {
+export function getScheduleLabel(weekdays: Weekday[]) {
   if (!weekdays || weekdays.length === 0 || weekdays.length === 7) {
     return "Every day";
   }
@@ -31,7 +35,9 @@ function getScheduleLabel(weekdays: Weekday[]) {
 export function HabitCard({
   title,
   time,
-  weekdays,
+  scheduleLabel,
+  tag,
+  deleteLabel = "Delete habit",
   isDone = false,
   onToggle,
   onDelete,
@@ -70,6 +76,14 @@ export function HabitCard({
       </Pressable>
 
       <View style={styles.copy}>
+        {tag ? (
+          <View style={styles.metaItem}>
+            <Icon source={tag.icon} size={14} color={colors.accentMeals} />
+            <Text variant="labelSmall" style={{ color: colors.accentMeals }}>
+              {tag.label.toUpperCase()}
+            </Text>
+          </View>
+        ) : null}
         <Text
           variant="titleMedium"
           numberOfLines={2}
@@ -104,7 +118,7 @@ export function HabitCard({
             numberOfLines={1}
             style={[styles.schedule, { color: colors.textSecondary }]}
           >
-            {getScheduleLabel(weekdays)}
+            {scheduleLabel}
           </Text>
         </View>
       </View>
@@ -125,7 +139,7 @@ export function HabitCard({
       >
         <Menu.Item
           leadingIcon="delete-outline"
-          title="Delete habit"
+          title={deleteLabel}
           onPress={() => {
             setMenuVisible(false);
             onDelete();
