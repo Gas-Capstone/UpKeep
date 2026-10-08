@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { useRouter } from "expo-router";
 import {
@@ -13,6 +13,7 @@ import {
 import { useThemeMode } from "@/components/context/ThemeContext";
 import { useMealsData } from "@/components/context/mealsDataContext";
 import { useNotifications } from "@/components/context/notificationsContext";
+import { AddHabitModal } from "@/components/habits/AddHabitModal";
 import { Center } from "@/components/ui/center";
 import { ScreenView } from "@/components/ui/ScreenView";
 import { Colors, Radius, Spacing } from "@/constants/theme";
@@ -24,17 +25,21 @@ import {
   recipeKey,
   sortFavoritesFirst,
 } from "@/lib/meals/meals";
+import { getUpcomingMeals } from "@/lib/meals/mealPlan";
 import {
+  addMealPlanToGroceryList,
   addRecipeToGroceryList,
   deleteCustomRecipe,
-  setMealPlanEntry,
 } from "@/lib/meals/queries";
 
 import { AddIngredientsModal } from "./AddIngredientsModal";
 import { AddRecipeModal } from "./AddRecipeModal";
-import { AddToMealPlanModal } from "./AddToMealPlanModal";
 import { FridgeModal } from "./FridgeModal";
 import { RecipeCard } from "./RecipeCard";
+
+/** How long the grocery-list result stays on screen. */
+const SHOP_STATUS_TIMEOUT_MS = 4000;
+const UPCOMING_DAYS = 7;
 
 export default function MealsScreen() {
   const router = useRouter();
@@ -55,6 +60,8 @@ export default function MealsScreen() {
     toggleFavorite,
     createNewRecipe,
     toggleFridgeItem: toggleFridgeItemShared,
+    mealPlanEntries,
+    addMealPlanEntry,
   } = useMealsData();
   const { resync } = useNotifications();
 
@@ -67,6 +74,47 @@ export default function MealsScreen() {
   // Recipe awaiting delete confirmation.
   const [deleteTarget, setDeleteTarget] = useState<Recipe | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [shopping, setShopping] = useState(false);
+  const [shopStatus, setShopStatus] = useState("");
+
+  // Clear the grocery-list result after a few seconds, since this screen
+  // stays mounted while you move between tabs.
+  useEffect(() => {
+    if (shopStatus === "") return;
+    const timer = setTimeout(() => setShopStatus(""), SHOP_STATUS_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [shopStatus]);
+
+  // Planned meals for the next week, once per occurrence so a recipe planned
+  // on three nights buys three nights' worth.
+  const upcomingMeals = getUpcomingMeals(mealPlanEntries, UPCOMING_DAYS);
+
+  const shopMealPlan = async () => {
+    if (!user?.id) return;
+    setMutationError("");
+    setShopStatus("");
+    setShopping(true);
+    try {
+      const count = await addMealPlanToGroceryList(
+        user.id,
+        upcomingMeals.map((entry) => ({
+          id: entry.recipeId,
+          isCustom: entry.isCustom,
+        })),
+      );
+      setShopStatus(
+        count === 0
+          ? "Nothing to add. Your fridge already covers these meals."
+          : `Added ${count} ${count === 1 ? "ingredient" : "ingredients"} to your grocery list.`,
+      );
+    } catch (error) {
+      setMutationError(
+        error instanceof Error ? error.message : "Couldn't build your grocery list",
+      );
+    } finally {
+      setShopping(false);
+    }
+  };
 
   const openEditRecipe = (recipe: Recipe) => {
     router.navigate({
@@ -193,15 +241,15 @@ export default function MealsScreen() {
             onSave={saveFridge}
           />
 
-          <AddToMealPlanModal
-            visible={planRecipe !== null}
-            onDismiss={() => setPlanRecipe(null)}
-            recipeName={planRecipe?.name ?? ""}
-            onConfirm={async (plannedDate, mealType) => {
-              await setMealPlanEntry(user!.id, planRecipe!, plannedDate, mealType);
-              resync();
-            }}
-          />
+          {planRecipe ? (
+            <AddHabitModal
+              key={recipeKey(planRecipe)}
+              visible
+              onDismiss={() => setPlanRecipe(null)}
+              initialRecipe={planRecipe}
+              onSaveMeal={addMealPlanEntry}
+            />
+          ) : null}
 
           <Portal>
             <Dialog
@@ -285,7 +333,7 @@ export default function MealsScreen() {
           <QuickAction
             icon="calendar-month-outline"
             label="Meal plan"
-            onPress={() => router.navigate("/mealplan")}
+            onPress={() => router.navigate("/habits")}
           />
           <QuickAction
             icon="cart-outline"
@@ -306,6 +354,25 @@ export default function MealsScreen() {
             onPress={() => setAddIngredientsVisible(true)}
           />
         </View>
+
+        <Button
+          mode="text"
+          icon="cart-plus"
+          onPress={shopMealPlan}
+          loading={shopping}
+          disabled={shopping || upcomingMeals.length === 0}
+          textColor={colors.brandStrong}
+        >
+          Shop planned meals for the next 7 days
+        </Button>
+        {shopStatus ? (
+          <Text
+            variant="bodySmall"
+            style={{ color: colors.brandStrong, textAlign: "center" }}
+          >
+            {shopStatus}
+          </Text>
+        ) : null}
       </View>
 
       {catalogLoading && hasCatalogData ? (

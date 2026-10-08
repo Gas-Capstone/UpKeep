@@ -63,13 +63,6 @@ const TABS: TabConfig[] = [
     icon: "cart-outline",
     placement: "hidden",
   },
-  {
-    name: "mealplan",
-    href: "/mealplan",
-    label: "Meal plan",
-    icon: "calendar-month-outline",
-    placement: "hidden",
-  },
 ];
 
 export default function AppTabs() {

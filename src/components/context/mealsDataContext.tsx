@@ -1,5 +1,7 @@
 import React, { createContext, useCallback, useContext, useState, useEffect } from "react";
+import { CompletionsByDate, rowsToCompletionsByDate } from "@/lib/habits/habits";
 import { FridgeEntry, Ingredient, Recipe, recipeKey } from "@/lib/meals/meals";
+import { MealPlanEntry, MealSchedule } from "@/lib/meals/mealPlan";
 import {
   addFridgeItem,
   fetchFridgeItems,
@@ -15,7 +17,13 @@ import {
   addCustomFavoriteRecipe,
   removeCustomFavoriteRecipe,
   createRecipe,
-  type CreateRecipeInput
+  type CreateRecipeInput,
+  completeMeal,
+  createMealPlanEntry,
+  fetchMealCompletions,
+  fetchMealPlanEntries,
+  removeMealPlanEntry,
+  uncompleteMeal,
 } from "@/lib/meals/queries";
 import { userContext } from "./userContext";
 
@@ -43,7 +51,26 @@ export type MealsDataContextType = {
   toggleFridgeItem: (ingredient: Ingredient) => Promise<void>;
   toggleFavorite: (recipe: Recipe) => void;
   createNewRecipe: (recipe: CreateRecipeInput) => Promise<void>
+  // Planned meals, scheduled like habits and shown on the Habits page.
+  mealPlanEntries: MealPlanEntry[];
+  // Same shape as habit completions: ISO date -> checked-off entry ids.
+  mealCompletions: CompletionsByDate;
+  // Throws on failure so the form can show an error.
+  addMealPlanEntry: (recipe: Recipe, schedule: MealSchedule) => Promise<void>;
+  removeMealPlanEntry: (entryId: string) => void;
+  toggleMeal: (args: { entryId: string; date: string }) => void;
 };
+
+async function loadMealPlan(userId: string) {
+  const [entries, rows] = await Promise.all([
+    fetchMealPlanEntries(userId),
+    fetchMealCompletions(userId),
+  ]);
+  const completions = rowsToCompletionsByDate(
+    rows.map((row) => ({ habit_id: row.entry_id, completed_on: row.completed_on })),
+  );
+  return { entries, completions };
+}
 
 export const mealsDataContext = createContext<MealsDataContextType | null>(null);
 
@@ -63,6 +90,8 @@ export const MealsDataProvider = ({ children }: MealsDataProviderProps) => {
     new Map(),
   );
   const [fridgeLoading, setFridgeLoading] = useState(false);
+  const [mealPlanEntries, setMealPlanEntries] = useState<MealPlanEntry[]>([]);
+  const [mealCompletions, setMealCompletions] = useState<CompletionsByDate>({});
   
   const refreshFavorites = useCallback(() => {
     if (!user?.id) return
@@ -214,6 +243,61 @@ export const MealsDataProvider = ({ children }: MealsDataProviderProps) => {
     refreshFavorites()
   }, [user, refreshFridge]);
 
+  function refreshMealPlan(userId: string) {
+    loadMealPlan(userId)
+      .then(({ entries, completions }) => {
+        setMealPlanEntries(entries);
+        setMealCompletions(completions);
+      })
+      .catch((err) => console.log("Error fetching meal plan: ", err));
+  }
+
+  useEffect(() => {
+    if (!user?.id) return;
+    loadMealPlan(user.id)
+      .then(({ entries, completions }) => {
+        setMealPlanEntries(entries);
+        setMealCompletions(completions);
+      })
+      .catch((err) => console.log("Error fetching meal plan: ", err));
+  }, [user?.id]);
+
+  async function addMealPlanEntry(recipe: Recipe, schedule: MealSchedule) {
+    if (!user?.id) return;
+    const created = await createMealPlanEntry(user.id, recipe, schedule);
+    setMealPlanEntries((prev) => [...prev, created]);
+  }
+
+  function removeMealPlanEntryFromPlan(entryId: string) {
+    if (!user?.id) return;
+    const userId = user.id;
+    setMealPlanEntries((prev) => prev.filter((entry) => entry.id !== entryId));
+    removeMealPlanEntry(entryId).catch((err) => {
+      console.log("Error removing planned meal: ", err);
+      refreshMealPlan(userId);
+    });
+  }
+
+  function toggleMeal({ entryId, date }: { entryId: string; date: string }) {
+    if (!user?.id) return;
+    const userId = user.id;
+    const isDone = mealCompletions[date]?.includes(entryId) ?? false;
+
+    setMealCompletions((prev) => {
+      const cur = prev[date] ?? [];
+      const next = isDone ? cur.filter((id) => id !== entryId) : [...cur, entryId];
+      return { ...prev, [date]: next };
+    });
+
+    const request = isDone
+      ? uncompleteMeal(entryId, date)
+      : completeMeal(userId, entryId, date);
+    request.catch((err) => {
+      console.log("Error toggling planned meal: ", err);
+      refreshMealPlan(userId);
+    });
+  }
+
   const toggleFridgeItem = useCallback(
     async (ingredient: Ingredient) => {
       if (!user?.id) return;
@@ -266,7 +350,12 @@ export const MealsDataProvider = ({ children }: MealsDataProviderProps) => {
     refreshFavorites,
     toggleFridgeItem,
     toggleFavorite,
-    createNewRecipe
+    createNewRecipe,
+    mealPlanEntries,
+    mealCompletions,
+    addMealPlanEntry,
+    removeMealPlanEntry: removeMealPlanEntryFromPlan,
+    toggleMeal,
   };
 
   return (

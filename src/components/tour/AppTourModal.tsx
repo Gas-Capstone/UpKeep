@@ -47,13 +47,13 @@ const STEPS: TourStep[] = [
     href: "/meals",
     icon: "silverware-fork-knife",
     title: "Meals",
-    body: "Add what's in your fridge to see which recipes you can cook right now. Plan your week and build a grocery list from here too.",
+    body: "Add what's in your fridge to see which recipes you can cook right now, and shop for the meals you've planned.",
   },
   {
     href: "/habits",
     icon: "check-circle-outline",
-    title: "Habits",
-    body: "Add habits with the + button and check them off each day. Use the week strip to look back at past days.",
+    title: "Habits & meal plan",
+    body: "Your day's habits and planned meals, in time order. Add either one from here, check them off, and use the week strip to look back.",
   },
   {
     href: "/profile",

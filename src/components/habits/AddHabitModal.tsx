@@ -1,5 +1,5 @@
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { format } from "date-fns";
+import { format, parse, parseISO } from "date-fns";
 import { useMemo, useState } from "react";
 import {
   KeyboardAvoidingView,
@@ -14,13 +14,30 @@ import {
   Icon,
   Modal,
   Portal,
+  SegmentedButtons,
   Text,
   TextInput,
 } from "react-native-paper";
 
+import { useMealsData } from "@/components/context/mealsDataContext";
 import { useThemeMode } from "@/components/context/ThemeContext";
 import { Colors, MaxContentWidth, Radius, Spacing } from "@/constants/theme";
 import type { Weekday } from "@/lib/habits/habits";
+import type { Recipe } from "@/lib/meals/meals";
+import {
+  DEFAULT_MEAL_TIMES,
+  MEAL_TYPES,
+  MEAL_TYPE_LABELS,
+  MealSchedule,
+  MealType,
+  toDateKey,
+} from "@/lib/meals/mealPlan";
+import { getTodaysDate } from "@/lib/time_management/week";
+
+import { RecipeSelectList } from "./RecipeSelectList";
+
+type ItemKind = "habit" | "meal";
+type RepeatMode = "weekly" | "once";
 
 type AddHabitModalProps = {
   visible: boolean;
@@ -30,6 +47,13 @@ type AddHabitModalProps = {
     time: string;
     weekdays: Weekday[];
   }) => void | Promise<void>;
+  onSaveMeal?: (recipe: Recipe, schedule: MealSchedule) => Promise<void>;
+  // Day a one-off meal starts on (yyyy-MM-dd). Read once on mount, so
+  // callers mount this modal only while it's open.
+  defaultDate?: string;
+  // Opens straight into meal mode with this recipe picked, and hides the
+  // habit/meal switch. Used by "Add to meal plan" on the Meals tab.
+  initialRecipe?: Recipe | null;
 };
 
 const WEEKDAYS: { label: string; longLabel: string; value: Weekday }[] = [
@@ -42,21 +66,45 @@ const WEEKDAYS: { label: string; longLabel: string; value: Weekday }[] = [
   { label: "Sa", longLabel: "Saturday", value: 6 },
 ];
 
+const DEFAULT_MEAL_TYPE: MealType = "dinner";
+
+function mealTimeAsDate(mealType: MealType) {
+  return parse(DEFAULT_MEAL_TIMES[mealType], "h:mm aa", new Date());
+}
+
+/** Adds a habit or plans a meal. Both share the time-of-day and repeat schedule. */
 export function AddHabitModal({
   visible,
   onDismiss,
   onSave,
+  onSaveMeal,
+  defaultDate = getTodaysDate(),
+  initialRecipe = null,
 }: AddHabitModalProps) {
   const { resolvedTheme } = useThemeMode();
   const colors = Colors[resolvedTheme];
+  const { recipes } = useMealsData();
+  const mealOnly = initialRecipe !== null;
 
-  const [time, setTime] = useState(new Date());
+  const [kind, setKind] = useState<ItemKind>(mealOnly ? "meal" : "habit");
+  const [time, setTime] = useState(() =>
+    mealOnly ? mealTimeAsDate(DEFAULT_MEAL_TYPE) : new Date(),
+  );
   const [showPicker, setShowPicker] = useState(false);
   const [habitTitle, setHabitTitle] = useState("");
   const [weekdays, setWeekdays] = useState<Weekday[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  const [recipe, setRecipe] = useState<Recipe | null>(initialRecipe);
+  const [mealType, setMealType] = useState<MealType>(DEFAULT_MEAL_TYPE);
+  // Meals default to a single day, matching how the old meal plan worked.
+  const [repeatMode, setRepeatMode] = useState<RepeatMode>("once");
+  const [mealDate, setMealDate] = useState(() => parseISO(defaultDate));
+  const [showDatePicker, setShowDatePicker] = useState(false);
+
+  const isMeal = kind === "meal";
+  const isWeekly = !isMeal || repeatMode === "weekly";
   const isEveryDay = weekdays.length === 0;
   const scheduleSummary = useMemo(() => {
     if (isEveryDay) return "Every day";
@@ -64,6 +112,8 @@ export function AddHabitModal({
       .map((day) => day.longLabel.slice(0, 3))
       .join(", ");
   }, [isEveryDay, weekdays]);
+
+  const canSave = isMeal ? recipe !== null : habitTitle.trim().length > 0;
 
   const resetForm = () => {
     setHabitTitle("");
@@ -77,6 +127,17 @@ export function AddHabitModal({
   const handleDismiss = () => {
     resetForm();
     onDismiss();
+  };
+
+  const changeKind = (next: ItemKind) => {
+    setKind(next);
+    setError("");
+    setTime(next === "meal" ? mealTimeAsDate(mealType) : new Date());
+  };
+
+  const changeMealType = (next: MealType) => {
+    setMealType(next);
+    setTime(mealTimeAsDate(next));
   };
 
   const toggleWeekday = (weekday: Weekday) => {
@@ -95,26 +156,47 @@ export function AddHabitModal({
     }
   };
 
+  const handleDateValueChange = (_event: unknown, selectedDate: Date) => {
+    setMealDate(selectedDate);
+    if (Platform.OS === "android") {
+      setShowDatePicker(false);
+    }
+  };
+
   const handleSave = async () => {
     const title = habitTitle.trim();
-    if (!title) {
+    if (!isMeal && !title) {
       setError("Give your habit a name first.");
+      return;
+    }
+    if (isMeal && !recipe) {
+      setError("Pick a recipe first.");
       return;
     }
 
     try {
       setSaving(true);
       setError("");
-      await onSave?.({
-        title,
-        time: format(time, "h:mm aa"),
-        weekdays,
-      });
+      const formattedTime = format(time, "h:mm aa");
+      if (isMeal && recipe) {
+        await onSaveMeal?.(recipe, {
+          mealType,
+          time: formattedTime,
+          weekdays: repeatMode === "weekly" ? weekdays : null,
+          plannedDate: repeatMode === "once" ? toDateKey(mealDate) : null,
+        });
+      } else {
+        await onSave?.({ title, time: formattedTime, weekdays });
+      }
       resetForm();
       onDismiss();
     } catch (caught) {
       setError(
-        caught instanceof Error ? caught.message : "Could not add that habit.",
+        caught instanceof Error
+          ? caught.message
+          : isMeal
+            ? "Could not plan that meal."
+            : "Could not add that habit.",
       );
     } finally {
       setSaving(false);
@@ -150,7 +232,9 @@ export function AddHabitModal({
                   ]}
                 >
                   <Icon
-                    source="check-circle-outline"
+                    source={
+                      isMeal ? "silverware-fork-knife" : "check-circle-outline"
+                    }
                     size={22}
                     color={colors.brand}
                   />
@@ -161,7 +245,7 @@ export function AddHabitModal({
                     variant="titleLarge"
                     style={[styles.title, { color: colors.text }]}
                   >
-                    Add habit
+                    {isMeal ? "Plan a meal" : "Add habit"}
                   </Text>
                   <Text
                     variant="bodySmall"
@@ -171,6 +255,26 @@ export function AddHabitModal({
                   </Text>
                 </View>
               </View>
+
+              {mealOnly ? null : (
+                <SegmentedButtons
+                  value={kind}
+                  onValueChange={(value) => changeKind(value as ItemKind)}
+                  style={styles.kindSwitch}
+                  buttons={[
+                    {
+                      value: "habit",
+                      label: "Habit",
+                      icon: "check-circle-outline",
+                    },
+                    {
+                      value: "meal",
+                      label: "Meal",
+                      icon: "silverware-fork-knife",
+                    },
+                  ]}
+                />
+              )}
             </View>
 
             <ScrollView
@@ -179,18 +283,86 @@ export function AddHabitModal({
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
             >
-              <View style={styles.section}>
-                <TextInput
-                  label="Habit name"
-                  mode="outlined"
-                  value={habitTitle}
-                  onChangeText={setHabitTitle}
-                  placeholder="Drink water"
-                  outlineColor={colors.border}
-                  activeOutlineColor={colors.brand}
-                  returnKeyType="done"
-                />
-              </View>
+              {isMeal ? (
+                <>
+                  <View style={styles.section}>
+                    <Text
+                      variant="titleMedium"
+                      style={{ color: colors.text, fontWeight: "800" }}
+                    >
+                      Recipe
+                    </Text>
+                    {mealOnly && recipe ? (
+                      <Text variant="bodyLarge" style={{ color: colors.text }}>
+                        {recipe.name}
+                      </Text>
+                    ) : (
+                      <RecipeSelectList
+                        recipes={recipes}
+                        selected={recipe}
+                        onSelect={setRecipe}
+                      />
+                    )}
+                  </View>
+
+                  <View
+                    style={[
+                      styles.section,
+                      styles.dividedSection,
+                      { borderTopColor: colors.border },
+                    ]}
+                  >
+                    <Text
+                      variant="titleMedium"
+                      style={{ color: colors.text, fontWeight: "800" }}
+                    >
+                      Meal
+                    </Text>
+                    <View style={styles.weekdayRow}>
+                      {MEAL_TYPES.map((type) => {
+                        const selected = mealType === type;
+                        return (
+                          <Chip
+                            key={type}
+                            selected={selected}
+                            showSelectedCheck={false}
+                            onPress={() => changeMealType(type)}
+                            style={{
+                              backgroundColor: selected
+                                ? colors.backgroundSelected
+                                : colors.background,
+                              borderColor: selected
+                                ? colors.brand
+                                : colors.border,
+                            }}
+                            textStyle={{
+                              color: selected
+                                ? colors.brandStrong
+                                : colors.text,
+                              fontWeight: selected ? "800" : "600",
+                            }}
+                          >
+                            {MEAL_TYPE_LABELS[type]}
+                          </Chip>
+                        );
+                      })}
+                    </View>
+                  </View>
+                </>
+              ) : (
+                <View style={styles.section}>
+                  <TextInput
+                    label="Habit name"
+                    mode="outlined"
+                    value={habitTitle}
+                    onChangeText={setHabitTitle}
+                    placeholder="Drink water"
+                    outlineColor={colors.border}
+                    activeOutlineColor={colors.brand}
+                    returnKeyType="done"
+                  />
+                </View>
+              )}
 
               <View
                 style={[
@@ -211,7 +383,9 @@ export function AddHabitModal({
                       variant="bodySmall"
                       style={{ color: colors.textSecondary, marginTop: 2 }}
                     >
-                      When do you want this habit on your list?
+                      {isMeal
+                        ? "When do you plan to eat this?"
+                        : "When do you want this habit on your list?"}
                     </Text>
                   </View>
                 </View>
@@ -273,60 +447,122 @@ export function AddHabitModal({
                       variant="bodySmall"
                       style={{ color: colors.textSecondary, marginTop: 2 }}
                     >
-                      {scheduleSummary}
+                      {isWeekly
+                        ? scheduleSummary
+                        : format(mealDate, "EEEE, MMM d")}
                     </Text>
                   </View>
 
-                  <Chip
-                    selected={isEveryDay}
-                    showSelectedCheck={false}
-                    onPress={() => setWeekdays([])}
-                    style={{
-                      backgroundColor: isEveryDay
-                        ? colors.backgroundSelected
-                        : colors.background,
-                      borderColor: isEveryDay ? colors.brand : colors.border,
-                    }}
-                    textStyle={{
-                      color: isEveryDay ? colors.brandStrong : colors.text,
-                      fontWeight: isEveryDay ? "800" : "600",
-                    }}
-                  >
-                    Every day
-                  </Chip>
+                  {isWeekly ? (
+                    <Chip
+                      selected={isEveryDay}
+                      showSelectedCheck={false}
+                      onPress={() => setWeekdays([])}
+                      style={{
+                        backgroundColor: isEveryDay
+                          ? colors.backgroundSelected
+                          : colors.background,
+                        borderColor: isEveryDay ? colors.brand : colors.border,
+                      }}
+                      textStyle={{
+                        color: isEveryDay ? colors.brandStrong : colors.text,
+                        fontWeight: isEveryDay ? "800" : "600",
+                      }}
+                    >
+                      Every day
+                    </Chip>
+                  ) : null}
                 </View>
 
-                <View style={styles.weekdayRow}>
-                  {WEEKDAYS.map((day) => {
-                    const selected = weekdays.includes(day.value);
-                    return (
-                      <Chip
-                        key={day.value}
-                        compact
-                        selected={selected}
-                        showSelectedCheck={false}
-                        onPress={() => toggleWeekday(day.value)}
+                {isMeal ? (
+                  <SegmentedButtons
+                    value={repeatMode}
+                    onValueChange={(value) => setRepeatMode(value as RepeatMode)}
+                    buttons={[
+                      { value: "once", label: "One day", icon: "calendar" },
+                      { value: "weekly", label: "Weekly", icon: "repeat" },
+                    ]}
+                  />
+                ) : null}
+
+                {isWeekly ? (
+                  <View style={styles.weekdayRow}>
+                    {WEEKDAYS.map((day) => {
+                      const selected = weekdays.includes(day.value);
+                      return (
+                        <Chip
+                          key={day.value}
+                          compact
+                          selected={selected}
+                          showSelectedCheck={false}
+                          onPress={() => toggleWeekday(day.value)}
+                          style={[
+                            styles.weekdayChip,
+                            {
+                              backgroundColor: selected
+                                ? colors.backgroundSelected
+                                : colors.background,
+                              borderColor: selected
+                                ? colors.brand
+                                : colors.border,
+                            },
+                          ]}
+                          textStyle={{
+                            color: selected ? colors.brandStrong : colors.text,
+                            fontWeight: selected ? "800" : "600",
+                          }}
+                        >
+                          {day.label}
+                        </Chip>
+                      );
+                    })}
+                  </View>
+                ) : (
+                  <>
+                    <Button
+                      mode="outlined"
+                      icon="calendar"
+                      onPress={() => setShowDatePicker(true)}
+                      textColor={colors.brandStrong}
+                      style={[
+                        styles.timeButton,
+                        { borderColor: colors.border },
+                      ]}
+                      contentStyle={styles.timeButtonContent}
+                    >
+                      {format(mealDate, "EEEE, MMM d")}
+                    </Button>
+
+                    {showDatePicker ? (
+                      <View
                         style={[
-                          styles.weekdayChip,
+                          styles.pickerWrap,
                           {
-                            backgroundColor: selected
-                              ? colors.backgroundSelected
-                              : colors.background,
-                            borderColor: selected
-                              ? colors.brand
-                              : colors.border,
+                            backgroundColor: colors.background,
+                            borderColor: colors.border,
                           },
                         ]}
-                        textStyle={{
-                          color: selected ? colors.brandStrong : colors.text,
-                          fontWeight: selected ? "800" : "600",
-                        }}
                       >
-                        {day.label}
-                      </Chip>
-                    );
-                  })}
-                </View>
+                        <DateTimePicker
+                          value={mealDate}
+                          mode="date"
+                          minimumDate={parseISO(getTodaysDate())}
+                          display={Platform.OS === "ios" ? "inline" : "default"}
+                          onValueChange={handleDateValueChange}
+                          onDismiss={() => setShowDatePicker(false)}
+                        />
+                        {Platform.OS === "ios" ? (
+                          <Button
+                            compact
+                            onPress={() => setShowDatePicker(false)}
+                          >
+                            Done
+                          </Button>
+                        ) : null}
+                      </View>
+                    ) : null}
+                  </>
+                )}
               </View>
 
               {error ? (
@@ -369,12 +605,12 @@ export function AddHabitModal({
                 icon="plus"
                 onPress={handleSave}
                 loading={saving}
-                disabled={saving || habitTitle.trim().length === 0}
+                disabled={saving || !canSave}
                 buttonColor={colors.brandStrong}
                 textColor="#FFFFFF"
                 style={styles.saveButton}
               >
-                Add habit
+                {isMeal ? "Plan meal" : "Add habit"}
               </Button>
             </View>
           </View>
@@ -408,6 +644,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.four,
     paddingTop: Spacing.four,
     paddingBottom: Spacing.three,
+    gap: Spacing.three,
   },
   titleRow: {
     flexDirection: "row",
@@ -423,6 +660,9 @@ const styles = StyleSheet.create({
   },
   title: {
     fontWeight: "900",
+  },
+  kindSwitch: {
+    alignSelf: "stretch",
   },
   scroll: {
     flexGrow: 0,
