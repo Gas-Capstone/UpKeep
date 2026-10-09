@@ -18,8 +18,9 @@ import {
 
 import { useThemeMode } from "@/components/context/ThemeContext";
 import { Colors, Radius, Spacing } from "@/constants/theme";
-import type { Ingredient } from "@/lib/meals/meals";
+import { stepsToInstructions, type Ingredient } from "@/lib/meals/meals";
 import { IngredientPicker } from "./IngredientPicker";
+import { StepsEditor } from "./StepsEditor";
 
 type RecipeIngredientInput = {
   ingredient_id: string;
@@ -28,6 +29,8 @@ type RecipeIngredientInput = {
 export type CreateRecipeInput = {
   name: string;
   prep_time_min: number;
+  // One step per line; left out when no steps were written.
+  instructions?: string;
   ingredients: RecipeIngredientInput[];
 };
 
@@ -52,6 +55,7 @@ export function AddRecipeModal({
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(
     new Set(),
   );
+  const [steps, setSteps] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -110,6 +114,7 @@ export function AddRecipeModal({
     const input: CreateRecipeInput = {
       name: trimmedName,
       prep_time_min: prepTimeMin,
+      instructions: stepsToInstructions(steps) ?? undefined,
       ingredients: ingredientIds.map((id) => ({ ingredient_id: id })),
     };
 
@@ -120,6 +125,7 @@ export function AddRecipeModal({
       setName("");
       setPrepTime("10");
       setSelectedIds(new Set());
+      setSteps([]);
       onDismiss();
     } catch (caught) {
       setError(
@@ -248,6 +254,30 @@ export function AddRecipeModal({
                   selectedIds={selectedIds}
                   onToggle={toggleIngredient}
                 />
+              </View>
+
+              <View
+                style={[
+                  styles.ingredientsSection,
+                  { borderTopColor: colors.border },
+                ]}
+              >
+                <View>
+                  <Text
+                    variant="titleMedium"
+                    style={{ color: colors.text, fontWeight: "800" }}
+                  >
+                    Steps
+                  </Text>
+                  <Text
+                    variant="bodySmall"
+                    style={{ color: colors.textSecondary, marginTop: 2 }}
+                  >
+                    Optional. These are what you check off while cooking.
+                  </Text>
+                </View>
+
+                <StepsEditor steps={steps} onChange={setSteps} />
               </View>
             </ScrollView>
 

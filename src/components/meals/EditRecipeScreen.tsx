@@ -19,11 +19,14 @@ import { ScreenView } from "@/components/ui/ScreenView";
 import { VStack } from "@/components/ui/vstack";
 import { Spacing, TopBadgeInset } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
+import { clearCookingProgress } from "@/lib/meals/cooking";
+import { parseInstructionSteps, stepsToInstructions } from "@/lib/meals/meals";
 import {
   fetchRecipeDetail,
   replaceCustomRecipeIngredients,
   updateCustomRecipe,
 } from "@/lib/meals/queries";
+import { StepsEditor } from "./StepsEditor";
 
 // Quantities are fractional (0.5 lb), capped at two decimal places — the same
 // rule the fridge card uses.
@@ -51,6 +54,7 @@ export default function EditRecipeScreen() {
   const [name, setName] = useState("");
   const [prepTime, setPrepTime] = useState("");
   const [drafts, setDrafts] = useState<IngredientDraft[]>([]);
+  const [steps, setSteps] = useState<string[]>([]);
   const [picking, setPicking] = useState(false);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -73,6 +77,7 @@ export default function EditRecipeScreen() {
         if (cancelled) return;
         setName(recipe.name ?? "");
         setPrepTime(recipe.prepTimeMin !== null ? String(recipe.prepTimeMin) : "");
+        setSteps(parseInstructionSteps(recipe.instructions));
         setDrafts(
           recipe.ingredients.map((line) => ({
             ingredientId: line.ingredientId,
@@ -163,6 +168,7 @@ export default function EditRecipeScreen() {
       await updateCustomRecipe(String(id), {
         name: name.trim(),
         prep_time_min: minutes,
+        instructions: stepsToInstructions(steps),
       });
       await replaceCustomRecipeIngredients(
         String(id),
@@ -179,6 +185,11 @@ export default function EditRecipeScreen() {
           };
         }),
       );
+      // Saved checks point at steps by position, so they'd land on the wrong
+      // steps once the list changes. Any cook in progress starts over.
+      await clearCookingProgress({ id: String(id), isCustom: true }).catch(
+        () => {},
+      );
       refreshCatalog();
       router.back();
     } catch {
@@ -186,7 +197,7 @@ export default function EditRecipeScreen() {
     } finally {
       setSaving(false);
     }
-  }, [name, prepTime, drafts, id, refreshCatalog, router]);
+  }, [name, prepTime, drafts, steps, id, refreshCatalog, router]);
 
   return (
     <ScreenView
@@ -323,6 +334,13 @@ export default function EditRecipeScreen() {
                   Add ingredient
                 </Button>
               )}
+            </VStack>
+
+            <Divider bold />
+
+            <VStack space="sm" style={{ alignSelf: "stretch" }}>
+              <Text variant="titleMedium">Steps ({steps.filter((step) => step.trim() !== "").length})</Text>
+              <StepsEditor steps={steps} onChange={setSteps} />
             </VStack>
 
             {error !== "" && (

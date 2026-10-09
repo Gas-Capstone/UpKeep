@@ -170,11 +170,15 @@ export async function fetchRecipeDetail(
 
 export async function updateCustomRecipe(
   recipeId: string,
-  recipe: { name: string; prep_time_min: number },
+  recipe: { name: string; prep_time_min: number; instructions: string | null },
 ): Promise<void> {
   const { error } = await supabase
     .from("custom_recipes")
-    .update({ name: recipe.name, prep_time_min: recipe.prep_time_min })
+    .update({
+      name: recipe.name,
+      prep_time_min: recipe.prep_time_min,
+      instructions: recipe.instructions,
+    })
     .eq("id", recipeId);
 
   if (error) throw error;
