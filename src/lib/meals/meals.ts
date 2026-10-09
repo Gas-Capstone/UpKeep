@@ -76,6 +76,15 @@ export function parseInstructionSteps(instructions: string | null): string[] {
     .filter((line) => line !== "");
 }
 
+/**
+ * The reverse of parseInstructionSteps: one step per line, for saving into the
+ * `instructions` column. Blank steps are dropped; null when nothing is left.
+ */
+export function stepsToInstructions(steps: string[]): string | null {
+  const lines = steps.map((step) => step.trim()).filter((step) => step !== "");
+  return lines.length > 0 ? lines.join("\n") : null;
+}
+
 /** Catalog and custom recipes have independent id spaces — never mix them as one key. */
 export function recipeKey(recipe: Pick<Recipe, "id" | "isCustom">): string {
   return recipe.isCustom ? `custom:${recipe.id}` : `catalog:${recipe.id}`;

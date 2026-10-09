@@ -22,7 +22,10 @@ import {
 } from "react-native-paper";
 import { DatePickerModal, TimePickerModal } from "react-native-paper-dates";
 
-import { useNotifications } from "@/components/context/notificationsContext";
+import {
+  useNotifications,
+  type NotificationToggle,
+} from "@/components/context/notificationsContext";
 import { useProfileData } from "@/components/context/profileDataContext";
 import { useThemeMode } from "@/components/context/ThemeContext";
 import { useTour } from "@/components/context/tourContext";
@@ -37,6 +40,8 @@ type SectionKey =
   | "goal"
   | "wellness"
   | "notifications"
+  | "habitReminders"
+  | "mealReminders"
   | "security"
   | null;
 
@@ -95,7 +100,9 @@ export default function SettingsScreen() {
     enabled: notificationsEnabled,
     hour: summaryHour,
     minute: summaryMinute,
-    setEnabled: setNotificationsEnabled,
+    habitReminders,
+    mealReminders,
+    setToggle: setNotificationToggle,
     setSummaryTime,
     sendTestSummary,
   } = useNotifications();
@@ -118,7 +125,6 @@ export default function SettingsScreen() {
   const [heightFeet, setHeightFeet] = useState("");
   const [heightInches, setHeightInches] = useState("");
   const [weight, setWeight] = useState("");
-  const [age, setAge] = useState("");
   const [sex, setSex] = useState<boolean | null>(null);
   const [password, setPassword] = useState("");
 
@@ -139,7 +145,6 @@ export default function SettingsScreen() {
     setHeightFeet(storedHeight.feet);
     setHeightInches(storedHeight.inches);
     setWeight(profile.weight?.toString() ?? "");
-    setAge(profile.age?.toString() ?? "");
     setSex(profile.sex);
   }, [profile]);
 
@@ -153,10 +158,13 @@ export default function SettingsScreen() {
     setOpenSection((current) => (current === section ? null : section));
   };
 
-  async function toggleNotifications(value: boolean) {
+  async function toggleNotifications(
+    toggle: NotificationToggle,
+    value: boolean,
+  ) {
     clearMessages();
     try {
-      await setNotificationsEnabled(value);
+      await setNotificationToggle(toggle, value);
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -252,7 +260,9 @@ export default function SettingsScreen() {
     try {
       await updateDisplayName(cleanedName);
       await updateBirthdate(
-        birthdate ? birthdate.toISOString().split("T")[0] : null,
+        // Formatted locally: toISOString() would shift the day for anyone
+        // east of UTC, and age is worked out from this date.
+        birthdate ? format(birthdate, "yyyy-MM-dd") : null,
       );
 
       if (avatarUri) {
@@ -312,7 +322,6 @@ export default function SettingsScreen() {
     try {
       const height = buildHeightValue(heightFeet, heightInches);
       const parsedWeight = weight.trim() ? Number(weight) : null;
-      const parsedAge = age.trim() ? Number(age) : null;
 
       if (
         weight.trim() &&
@@ -320,17 +329,10 @@ export default function SettingsScreen() {
       ) {
         throw new Error("Enter a valid weight.");
       }
-      if (
-        age.trim() &&
-        (!Number.isFinite(parsedAge) || (parsedAge ?? 0) <= 0)
-      ) {
-        throw new Error("Enter a valid age.");
-      }
 
       await updateBiometrics({
         height,
         weight: parsedWeight,
-        age: parsedAge,
         sex,
       });
 
@@ -700,7 +702,7 @@ export default function SettingsScreen() {
               <ExpandableCard
                 icon="fitness-outline"
                 title="Wellness details"
-                summary="Height, weight, age, and sex"
+                summary="Height, weight, and sex"
                 open={openSection === "wellness"}
                 onPress={() => toggleSection("wellness")}
               >
@@ -737,16 +739,6 @@ export default function SettingsScreen() {
                   activeOutlineColor={colors.brand}
                 />
 
-                <TextInput
-                  label="Age"
-                  mode="outlined"
-                  value={age}
-                  onChangeText={setAge}
-                  keyboardType="number-pad"
-                  outlineColor={colors.border}
-                  activeOutlineColor={colors.brand}
-                />
-
                 <View style={styles.sexRow}>
                   <ChoiceButton
                     label="Male"
@@ -769,7 +761,7 @@ export default function SettingsScreen() {
 
               <SectionLabel
                 title="Notifications"
-                subtitle="A rundown of your habits and meals"
+                subtitle="Summaries and reminders for your habits and meals"
               />
               <ExpandableCard
                 icon="notifications-outline"
@@ -787,7 +779,9 @@ export default function SettingsScreen() {
                 headerAction={
                   <Switch
                     value={notificationsEnabled}
-                    onValueChange={toggleNotifications}
+                    onValueChange={(value) =>
+                      toggleNotifications("enabled", value)
+                    }
                     color={colors.brand}
                   />
                 }
@@ -837,6 +831,52 @@ export default function SettingsScreen() {
                   onPress={sendTestNotification}
                   disabled={sendingTest}
                 />
+              </ExpandableCard>
+
+              <ExpandableCard
+                icon="checkmark-circle-outline"
+                title="Habit reminders"
+                summary={habitReminders ? "At each habit's time" : "Off"}
+                open={openSection === "habitReminders"}
+                onPress={() => toggleSection("habitReminders")}
+                headerAction={
+                  <Switch
+                    value={habitReminders}
+                    onValueChange={(value) =>
+                      toggleNotifications("habitReminders", value)
+                    }
+                    color={colors.brand}
+                  />
+                }
+              >
+                <ThemedText type="small" themeColor="textSecondary">
+                  Get a reminder at the time you set for each habit, on the
+                  days it&apos;s scheduled. Habits you&apos;ve already checked
+                  off are skipped.
+                </ThemedText>
+              </ExpandableCard>
+
+              <ExpandableCard
+                icon="restaurant-outline"
+                title="Meal reminders"
+                summary={mealReminders ? "For meals on your plan" : "Off"}
+                open={openSection === "mealReminders"}
+                onPress={() => toggleSection("mealReminders")}
+                headerAction={
+                  <Switch
+                    value={mealReminders}
+                    onValueChange={(value) =>
+                      toggleNotifications("mealReminders", value)
+                    }
+                    color={colors.brand}
+                  />
+                }
+              >
+                <ThemedText type="small" themeColor="textSecondary">
+                  Get a reminder at the time set for each planned meal, on the
+                  days it&apos;s scheduled. Meals you&apos;ve already checked
+                  off are skipped.
+                </ThemedText>
               </ExpandableCard>
 
               <SectionLabel

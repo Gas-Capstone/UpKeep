@@ -19,12 +19,17 @@ import {
   formatSummaryBody,
   getSummaryDays,
 } from "@/lib/dailySummary";
+import { recipeKey } from "@/lib/meals/meals";
 import {
-  cancelDailySummaries,
+  replaceScheduled,
   requestNotificationPermission,
-  scheduleDailySummaries,
   sendNotificationNow,
 } from "@/lib/notifications";
+import {
+  buildHabitReminders,
+  buildMealReminders,
+  buildSummaryReminders,
+} from "@/lib/reminders";
 import { useHabitsContext } from "./habitsContext";
 import { useMealsData } from "./mealsDataContext";
 import { useUserContext } from "./userContext";
@@ -32,22 +37,31 @@ import { useUserContext } from "./userContext";
 const SETTINGS_STORAGE_KEY = "wellness-app-notification-settings";
 
 type NotificationSettings = {
-  enabled: boolean;
+  enabled: boolean; // daily summary
   hour: number;
   minute: number;
+  habitReminders: boolean;
+  mealReminders: boolean;
 };
+
+// The on/off switches, each of which needs permission before turning on.
+export type NotificationToggle = "enabled" | "habitReminders" | "mealReminders";
 
 const DEFAULT_SETTINGS: NotificationSettings = {
   enabled: false,
   hour: DEFAULT_SUMMARY_HOUR,
   minute: DEFAULT_SUMMARY_MINUTE,
+  habitReminders: false,
+  mealReminders: false,
 };
 
 export type NotificationsContextType = {
   enabled: boolean;
   hour: number;
   minute: number;
-  setEnabled: (enabled: boolean) => Promise<void>;
+  habitReminders: boolean;
+  mealReminders: boolean;
+  setToggle: (toggle: NotificationToggle, value: boolean) => Promise<void>;
   setSummaryTime: (hour: number, minute: number) => void;
   sendTestSummary: () => Promise<void>;
   resync: () => Promise<void>;
@@ -61,8 +75,8 @@ type NotificationsProviderProps = {
 
 export const NotificationsProvider = ({ children }: NotificationsProviderProps) => {
   const { user } = useUserContext();
-  const { habitArray } = useHabitsContext();
-  const { mealPlanEntries } = useMealsData();
+  const { habitArray, habitCompletions } = useHabitsContext();
+  const { recipes, mealPlanEntries, mealCompletions } = useMealsData();
   const [settings, setSettings] = useState<NotificationSettings>(DEFAULT_SETTINGS);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
 
@@ -95,6 +109,12 @@ export const NotificationsProvider = ({ children }: NotificationsProviderProps) 
     [habitArray, mealPlanEntries],
   );
 
+  // Keyed by recipeKey — catalog and custom recipe ids can collide.
+  const recipeNameByKey = useMemo(
+    () => new Map(recipes.map((recipe) => [recipeKey(recipe), recipe.name])),
+    [recipes],
+  );
+
   const resync = useCallback(() => {
     const run = ++latestRun.current;
 
@@ -102,29 +122,63 @@ export const NotificationsProvider = ({ children }: NotificationsProviderProps) 
       .then(async () => {
         if (run !== latestRun.current || !settingsLoaded) return;
 
-        if (!user || !settings.enabled) {
-          await cancelDailySummaries();
-          return;
-        }
+        // Logged out means nothing should stay scheduled.
+        const summaryOn = Boolean(user) && settings.enabled;
+        const habitsOn = Boolean(user) && settings.habitReminders;
+        const mealsOn = Boolean(user) && settings.mealReminders;
 
-        const summaries = await loadSummaries(getSummaryDays());
+        const days = getSummaryDays();
+        const summaries = await loadSummaries(days);
         if (run !== latestRun.current) return;
 
-        await scheduleDailySummaries(summaries, settings.hour, settings.minute);
+        await replaceScheduled(
+          "daily-summary",
+          summaryOn
+            ? buildSummaryReminders(summaries, settings.hour, settings.minute)
+            : [],
+        );
+        await replaceScheduled(
+          "habit",
+          habitsOn ? buildHabitReminders(days, habitArray, habitCompletions) : [],
+        );
+        await replaceScheduled(
+          "meal",
+          mealsOn
+            ? buildMealReminders(
+                days,
+                mealPlanEntries,
+                mealCompletions,
+                (entry) =>
+                  recipeNameByKey.get(
+                    recipeKey({ id: entry.recipeId, isCustom: entry.isCustom }),
+                  ) ?? "a planned recipe",
+              )
+            : [],
+        );
       })
       .catch((err) => console.log("Error syncing notifications: ", err));
 
     return queue.current;
-  }, [user, settings, settingsLoaded, loadSummaries]);
+  }, [
+    user,
+    settings,
+    settingsLoaded,
+    loadSummaries,
+    habitArray,
+    habitCompletions,
+    mealPlanEntries,
+    mealCompletions,
+    recipeNameByKey,
+  ]);
 
-  const setEnabled = useCallback(
-    async (enabled: boolean) => {
-      if (enabled && !(await requestNotificationPermission())) {
+  const setToggle = useCallback(
+    async (toggle: NotificationToggle, value: boolean) => {
+      if (value && !(await requestNotificationPermission())) {
         throw new Error(
           "Notification permission was not granted. Enable notifications in your device settings.",
         );
       }
-      updateSettings({ enabled });
+      updateSettings({ [toggle]: value });
     },
     [updateSettings],
   );
@@ -156,12 +210,14 @@ export const NotificationsProvider = ({ children }: NotificationsProviderProps) 
       enabled: settings.enabled,
       hour: settings.hour,
       minute: settings.minute,
-      setEnabled,
+      habitReminders: settings.habitReminders,
+      mealReminders: settings.mealReminders,
+      setToggle,
       setSummaryTime,
       sendTestSummary,
       resync,
     }),
-    [settings, setEnabled, setSummaryTime, sendTestSummary, resync],
+    [settings, setToggle, setSummaryTime, sendTestSummary, resync],
   );
 
   return (
