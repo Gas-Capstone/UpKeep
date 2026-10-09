@@ -58,6 +58,18 @@ export function isOnWeekdays(weekdays: Weekday[], date: string){
     return weekdays.includes(getDay(parseISO(date)) as Weekday)
 }
 
+// Planned meals and scheduled workouts either repeat on weekdays (like a
+// habit) or fall on a single date. Exactly one of the two is set.
+export type DatedSchedule = {
+    weekdays: Weekday[] | null;
+    plannedDate: string | null;
+}
+
+export function isScheduledOnDate(schedule: DatedSchedule, date: string){
+    if (schedule.weekdays === null) return schedule.plannedDate === date;
+    return isOnWeekdays(schedule.weekdays, date);
+}
+
 export function isHabitOnDate(habit: Habit, date: string){
     return isOnWeekdays(habit.weekdays ?? [], date)
 }
