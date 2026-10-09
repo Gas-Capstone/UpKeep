@@ -1,6 +1,8 @@
 import { useState } from "react";
-import type { StyleProp, ViewStyle } from "react-native";
+import { StyleSheet, type StyleProp, type ViewStyle } from "react-native";
 import { IconButton, Menu, useTheme } from "react-native-paper";
+
+import { Radius, Spacing } from "@/constants/theme";
 
 export type CardMenuAction = {
   key: string;
@@ -19,6 +21,8 @@ type CardMenuProps = {
   // negative margin, and the two only line up if this does the same.
   size?: number;
   anchorStyle?: StyleProp<ViewStyle>;
+  // Trigger icon. Defaults to the burger used on recipe and workout cards.
+  icon?: string;
 };
 
 /**
@@ -33,6 +37,7 @@ export function CardMenu({
   accessibilityLabel,
   size = 22,
   anchorStyle,
+  icon = "menu",
 }: CardMenuProps) {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
@@ -43,9 +48,17 @@ export function CardMenu({
     <Menu
       visible={open}
       onDismiss={() => setOpen(false)}
+      // Styled like the cards it opens from, rather than Paper's default sheet.
+      contentStyle={[
+        styles.content,
+        {
+          backgroundColor: theme.colors.surface,
+          borderColor: theme.colors.outlineVariant,
+        },
+      ]}
       anchor={
         <IconButton
-          icon="menu"
+          icon={icon}
           size={size}
           iconColor={theme.colors.onSurfaceVariant}
           style={anchorStyle ?? { margin: 0 }}
@@ -62,8 +75,16 @@ export function CardMenu({
           leadingIcon={action.icon}
           title={action.label}
           disabled={action.disabled}
+          rippleColor={theme.colors.primaryContainer}
           titleStyle={
             action.destructive ? { color: theme.colors.error } : undefined
+          }
+          // Menu.Item colors its icon from onSurfaceVariant, so this is how the
+          // icon turns red alongside the title.
+          theme={
+            action.destructive
+              ? { colors: { onSurfaceVariant: theme.colors.error } }
+              : undefined
           }
           onPress={() => {
             // Close first: leaving the menu open behind a navigation or a
@@ -76,3 +97,11 @@ export function CardMenu({
     </Menu>
   );
 }
+
+const styles = StyleSheet.create({
+  content: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: Radius.medium,
+    paddingVertical: Spacing.one,
+  },
+});

@@ -1,4 +1,3 @@
-import DateTimePicker from "@react-native-community/datetimepicker";
 import { Ionicons } from "@expo/vector-icons";
 import { format } from "date-fns";
 import { router } from "expo-router";
@@ -6,7 +5,6 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
 import { useEffect, useState } from "react";
 import {
-  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -22,6 +20,7 @@ import {
   Switch,
   TextInput,
 } from "react-native-paper";
+import { DatePickerModal, TimePickerModal } from "react-native-paper-dates";
 
 import {
   useNotifications,
@@ -32,6 +31,7 @@ import { useThemeMode } from "@/components/context/ThemeContext";
 import { useTour } from "@/components/context/tourContext";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Colors, MaxContentWidth, Radius, Spacing } from "@/constants/theme";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -129,8 +129,8 @@ export default function SettingsScreen() {
   const [password, setPassword] = useState("");
 
   const [showTimePicker, setShowTimePicker] = useState(false);
-  const [draftTime, setDraftTime] = useState(summaryTime);
   const [sendingTest, setSendingTest] = useState(false);
+  const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
 
   useEffect(() => {
     if (!profile) return;
@@ -175,21 +175,12 @@ export default function SettingsScreen() {
   }
 
   function openTimePicker() {
-    setDraftTime(summaryTime);
     setShowTimePicker(true);
   }
 
   function saveSummaryTime(time: Date) {
     setSummaryTime(time.getHours(), time.getMinutes());
     setShowTimePicker(false);
-  }
-
-  function handleTimeValueChange(_event: unknown, selectedTime: Date) {
-    if (Platform.OS === "android") {
-      saveSummaryTime(selectedTime);
-    } else {
-      setDraftTime(selectedTime);
-    }
   }
 
   async function sendTestNotification() {
@@ -386,36 +377,23 @@ export default function SettingsScreen() {
     }
   }
 
-  function confirmDeleteAccount() {
-    Alert.alert(
-      "Delete account?",
-      "This permanently deletes your account and cannot be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete account",
-          style: "destructive",
-          onPress: async () => {
-            setSaving(true);
-            clearMessages();
-            try {
-              const { error: deleteError } = await supabase.rpc(
-                "delete_user_account",
-              );
-              if (deleteError) throw deleteError;
-              router.replace("/(auth)/login");
-            } catch (caught) {
-              setError(
-                caught instanceof Error
-                  ? caught.message
-                  : "Could not delete your account.",
-              );
-              setSaving(false);
-            }
-          },
-        },
-      ],
-    );
+  async function deleteAccount() {
+    setSaving(true);
+    clearMessages();
+    try {
+      const { error: deleteError } = await supabase.rpc("delete_user_account");
+      if (deleteError) throw deleteError;
+      setDeleteDialogVisible(false);
+      router.replace("/(auth)/login");
+    } catch (caught) {
+      setDeleteDialogVisible(false);
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Could not delete your account.",
+      );
+      setSaving(false);
+    }
   }
 
   const avatarSource = avatarUri || profile?.avatar_url || "";
@@ -641,35 +619,20 @@ export default function SettingsScreen() {
                   />
                 </Pressable>
 
-                {showDatePicker ? (
-                  <View
-                    style={[styles.pickerWrap, { borderColor: colors.border }]}
-                  >
-                    <DateTimePicker
-                      value={birthdate || new Date()}
-                      mode="date"
-                      maximumDate={new Date()}
-                      display={Platform.OS === "ios" ? "spinner" : "calendar"}
-                      onValueChange={(_event, selectedDate) =>
-                        setBirthdate(selectedDate)
-                      }
-                      onDismiss={() => setShowDatePicker(false)}
-                    />
-                    {Platform.OS === "ios" ? (
-                      <Pressable
-                        onPress={() => setShowDatePicker(false)}
-                        style={styles.doneButton}
-                      >
-                        <ThemedText
-                          type="smallBold"
-                          style={{ color: colors.brand }}
-                        >
-                          Done
-                        </ThemedText>
-                      </Pressable>
-                    ) : null}
-                  </View>
-                ) : null}
+                <DatePickerModal
+                  mode="single"
+                  locale="en"
+                  visible={showDatePicker}
+                  date={birthdate ?? undefined}
+                  startYear={1900}
+                  endYear={new Date().getFullYear()}
+                  validRange={{ endDate: new Date() }}
+                  onDismiss={() => setShowDatePicker(false)}
+                  onConfirm={({ date }) => {
+                    if (date) setBirthdate(date);
+                    setShowDatePicker(false);
+                  }}
+                />
 
                 <PrimaryAction
                   label="Save profile details"
@@ -849,33 +812,19 @@ export default function SettingsScreen() {
                   />
                 </Pressable>
 
-                {showTimePicker ? (
-                  <View
-                    style={[styles.pickerWrap, { borderColor: colors.border }]}
-                  >
-                    <DateTimePicker
-                      value={draftTime}
-                      mode="time"
-                      display={Platform.OS === "ios" ? "spinner" : "default"}
-                      is24Hour={false}
-                      onValueChange={handleTimeValueChange}
-                      onDismiss={() => setShowTimePicker(false)}
-                    />
-                    {Platform.OS === "ios" ? (
-                      <Pressable
-                        onPress={() => saveSummaryTime(draftTime)}
-                        style={styles.doneButton}
-                      >
-                        <ThemedText
-                          type="smallBold"
-                          style={{ color: colors.brand }}
-                        >
-                          Done
-                        </ThemedText>
-                      </Pressable>
-                    ) : null}
-                  </View>
-                ) : null}
+                <TimePickerModal
+                  visible={showTimePicker}
+                  locale="en"
+                  use24HourClock={false}
+                  hours={summaryHour}
+                  minutes={summaryMinute}
+                  onDismiss={() => setShowTimePicker(false)}
+                  onConfirm={({ hours, minutes }) => {
+                    const next = new Date();
+                    next.setHours(hours, minutes, 0, 0);
+                    saveSummaryTime(next);
+                  }}
+                />
 
                 <PrimaryAction
                   label="Send test notification"
@@ -986,7 +935,7 @@ export default function SettingsScreen() {
                 subtitle="Permanent account actions"
               />
               <Pressable
-                onPress={confirmDeleteAccount}
+                onPress={() => setDeleteDialogVisible(true)}
                 disabled={saving}
                 style={({ pressed }) => [
                   styles.deleteCard,
@@ -1026,6 +975,16 @@ export default function SettingsScreen() {
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      <ConfirmDialog
+        visible={deleteDialogVisible}
+        title="Delete account?"
+        message="This permanently deletes your account and cannot be undone."
+        confirmLabel="Delete account"
+        onConfirm={deleteAccount}
+        onDismiss={() => setDeleteDialogVisible(false)}
+        loading={saving}
+      />
     </ThemedView>
   );
 }
@@ -1367,17 +1326,6 @@ const styles = StyleSheet.create({
   },
   fieldButtonCopy: {
     gap: 1,
-  },
-  pickerWrap: {
-    borderWidth: 1,
-    borderRadius: Radius.medium,
-    overflow: "hidden",
-    paddingBottom: Platform.OS === "ios" ? Spacing.two : 0,
-  },
-  doneButton: {
-    alignSelf: "flex-end",
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
   },
   goalGrid: {
     flexDirection: "row",

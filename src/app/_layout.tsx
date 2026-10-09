@@ -3,6 +3,7 @@ import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { PaperProvider } from "react-native-paper";
+import { en, registerTranslation } from "react-native-paper-dates";
 
 import { HabitsProvider } from "@/components/context/habitsContext";
 import { MealsDataProvider } from "@/components/context/mealsDataContext";
@@ -21,6 +22,9 @@ import { supabase } from "@/lib/supabaseClient";
 import "@/global.css";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
+
+// Strings for the react-native-paper-dates date and time pickers.
+registerTranslation("en", en);
 
 export default function RootLayout() {
   return (

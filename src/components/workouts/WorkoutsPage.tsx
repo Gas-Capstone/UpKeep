@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
-import { Button, Dialog, Icon, Portal, Text } from "react-native-paper";
+import { Button, Icon, Text } from "react-native-paper";
 import { useFocusEffect, useRouter } from "expo-router";
 
 import { useThemeMode } from "@/components/context/ThemeContext";
@@ -10,6 +10,7 @@ import {
   useWorkoutsData,
   type Workout,
 } from "@/components/context/workoutsDataContext";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { ScreenView } from "@/components/ui/ScreenView";
 import { Colors, Radius, Spacing } from "@/constants/theme";
 import { deleteWorkoutPlan } from "@/lib/supabaseFunctions";
@@ -141,39 +142,16 @@ export default function WorkoutsPage() {
             onCreate={createPlan}
           />
 
-          <Portal>
-            <Dialog
-              visible={deleteTarget !== null}
-              onDismiss={() => setDeleteTarget(null)}
-            >
-              <Dialog.Title>Delete plan?</Dialog.Title>
-              <Dialog.Content>
-                <Text>
-                  {deleteTarget?.name} and its exercises will be removed.
-                  Workouts you already completed stay in your history, but will
-                  no longer show the plan&apos;s name. This can&apos;t be undone.
-                </Text>
-                {deleteError !== "" && (
-                  <Text style={{ color: colors.danger, marginTop: Spacing.two }}>
-                    {deleteError}
-                  </Text>
-                )}
-              </Dialog.Content>
-              <Dialog.Actions>
-                <Button onPress={() => setDeleteTarget(null)} disabled={deleting}>
-                  Cancel
-                </Button>
-                <Button
-                  onPress={confirmDelete}
-                  loading={deleting}
-                  disabled={deleting}
-                  textColor={colors.danger}
-                >
-                  Delete
-                </Button>
-              </Dialog.Actions>
-            </Dialog>
-          </Portal>
+          <ConfirmDialog
+            visible={deleteTarget !== null}
+            title="Delete plan?"
+            message={`${deleteTarget?.name ?? "This plan"} and its exercises will be removed. Workouts you already completed stay in your history, but will no longer show the plan's name. This can't be undone.`}
+            confirmLabel="Delete"
+            onConfirm={confirmDelete}
+            onDismiss={() => setDeleteTarget(null)}
+            loading={deleting}
+            error={deleteError}
+          />
         </>
       }
     >

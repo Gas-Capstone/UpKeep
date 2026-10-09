@@ -1,8 +1,8 @@
-import { useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
-import { Icon, IconButton, Menu, Text } from "react-native-paper";
+import { Icon, Text } from "react-native-paper";
 
 import { useThemeMode } from "@/components/context/ThemeContext";
+import { CardMenu } from "@/components/ui/CardMenu";
 import { Colors, Radius, Spacing } from "@/constants/theme";
 import type { Weekday } from "@/lib/habits/habits";
 
@@ -44,7 +44,6 @@ export function HabitCard({
 }: HabitCardProps) {
   const { resolvedTheme } = useThemeMode();
   const colors = Colors[resolvedTheme];
-  const [menuVisible, setMenuVisible] = useState(false);
 
   return (
     <View
@@ -123,29 +122,20 @@ export function HabitCard({
         </View>
       </View>
 
-      <Menu
-        visible={menuVisible}
-        onDismiss={() => setMenuVisible(false)}
-        anchor={
-          <IconButton
-            icon="dots-horizontal"
-            size={21}
-            iconColor={colors.textSecondary}
-            style={styles.menuButton}
-            onPress={() => setMenuVisible(true)}
-            accessibilityLabel={`More options for ${title}`}
-          />
-        }
-      >
-        <Menu.Item
-          leadingIcon="delete-outline"
-          title={deleteLabel}
-          onPress={() => {
-            setMenuVisible(false);
-            onDelete();
-          }}
-        />
-      </Menu>
+      <CardMenu
+        icon="dots-horizontal"
+        size={21}
+        accessibilityLabel={`More options for ${title}`}
+        actions={[
+          {
+            key: "delete",
+            label: deleteLabel,
+            icon: "delete-outline",
+            destructive: true,
+            onPress: onDelete,
+          },
+        ]}
+      />
     </View>
   );
 }
@@ -197,8 +187,5 @@ const styles = StyleSheet.create({
   schedule: {
     flex: 1,
     minWidth: 0,
-  },
-  menuButton: {
-    margin: 0,
   },
 });
