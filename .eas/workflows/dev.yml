@@ -1,0 +1,37 @@
+name: Create dev build
+
+on:
+  push:
+    branches: [dev]
+    paths:
+      - '**'
+      - '!README.md'
+      - '!AGENTS.md'
+      - '!CLAUDE.md'
+      - '!doc-site/**'
+
+jobs:
+  # fingerprint + get_android_build ensures a dev build is made
+  # ONLY when needed (new packages, layout file changes, etc.)
+  
+  fingerprint:
+    name: Dev Fingerprint
+    type: fingerprint
+    environment: development
+
+  get_android_build:
+    name: Check for existing dev build
+    needs: [fingerprint]
+    type: get-build
+    params:
+      fingerprint_hash: ${{ needs.fingerprint.outputs.android_fingerprint_hash }}
+      profile: development
+
+  build_android:
+    name: Development build Android
+    needs: [get_android_build]
+    if: ${{ !needs.get_android_build.outputs.build_id }}
+    type: build
+    params:
+      platform: android
+      profile: development

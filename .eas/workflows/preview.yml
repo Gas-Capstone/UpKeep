@@ -1,0 +1,38 @@
+name: Create preview build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**'
+      - '!README.md'
+      - '!AGENTS.md'
+      - '!CLAUDE.md'
+      - '!doc-site/**'
+
+jobs:
+  # fingerprint and get_android_build serve a similar purpose as in the dev workflow;
+  # here, they determine if a new build is needed or if updates can be served via 
+  # EAS update (will configure later)
+
+  fingerprint:
+    name: Fingerprint
+    type: fingerprint
+    environment: preview
+
+  get_android_build:
+    name: Check for existing preview build
+    needs: [fingerprint]
+    type: get-build
+    params:
+      fingerprint_hash: ${{ needs.fingerprint.outputs.android_fingerprint_hash }}
+      profile: preview
+
+  build_android:
+    name: Preview build Android
+    needs: [get_android_build]
+    if: ${{ !needs.get_android_build.outputs.build_id }}
+    type: build
+    params:
+      platform: android
+      profile: preview
