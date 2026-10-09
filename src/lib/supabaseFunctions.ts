@@ -1,5 +1,6 @@
 import { supabase } from "./supabaseClient";
 import type { Weekday } from "./habits/habits";
+import type { ScheduledWorkout, WorkoutSchedule } from "./workoutSchedule";
 
 type UserRef = { id: string };
 type WorkoutRef = { id: string };
@@ -106,6 +107,7 @@ export async function getCompletedWorkouts(user: UserRef) {
             id,
             duration_min,
             completed_at,
+            workout_plan_id,
             workout_plans ( name )
         `,
     )
@@ -117,6 +119,8 @@ export async function getCompletedWorkouts(user: UserRef) {
     id: session.id,
     duration_min: session.duration_min,
     completed_at: session.completed_at,
+    // Lets a scheduled workout count as done when its plan was logged that day.
+    workout_plan_id: (session.workout_plan_id as string | null) ?? null,
     // workout_plan_id is ON DELETE SET NULL, so a session outlives the plan it
     // was logged against and the embed comes back null. The workout still
     // happened — keep the row, just say what's missing.
@@ -375,4 +379,104 @@ export async function markTourSeen(user: UserRef) {
     .update({ tour_seen_at: new Date().toISOString() })
     .eq("id", user.id);
   if (error) console.log("Error saving tour status: ", error);
+}
+
+/* --------------
+    WORKOUT SCHEDULE
+------------- */
+type ScheduledWorkoutRow = {
+  id: string;
+  workout_plan_id: string;
+  scheduled_time: string;
+  weekdays: Weekday[] | null;
+  planned_date: string | null;
+};
+
+const SCHEDULED_WORKOUT_COLUMNS =
+  "id, workout_plan_id, scheduled_time, weekdays, planned_date";
+
+function toScheduledWorkout(row: ScheduledWorkoutRow): ScheduledWorkout {
+  return {
+    id: row.id,
+    workoutPlanId: row.workout_plan_id,
+    time: row.scheduled_time,
+    weekdays: row.weekdays,
+    plannedDate: row.planned_date,
+  };
+}
+
+/** All of a user's scheduled workouts; pick a day with getScheduledWorkoutsForDate(). */
+export async function getScheduledWorkouts(
+  user: UserRef,
+): Promise<ScheduledWorkout[]> {
+  const { data, error } = await supabase
+    .from("workout_schedule_entries")
+    .select(SCHEDULED_WORKOUT_COLUMNS)
+    .eq("user_id", user.id)
+    .returns<ScheduledWorkoutRow[]>();
+  if (error) throw error;
+  return data.map(toScheduledWorkout);
+}
+
+export async function createScheduledWorkout(
+  user: UserRef,
+  workoutPlanId: string,
+  schedule: WorkoutSchedule,
+): Promise<ScheduledWorkout> {
+  const { data, error } = await supabase
+    .from("workout_schedule_entries")
+    .insert({
+      user_id: user.id,
+      workout_plan_id: workoutPlanId,
+      scheduled_time: schedule.time,
+      weekdays: schedule.weekdays,
+      planned_date: schedule.plannedDate,
+    })
+    .select(SCHEDULED_WORKOUT_COLUMNS)
+    .single<ScheduledWorkoutRow>();
+  if (error) throw error;
+  return toScheduledWorkout(data);
+}
+
+export async function deleteScheduledWorkout(entryId: string): Promise<void> {
+  const { error } = await supabase
+    .from("workout_schedule_entries")
+    .delete()
+    .eq("id", entryId);
+  if (error) throw error;
+}
+
+/** Manual check-offs as { entry_id, completed_on } rows, like habit_completions. */
+export async function getWorkoutScheduleCompletions(
+  user: UserRef,
+): Promise<{ entry_id: string; completed_on: string }[]> {
+  const { data, error } = await supabase
+    .from("workout_schedule_completions")
+    .select("entry_id, completed_on")
+    .eq("user_id", user.id);
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function completeScheduledWorkout(
+  user: UserRef,
+  entryId: string,
+  date: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from("workout_schedule_completions")
+    .insert({ user_id: user.id, entry_id: entryId, completed_on: date });
+  if (error) throw error;
+}
+
+export async function uncompleteScheduledWorkout(
+  entryId: string,
+  date: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from("workout_schedule_completions")
+    .delete()
+    .eq("entry_id", entryId)
+    .eq("completed_on", date);
+  if (error) throw error;
 }

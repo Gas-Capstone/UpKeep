@@ -27,8 +27,12 @@ import { CircleTimer } from "@/components/ui/CircleTimer";
 import { useThemeMode } from "@/components/context/ThemeContext";
 import { Colors, Radius, Spacing } from "@/constants/theme";
 import { estimateCalorieGoal } from "@/lib/calorieGoal";
-import { getHabitsForDate, isHabitDone } from "@/lib/habits/habits";
-import { getMealsForDate } from "@/lib/meals/mealPlan";
+import {
+  getHabitsForDate,
+  isHabitDone,
+  isScheduledOnDate,
+} from "@/lib/habits/habits";
+import { isMealOnDate } from "@/lib/meals/mealPlan";
 import { matchRecipes } from "@/lib/meals/meals";
 import { getTodaysDate } from "@/lib/time_management/week";
 import {
@@ -36,8 +40,10 @@ import {
   getHabitConsistencyStats,
   getNutrientGapStats,
   getWorkoutCategoryStats,
+  PlannedItem,
   WellnessComponent,
 } from "@/lib/wellnessScore";
+import { getSessionDays, isScheduledWorkoutDone } from "@/lib/workoutSchedule";
 
 function getGreeting() {
   const hour = new Date().getHours();
@@ -399,10 +405,14 @@ export default function HomeScreen() {
     completedWorkouts,
     workoutList,
     loading: workoutsLoading,
+    scheduledWorkouts,
+    workoutScheduleCompletions,
   } = useContext(workoutsDataContext) ?? {
     completedWorkouts: [] as CompletedWorkout[],
     workoutList: [],
     loading: true,
+    scheduledWorkouts: [],
+    workoutScheduleCompletions: {},
   };
 
   const { habitArray, habitCompletions } = useContext(habitsContext) ?? {
@@ -433,33 +443,41 @@ export default function HomeScreen() {
     loading: true,
   };
 
-  const streak = useMemo(
-    () => getWorkoutStreak(completedWorkouts),
-    [completedWorkouts],
-  );
-
-  const workoutsThisWeek = useMemo(
-    () => getWorkoutsThisWeek(completedWorkouts),
-    [completedWorkouts],
-  );
-
-  const workoutDoneToday = useMemo(
-    () => hasWorkoutToday(completedWorkouts),
-    [completedWorkouts],
-  );
+  const streak = getWorkoutStreak(completedWorkouts);
+  const workoutsThisWeek = getWorkoutsThisWeek(completedWorkouts);
+  const workoutDoneToday = hasWorkoutToday(completedWorkouts);
 
   const today = getTodaysDate();
 
   // Planned meals sit on the Habits page and are checked off the same way,
   // so today's tile counts them alongside habits.
+  // Planned meals and scheduled workouts sit on the Habits page and are
+  // checked off the same way, so the Today tile and the wellness score count
+  // them alongside habits.
+  const sessionDays = getSessionDays(completedWorkouts);
+  const plannedItems: PlannedItem[] = [
+    ...mealPlanEntries.map((entry) => ({
+      isOnDate: (date: string) => isMealOnDate(entry, date),
+      isDoneOn: (date: string) => isHabitDone(entry.id, date, mealCompletions),
+    })),
+    ...scheduledWorkouts.map((entry) => ({
+      isOnDate: (date: string) => isScheduledOnDate(entry, date),
+      isDoneOn: (date: string) =>
+        isScheduledWorkoutDone(
+          entry,
+          date,
+          workoutScheduleCompletions,
+          sessionDays,
+        ),
+    })),
+  ];
+
   const habitsToday = getHabitsForDate(habitArray, today);
-  const mealsToday = getMealsForDate(mealPlanEntries, today);
-  const scheduledToday = habitsToday.length + mealsToday.length;
+  const plannedToday = plannedItems.filter((item) => item.isOnDate(today));
+  const scheduledToday = habitsToday.length + plannedToday.length;
   const completedToday =
     habitsToday.filter((habit) => isHabitDone(habit.id, today, habitCompletions))
-      .length +
-    mealsToday.filter((entry) => isHabitDone(entry.id, today, mealCompletions))
-      .length;
+      .length + plannedToday.filter((item) => item.isDoneOn(today)).length;
 
   const habitsProgress = scheduledToday > 0 ? completedToday / scheduledToday : 0;
 
@@ -476,24 +494,19 @@ export default function HomeScreen() {
 
   const calorieGoal = useMemo(() => getCalorieGoal(profile), [profile]);
 
-  const habitStats = useMemo(
-    () =>
-      getHabitConsistencyStats(habitArray, habitCompletions, today, 7, {
-        entries: mealPlanEntries,
-        completions: mealCompletions,
-      }),
-    [habitArray, habitCompletions, today, mealPlanEntries, mealCompletions],
+  const habitStats = getHabitConsistencyStats(
+    habitArray,
+    habitCompletions,
+    today,
+    7,
+    plannedItems,
   );
 
-  const workoutStats = useMemo(
-    () =>
-      getWorkoutCategoryStats(
-        workoutList,
-        completedWorkouts,
-        workoutsThisWeek,
-        4,
-      ),
-    [workoutList, completedWorkouts, workoutsThisWeek],
+  const workoutStats = getWorkoutCategoryStats(
+    workoutList,
+    completedWorkouts,
+    workoutsThisWeek,
+    4,
   );
 
   const calorieReadiness: number | null =
@@ -515,8 +528,8 @@ export default function HomeScreen() {
       value: habitStats.rate,
       detail:
         habitStats.rate !== null
-          ? `${Math.round(habitStats.rate * 100)}% of scheduled habits and planned meals completed in the last 7 days`
-          : "No habits or meals scheduled yet",
+          ? `${Math.round(habitStats.rate * 100)}% of scheduled habits, meals, and workouts completed in the last 7 days`
+          : "No habits, meals, or workouts scheduled yet",
     },
     {
       key: "workouts",

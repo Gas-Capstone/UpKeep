@@ -41,7 +41,7 @@ const STEPS: TourStep[] = [
     href: "/workouts",
     icon: "dumbbell",
     title: "Workouts",
-    body: "Build workout plans, then start one to follow along with the guided timer. Finished sessions are saved to your history.",
+    body: "Build workout plans, then start one to follow along with the guided timer. Use a plan's menu to schedule it, and it shows up on your Habits page.",
   },
   {
     href: "/meals",
@@ -53,7 +53,7 @@ const STEPS: TourStep[] = [
     href: "/habits",
     icon: "check-circle-outline",
     title: "Habits & meal plan",
-    body: "Your day's habits and planned meals, in time order. Add either one from here, check them off, and use the week strip to look back.",
+    body: "Your day's habits, planned meals, and scheduled workouts, in time order. Add any of them from here, check them off, and use the week strip to look back.",
   },
   {
     href: "/profile",

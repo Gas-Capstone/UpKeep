@@ -4,34 +4,42 @@ import { Divider, List, Searchbar, Text } from "react-native-paper";
 
 import { useThemeMode } from "@/components/context/ThemeContext";
 import { Colors, Radius, Spacing } from "@/constants/theme";
-import { Recipe, recipeKey } from "@/lib/meals/meals";
 
-type RecipeSelectListProps = {
-  recipes: Recipe[];
-  selected: Recipe | null;
-  onSelect: (recipe: Recipe) => void;
+export type SelectOption = {
+  key: string;
+  title: string;
+  description?: string;
 };
 
-/** Searchable, single-select recipe list for planning a meal. */
-export function RecipeSelectList({
-  recipes,
-  selected,
+type SearchSelectListProps = {
+  options: SelectOption[];
+  selectedKey: string | null;
+  onSelect: (key: string) => void;
+  searchPlaceholder: string;
+  emptyText: string;
+};
+
+/** Searchable, single-select list — used to pick a recipe or workout plan. */
+export function SearchSelectList({
+  options,
+  selectedKey,
   onSelect,
-}: RecipeSelectListProps) {
+  searchPlaceholder,
+  emptyText,
+}: SearchSelectListProps) {
   const { resolvedTheme } = useThemeMode();
   const colors = Colors[resolvedTheme];
   const [query, setQuery] = useState("");
 
   const q = query.trim().toLowerCase();
   const filtered = q
-    ? recipes.filter((recipe) => recipe.name.toLowerCase().includes(q))
-    : recipes;
-  const selectedKey = selected ? recipeKey(selected) : null;
+    ? options.filter((option) => option.title.toLowerCase().includes(q))
+    : options;
 
   return (
     <>
       <Searchbar
-        placeholder="Search recipes"
+        placeholder={searchPlaceholder}
         value={query}
         onChangeText={setQuery}
         autoCapitalize="none"
@@ -50,18 +58,18 @@ export function RecipeSelectList({
             variant="bodySmall"
             style={[styles.empty, { color: colors.textSecondary }]}
           >
-            No recipes found.
+            {emptyText}
           </Text>
         ) : (
-          filtered.map((recipe, index) => {
-            const isSelected = recipeKey(recipe) === selectedKey;
+          filtered.map((option, index) => {
+            const isSelected = option.key === selectedKey;
             return (
-              <View key={recipeKey(recipe)}>
+              <View key={option.key}>
                 {index > 0 && <Divider />}
                 <List.Item
-                  title={recipe.name}
-                  description={`${recipe.prepTimeMin} min`}
-                  onPress={() => onSelect(recipe)}
+                  title={option.title}
+                  description={option.description}
+                  onPress={() => onSelect(option.key)}
                   style={
                     isSelected
                       ? { backgroundColor: colors.backgroundSelected }

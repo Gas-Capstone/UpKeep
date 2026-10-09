@@ -1,13 +1,26 @@
 import React, { createContext, useCallback, useContext, useState, useEffect } from "react";
+import { CompletionsByDate, rowsToCompletionsByDate } from "@/lib/habits/habits";
 import {
   addFavoriteWorkout,
+  completeScheduledWorkout,
+  createScheduledWorkout,
   createWorkoutPlan,
+  deleteScheduledWorkout,
+  getScheduledWorkouts,
+  getWorkoutScheduleCompletions,
+  uncompleteScheduledWorkout,
   getAvailableWorkouts,
   getCompletedWorkouts,
   getFavoriteWorkouts,
   getWorkouts,
   removeFavoriteWorkout,
 } from "@/lib/supabaseFunctions";
+import {
+  ScheduledWorkout,
+  WorkoutSchedule,
+  getSessionDays,
+  wasLoggedOn,
+} from "@/lib/workoutSchedule";
 import { userContext } from "./userContext";
 
 // Lifted out of WorkoutsPage's local useState so index.tsx can read the same data.
@@ -31,6 +44,8 @@ export type CompletedWorkout = {
   name: string;
   duration_min: number;
   completed_at: string;
+  // null when the plan was deleted after the session was logged.
+  workout_plan_id: string | null;
 };
 
 // An individual exercise from the `workouts` table — the building blocks a
@@ -73,6 +88,15 @@ export type WorkoutsDataContextType = {
     plan: NewWorkoutPlan,
     selections: PlanWorkoutSelection[],
   ) => Promise<boolean>;
+  // Workouts scheduled like habits and shown on the Habits page.
+  scheduledWorkouts: ScheduledWorkout[];
+  // Manual check-offs (ISO date -> entry ids). Logging the plan with the
+  // workout timer also counts — see isScheduledWorkoutDone().
+  workoutScheduleCompletions: CompletionsByDate;
+  // Throws on failure so the form can show an error.
+  scheduleWorkout: (workoutPlanId: string, schedule: WorkoutSchedule) => Promise<void>;
+  unscheduleWorkout: (entryId: string) => void;
+  toggleScheduledWorkout: (args: { entryId: string; date: string }) => void;
 };
 
 export const workoutsDataContext =
@@ -81,6 +105,17 @@ export const workoutsDataContext =
 type WorkoutsDataProviderProps = {
   children: React.ReactNode;
 };
+
+async function loadWorkoutSchedule(user: { id: string }) {
+  const [entries, rows] = await Promise.all([
+    getScheduledWorkouts(user),
+    getWorkoutScheduleCompletions(user),
+  ]);
+  const completions = rowsToCompletionsByDate(
+    rows.map((row) => ({ habit_id: row.entry_id, completed_on: row.completed_on })),
+  );
+  return { entries, completions };
+}
 
 export const WorkoutsDataProvider = ({
   children,
@@ -93,6 +128,9 @@ export const WorkoutsDataProvider = ({
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [availableWorkouts, setAvailableWorkouts] = useState<PlanWorkout[]>([]);
   const [loading, setLoading] = useState(true);
+  const [scheduledWorkouts, setScheduledWorkouts] = useState<ScheduledWorkout[]>([]);
+  const [workoutScheduleCompletions, setWorkoutScheduleCompletions] =
+    useState<CompletionsByDate>({});
 
   const refreshFavorites = useCallback(() => {
     if (!user?.id) return;
@@ -211,6 +249,64 @@ export const WorkoutsDataProvider = ({
     refreshAvailableWorkouts,
   ]);
 
+  function refreshWorkoutSchedule(currentUser: { id: string }) {
+    loadWorkoutSchedule(currentUser)
+      .then(({ entries, completions }) => {
+        setScheduledWorkouts(entries);
+        setWorkoutScheduleCompletions(completions);
+      })
+      .catch((error) => console.log("Error fetching workout schedule: ", error));
+  }
+
+  useEffect(() => {
+    if (!user?.id) return;
+    loadWorkoutSchedule(user)
+      .then(({ entries, completions }) => {
+        setScheduledWorkouts(entries);
+        setWorkoutScheduleCompletions(completions);
+      })
+      .catch((error) => console.log("Error fetching workout schedule: ", error));
+  }, [user]);
+
+  async function scheduleWorkout(workoutPlanId: string, schedule: WorkoutSchedule) {
+    if (!user?.id) return;
+    const created = await createScheduledWorkout(user, workoutPlanId, schedule);
+    setScheduledWorkouts((prev) => [...prev, created]);
+  }
+
+  function unscheduleWorkout(entryId: string) {
+    if (!user?.id) return;
+    const currentUser = user;
+    setScheduledWorkouts((prev) => prev.filter((entry) => entry.id !== entryId));
+    deleteScheduledWorkout(entryId).catch((error) => {
+      console.log("Error removing scheduled workout: ", error);
+      refreshWorkoutSchedule(currentUser);
+    });
+  }
+
+  function toggleScheduledWorkout({ entryId, date }: { entryId: string; date: string }) {
+    if (!user?.id) return;
+    const entry = scheduledWorkouts.find((e) => e.id === entryId);
+    // A logged workout already counts it as done, and a tick can't undo that.
+    if (!entry || wasLoggedOn(entry, date, getSessionDays(completedWorkouts))) return;
+
+    const currentUser = user;
+    const isDone = workoutScheduleCompletions[date]?.includes(entryId) ?? false;
+    setWorkoutScheduleCompletions((prev) => {
+      const cur = prev[date] ?? [];
+      const next = isDone ? cur.filter((id) => id !== entryId) : [...cur, entryId];
+      return { ...prev, [date]: next };
+    });
+
+    const request = isDone
+      ? uncompleteScheduledWorkout(entryId, date)
+      : completeScheduledWorkout(currentUser, entryId, date);
+    request.catch((error) => {
+      console.log("Error toggling scheduled workout: ", error);
+      refreshWorkoutSchedule(currentUser);
+    });
+  }
+
   const contextValue: WorkoutsDataContextType = {
     workoutList,
     completedWorkouts,
@@ -222,6 +318,11 @@ export const WorkoutsDataProvider = ({
     refreshFavorites,
     toggleFavorite,
     createPlan,
+    scheduledWorkouts,
+    workoutScheduleCompletions,
+    scheduleWorkout,
+    unscheduleWorkout,
+    toggleScheduledWorkout,
   };
 
   return (
