@@ -307,7 +307,11 @@ export async function createHabit(user: UserRef, habit: HabitInput) {
     })
     .select()
     .single();
-  if (error) console.log("Error creating habit: ", error);
+  if (error) {
+    console.log("Error creating habit: ", error);
+    // Thrown so the add-habit form can show it instead of closing silently.
+    throw new Error("Couldn't save that habit. Please try again.");
+  }
   return data;
 }
 
@@ -344,4 +348,31 @@ export async function uncompleteHabit(
     return false;
   }
   return true;
+}
+
+/* --------------
+    APP TOUR
+------------- */
+// Whether this account has already been shown the first-time tour. Returns
+// true when the check fails, so a missing column or network error skips the
+// tour instead of showing it on every visit.
+export async function hasSeenTour(user: UserRef) {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("tour_seen_at")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (error) {
+    console.log("Error checking tour status: ", error);
+    return true;
+  }
+  return data?.tour_seen_at != null;
+}
+
+export async function markTourSeen(user: UserRef) {
+  const { error } = await supabase
+    .from("profiles")
+    .update({ tour_seen_at: new Date().toISOString() })
+    .eq("id", user.id);
+  if (error) console.log("Error saving tour status: ", error);
 }

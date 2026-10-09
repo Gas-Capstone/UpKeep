@@ -28,6 +28,7 @@ import { useThemeMode } from "@/components/context/ThemeContext";
 import { Colors, Radius, Spacing } from "@/constants/theme";
 import { estimateCalorieGoal } from "@/lib/calorieGoal";
 import { getHabitsForDate, isHabitDone } from "@/lib/habits/habits";
+import { getMealsForDate } from "@/lib/meals/mealPlan";
 import { matchRecipes } from "@/lib/meals/meals";
 import { getTodaysDate } from "@/lib/time_management/week";
 import {
@@ -414,11 +415,15 @@ export default function HomeScreen() {
     recipes,
     fridgeIds,
     catalogLoading: mealsLoading,
+    mealPlanEntries,
+    mealCompletions,
   } = useContext(mealsDataContext) ?? {
     ingredients: [],
     recipes: [],
     fridgeIds: new Set<string>(),
     catalogLoading: true,
+    mealPlanEntries: [],
+    mealCompletions: {},
   };
 
   const { profile, loading: profileLoading } = useContext(
@@ -445,21 +450,18 @@ export default function HomeScreen() {
 
   const today = getTodaysDate();
 
-  const habitsToday = useMemo(
-    () => getHabitsForDate(habitArray, today),
-    [habitArray, today],
-  );
+  // Planned meals sit on the Habits page and are checked off the same way,
+  // so today's tile counts them alongside habits.
+  const habitsToday = getHabitsForDate(habitArray, today);
+  const mealsToday = getMealsForDate(mealPlanEntries, today);
+  const scheduledToday = habitsToday.length + mealsToday.length;
+  const completedToday =
+    habitsToday.filter((habit) => isHabitDone(habit.id, today, habitCompletions))
+      .length +
+    mealsToday.filter((entry) => isHabitDone(entry.id, today, mealCompletions))
+      .length;
 
-  const habitsCompleteToday = useMemo(
-    () =>
-      habitsToday.filter((habit) =>
-        isHabitDone(habit.id, today, habitCompletions),
-      ).length,
-    [habitsToday, today, habitCompletions],
-  );
-
-  const habitsProgress =
-    habitsToday.length > 0 ? habitsCompleteToday / habitsToday.length : 0;
+  const habitsProgress = scheduledToday > 0 ? completedToday / scheduledToday : 0;
 
   const { ready: readyRecipes, almost: almostRecipes } = useMemo(
     () => matchRecipes(recipes, fridgeIds),
@@ -475,8 +477,12 @@ export default function HomeScreen() {
   const calorieGoal = useMemo(() => getCalorieGoal(profile), [profile]);
 
   const habitStats = useMemo(
-    () => getHabitConsistencyStats(habitArray, habitCompletions, today, 7),
-    [habitArray, habitCompletions, today],
+    () =>
+      getHabitConsistencyStats(habitArray, habitCompletions, today, 7, {
+        entries: mealPlanEntries,
+        completions: mealCompletions,
+      }),
+    [habitArray, habitCompletions, today, mealPlanEntries, mealCompletions],
   );
 
   const workoutStats = useMemo(
@@ -509,8 +515,8 @@ export default function HomeScreen() {
       value: habitStats.rate,
       detail:
         habitStats.rate !== null
-          ? `${Math.round(habitStats.rate * 100)}% of scheduled habits completed in the last 7 days`
-          : "No habits scheduled yet",
+          ? `${Math.round(habitStats.rate * 100)}% of scheduled habits and planned meals completed in the last 7 days`
+          : "No habits or meals scheduled yet",
     },
     {
       key: "workouts",
@@ -672,7 +678,7 @@ export default function HomeScreen() {
         <TodayTile
           icon="checkmark-circle-outline"
           title="Habits"
-          value={`${habitsCompleteToday}/${habitsToday.length}`}
+          value={`${completedToday}/${scheduledToday}`}
           progress={habitsProgress}
         />
         <TodayTile
