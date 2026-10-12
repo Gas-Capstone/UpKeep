@@ -6,7 +6,11 @@
 
 import { addDays, format, startOfDay } from "date-fns";
 
-import { Weekday, isOnWeekdays, timeToMinutes } from "@/lib/habits/habits";
+import {
+  Weekday,
+  isScheduledOnDate,
+  timeToMinutes,
+} from "@/lib/habits/habits";
 
 // Mirrors the check constraint on meal_plan_entries.meal_type.
 export type MealType = "breakfast" | "lunch" | "dinner" | "snack";
@@ -56,8 +60,7 @@ export function toDateKey(date: Date): string {
 }
 
 export function isMealOnDate(entry: MealPlanEntry, date: string): boolean {
-  if (entry.weekdays === null) return entry.plannedDate === date;
-  return isOnWeekdays(entry.weekdays, date);
+  return isScheduledOnDate(entry, date);
 }
 
 export function getMealsForDate(

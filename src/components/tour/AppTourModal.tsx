@@ -1,4 +1,4 @@
-import { Href, router } from "expo-router";
+import { Href, router, usePathname } from "expo-router";
 import { useEffect, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import {
@@ -41,7 +41,7 @@ const STEPS: TourStep[] = [
     href: "/workouts",
     icon: "dumbbell",
     title: "Workouts",
-    body: "Build workout plans, then start one to follow along with the guided timer. Finished sessions are saved to your history.",
+    body: "Build workout plans, then start one to follow along with the guided timer. Use a plan's menu to schedule it, and it shows up on your Habits page.",
   },
   {
     href: "/meals",
@@ -53,7 +53,7 @@ const STEPS: TourStep[] = [
     href: "/habits",
     icon: "check-circle-outline",
     title: "Habits & meal plan",
-    body: "Your day's habits and planned meals, in time order. Add either one from here, check them off, and use the week strip to look back.",
+    body: "Your day's habits, planned meals, and scheduled workouts, in time order. Add any of them from here, check them off, and use the week strip to look back.",
   },
   {
     href: "/profile",
@@ -63,16 +63,26 @@ const STEPS: TourStep[] = [
   },
 ];
 
-/** Step-by-step intro shown once to new users. Moves through each tab as it goes. */
+/**
+ * Step-by-step intro shown to each account once, the first time it opens Home.
+ * Moves through each tab as it goes.
+ */
 export function AppTourModal() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const { visible, finishTour } = useTour();
+  const { visible, startFirstVisitTour, finishTour } = useTour();
+  const pathname = usePathname();
   const [stepIndex, setStepIndex] = useState(0);
 
   const step = STEPS[stepIndex];
   const isFirst = stepIndex === 0;
   const isLast = stepIndex === STEPS.length - 1;
+
+  // Re-runs when the "has this account seen it" check resolves, so a slow
+  // check still opens the tour if the user is on Home by then.
+  useEffect(() => {
+    if (pathname === "/") startFirstVisitTour();
+  }, [pathname, startFirstVisitTour]);
 
   useEffect(() => {
     if (visible) router.navigate(STEPS[stepIndex].href);

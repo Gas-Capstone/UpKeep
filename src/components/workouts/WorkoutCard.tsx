@@ -12,8 +12,10 @@ type WorkoutCardProps = {
   onPress: () => void;
   isFavorited: boolean;
   onToggleFavorite: () => void;
-  // Omitted for seeded plans, which the user can't change — the card then
-  // renders no menu at all rather than disabled items.
+  // Puts this plan on the Habits page schedule. Offered on every plan.
+  onSchedule?: () => void;
+  // Omitted for seeded plans, which the user can't change, so their menu
+  // only offers scheduling.
   onEdit?: () => void;
   onDelete?: () => void;
 };
@@ -23,6 +25,7 @@ export function WorkoutCard({
   onPress,
   isFavorited,
   onToggleFavorite,
+  onSchedule,
   onEdit,
   onDelete,
 }: WorkoutCardProps) {
@@ -86,6 +89,16 @@ export function WorkoutCard({
           <CardMenu
             accessibilityLabel={`More options for ${workout.name}`}
             actions={[
+              ...(onSchedule
+                ? [
+                    {
+                      key: "schedule",
+                      label: "Schedule",
+                      icon: "calendar-plus",
+                      onPress: onSchedule,
+                    },
+                  ]
+                : []),
               ...(onEdit
                 ? [
                     {
