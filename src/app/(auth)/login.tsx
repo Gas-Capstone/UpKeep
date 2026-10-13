@@ -248,8 +248,8 @@ export default function Login() {
             </>
           ) : (
             <>
-              <ThemedText type="title" style={styles.title}>
-                Two-factor authentication
+              <ThemedText type="title" style={styles.title} adjustsFontSizeToFit={true}>
+                2FA
               </ThemedText>
 
               <ThemedText
