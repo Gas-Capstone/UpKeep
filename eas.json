@@ -9,14 +9,16 @@
         "simulator": true
       },
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
     },
     "preview": {
       "distribution": "internal",
-      "autoIncrement": true
+      "autoIncrement": true,
+      "channel": "preview"
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "channel": "production"
     }
   },
   "submit": {

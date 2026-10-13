@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import { format } from "date-fns";
 import { router } from "expo-router";
@@ -6,6 +7,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useEffect, useRef, useState } from "react";
 import {
   Image,
+  InteractionManager,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -16,7 +18,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { SvgXml } from "react-native-svg";
-import { ActivityIndicator, List, Switch, TextInput } from "react-native-paper";
+import { ActivityIndicator, List, Switch, TextInput, Card } from "react-native-paper";
 import { DatePickerModal, TimePickerModal } from "react-native-paper-dates";
 
 import {
@@ -26,11 +28,77 @@ import {
 import { useProfileData } from "@/components/context/profileDataContext";
 import { useThemeMode } from "@/components/context/ThemeContext";
 import { useTour } from "@/components/context/tourContext";
+import { useUserContext } from "@/components/context/userContext";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Colors, MaxContentWidth, Radius, Spacing } from "@/constants/theme";
 import { supabase } from "@/lib/supabaseClient";
+
+const MFA_QR_DISPLAY_SIZE = 160;
+
+type PendingMfaEnrollment = {
+  factorId: string;
+  qrCode: string;
+  secret: string;
+};
+
+function mfaEnrollmentStorageKey(userId: string) {
+  return `mfa-pending-enrollment:${userId}`;
+}
+
+async function loadPendingMfaEnrollment(
+  userId: string,
+): Promise<PendingMfaEnrollment | null> {
+  try {
+    const raw = await AsyncStorage.getItem(mfaEnrollmentStorageKey(userId));
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw) as PendingMfaEnrollment;
+    if (!parsed.factorId || !parsed.qrCode || !parsed.secret) return null;
+
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+async function savePendingMfaEnrollment(
+  userId: string,
+  enrollment: PendingMfaEnrollment,
+) {
+  await AsyncStorage.setItem(
+    mfaEnrollmentStorageKey(userId),
+    JSON.stringify(enrollment),
+  );
+}
+
+async function clearPendingMfaEnrollment(userId: string) {
+  await AsyncStorage.removeItem(mfaEnrollmentStorageKey(userId));
+}
+
+/** Supabase QR SVGs lack a viewBox, so SvgXml won't scale them and they overflow. */
+function normalizeTotpQrSvg(qrCode: string): string {
+  let xml = qrCode.trim();
+
+  if (xml.startsWith("data:image/svg+xml")) {
+    const commaIndex = xml.indexOf(",");
+    if (commaIndex !== -1) {
+      xml = decodeURIComponent(xml.slice(commaIndex + 1));
+    }
+  }
+
+  if (/\bviewBox=/i.test(xml)) return xml;
+
+  const widthMatch = xml.match(/\bwidth="(\d+(?:\.\d+)?)"/i);
+  const heightMatch = xml.match(/\bheight="(\d+(?:\.\d+)?)"/i);
+  if (!widthMatch || !heightMatch) return xml;
+
+  return xml.replace(
+    /<svg\b/i,
+    `<svg viewBox="0 0 ${widthMatch[1]} ${heightMatch[1]}"`,
+  );
+}
 
 type SectionKey =
   | "profile"
@@ -86,6 +154,7 @@ function formatBirthday(value: string | null | undefined) {
 export default function SettingsScreen() {
   const { theme, setTheme, resolvedTheme } = useThemeMode();
   const colors = Colors[resolvedTheme];
+  const { user } = useUserContext();
   const {
     profile,
     updateDisplayName,
@@ -159,7 +228,7 @@ export default function SettingsScreen() {
 
   useEffect(() => {
     void refreshMfaStatus();
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     if (!error && !status) return;
@@ -188,11 +257,41 @@ export default function SettingsScreen() {
       return;
     }
 
-    setMfaEnabled(
-      data.totp.some(
-        (factor: { status: string }) => factor.status === "verified",
-      ),
+    const hasVerified = data.totp.some(
+      (factor: { status: string }) => factor.status === "verified",
     );
+    setMfaEnabled(hasVerified);
+
+    if (!user?.id) return;
+
+    if (hasVerified) {
+      await clearPendingMfaEnrollment(user.id);
+      setMfaFactorId("");
+      setMfaQrCode("");
+      setMfaSecret("");
+      setMfaCode("");
+      return;
+    }
+
+    const pending = await loadPendingMfaEnrollment(user.id);
+    const abandonedFactors = data.all.filter(
+      (factor) =>
+        factor.factor_type === "totp" && factor.status === "unverified",
+    );
+    const reusable =
+      pending &&
+      abandonedFactors.some((factor) => factor.id === pending.factorId);
+
+    if (pending && reusable) {
+      setMfaFactorId(pending.factorId);
+      setMfaQrCode(pending.qrCode);
+      setMfaSecret(pending.secret);
+      return;
+    }
+
+    if (pending) {
+      await clearPendingMfaEnrollment(user.id);
+    }
   }
 
   const clearMessages = () => {
@@ -401,6 +500,10 @@ export default function SettingsScreen() {
     clearMessages();
 
     try {
+      if (!user?.id) {
+        throw new Error("You must be signed in to set up two-factor authentication.");
+      }
+
       const { data: factors, error: factorsError } =
         await supabase.auth.mfa.listFactors();
 
@@ -412,6 +515,21 @@ export default function SettingsScreen() {
         (factor) =>
           factor.factor_type === "totp" && factor.status === "unverified",
       );
+
+      const pending = await loadPendingMfaEnrollment(user.id);
+      const reusableFactor =
+        pending &&
+        abandonedFactors.find((factor) => factor.id === pending.factorId);
+
+      // Supabase only returns the TOTP secret at enroll time, so resume from
+      // the cached enrollment when the same unverified factor is still present.
+      if (pending && reusableFactor) {
+        setMfaFactorId(pending.factorId);
+        setMfaQrCode(pending.qrCode);
+        setMfaSecret(pending.secret);
+        setMfaCode("");
+        return;
+      }
 
       for (const factor of abandonedFactors) {
         const { error: unenrollError } = await supabase.auth.mfa.unenroll({
@@ -429,9 +547,16 @@ export default function SettingsScreen() {
       });
       if (enrollError) throw enrollError;
 
-      setMfaFactorId(data.id);
-      setMfaQrCode(data.totp.qr_code);
-      setMfaSecret(data.totp.secret);
+      const enrollment: PendingMfaEnrollment = {
+        factorId: data.id,
+        qrCode: data.totp.qr_code,
+        secret: data.totp.secret,
+      };
+      await savePendingMfaEnrollment(user.id, enrollment);
+
+      setMfaFactorId(enrollment.factorId);
+      setMfaQrCode(enrollment.qrCode);
+      setMfaSecret(enrollment.secret);
       setMfaCode("");
     } catch (caught) {
       setError(
@@ -468,6 +593,10 @@ export default function SettingsScreen() {
         },
       );
       if (verifyError) throw verifyError;
+
+      if (user?.id) {
+        await clearPendingMfaEnrollment(user.id);
+      }
 
       setMfaEnabled(true);
       setMfaFactorId("");
@@ -1099,7 +1228,7 @@ export default function SettingsScreen() {
                         },
                       ]}
                     >
-                      <SvgXml xml={mfaQrCode} width={190} height={190} />
+                      <DeferredMfaQr qrCode={mfaQrCode} />
                     </View>
 
                     <View
@@ -1214,7 +1343,8 @@ export default function SettingsScreen() {
                 title="Help"
                 subtitle="Get reacquainted with UpKeep"
               />
-              <View
+              <Card
+                mode="contained"
                 style={[
                   styles.card,
                   {
@@ -1234,7 +1364,7 @@ export default function SettingsScreen() {
                   )}
                   onPress={startTour}
                 />
-              </View>
+              </Card>
 
               <SectionLabel
                 title="Account"
@@ -1309,6 +1439,34 @@ function SectionLabel({
         {subtitle}
       </ThemedText>
     </View>
+  );
+}
+
+function DeferredMfaQr({ qrCode }: { qrCode: string }) {
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    setReady(false);
+    const task = InteractionManager.runAfterInteractions(() => {
+      setReady(true);
+    });
+    return () => task.cancel();
+  }, [qrCode]);
+
+  if (!ready) {
+    return (
+      <View style={styles.qrPlaceholder}>
+        <ActivityIndicator />
+      </View>
+    );
+  }
+
+  return (
+    <SvgXml
+      xml={normalizeTotpQrSvg(qrCode)}
+      width={MFA_QR_DISPLAY_SIZE}
+      height={MFA_QR_DISPLAY_SIZE}
+    />
   );
 }
 
@@ -1558,9 +1716,20 @@ const styles = StyleSheet.create({
   },
   qrCard: {
     alignSelf: "center",
+    width: MFA_QR_DISPLAY_SIZE + Spacing.three * 2,
+    height: MFA_QR_DISPLAY_SIZE + Spacing.three * 2,
     padding: Spacing.three,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
     borderWidth: 1,
     borderRadius: Radius.medium,
+  },
+  qrPlaceholder: {
+    width: MFA_QR_DISPLAY_SIZE,
+    height: MFA_QR_DISPLAY_SIZE,
+    alignItems: "center",
+    justifyContent: "center",
   },
   secretCard: {
     gap: Spacing.one,
