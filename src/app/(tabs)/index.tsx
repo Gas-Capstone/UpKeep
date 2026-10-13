@@ -21,6 +21,7 @@ import {
   CompletedWorkout,
   workoutsDataContext,
 } from "@/components/context/workoutsDataContext";
+import { FeedbackCard } from "@/components/home/FeedbackCard";
 import { WellnessScoreInfoModal } from "@/components/home/WellnessScoreInfoModal";
 import { ScreenView } from "@/components/ui/ScreenView";
 import { CircleTimer } from "@/components/ui/CircleTimer";
@@ -821,6 +822,17 @@ export default function HomeScreen() {
         rightItems={nutrientStats.possiblyMissing}
         emptyText="Add ingredients to your fridge to see nutrition patterns."
       />
+
+      <View style={homeStyles.sectionHeader}>
+        <Text style={[homeStyles.sectionTitle, { color: colors.text }]}>
+          Feedback
+        </Text>
+        <Text style={[homeStyles.sectionHint, { color: colors.textSecondary }]}>
+          Help shape what UpKeep does next
+        </Text>
+      </View>
+
+      <FeedbackCard />
     </ScreenView>
   );
 }

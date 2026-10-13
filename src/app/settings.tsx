@@ -16,6 +16,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   ActivityIndicator,
+  Card,
   List,
   Switch,
   TextInput,
@@ -910,7 +911,8 @@ export default function SettingsScreen() {
                 title="Help"
                 subtitle="Get reacquainted with UpKeep"
               />
-              <View
+              <Card
+                mode="contained"
                 style={[
                   styles.card,
                   {
@@ -928,7 +930,7 @@ export default function SettingsScreen() {
                   right={(props) => <List.Icon {...props} icon="chevron-right" />}
                   onPress={startTour}
                 />
-              </View>
+              </Card>
 
               <SectionLabel
                 title="Account"
