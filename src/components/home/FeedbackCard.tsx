@@ -1,6 +1,13 @@
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
-import { Button, HelperText, Icon, Text, TextInput } from "react-native-paper";
+import {
+  Avatar,
+  Button,
+  Card,
+  HelperText,
+  Text,
+  TextInput,
+} from "react-native-paper";
 
 import { useThemeMode } from "@/components/context/ThemeContext";
 import { useUserContext } from "@/components/context/userContext";
@@ -39,17 +46,22 @@ export function FeedbackCard() {
   };
 
   return (
-    <View
+    <Card
+      mode="contained"
       style={[
         styles.card,
         { backgroundColor: colors.backgroundElement, borderColor: colors.border },
       ]}
+      contentStyle={styles.content}
     >
       {sent ? (
         <View style={styles.thanks}>
-          <View style={[styles.icon, { backgroundColor: colors.brandSoft }]}>
-            <Icon source="heart-outline" size={24} color={colors.brand} />
-          </View>
+          <Avatar.Icon
+            size={48}
+            icon="heart-outline"
+            color={colors.brand}
+            style={{ backgroundColor: colors.brandSoft }}
+          />
           <Text variant="titleMedium" style={[styles.title, { color: colors.text }]}>
             Thanks for the feedback!
           </Text>
@@ -64,7 +76,8 @@ export function FeedbackCard() {
           </Button>
         </View>
       ) : (
-        <>
+        // A View rather than a fragment: Card passes props to its children.
+        <View style={styles.form}>
           <View>
             <Text variant="titleMedium" style={[styles.title, { color: colors.text }]}>
               How are we doing?
@@ -113,18 +126,23 @@ export function FeedbackCard() {
           >
             Send feedback
           </Button>
-        </>
+        </View>
       )}
-    </View>
+    </Card>
   );
 }
 
 const styles = StyleSheet.create({
+  // Matches the other Home cards rather than Paper's default card surface.
   card: {
     width: "100%",
     borderRadius: Radius.large,
     borderWidth: StyleSheet.hairlineWidth,
+  },
+  content: {
     padding: Spacing.three,
+  },
+  form: {
     gap: Spacing.three,
   },
   title: {
@@ -148,13 +166,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: Spacing.two,
     paddingVertical: Spacing.two,
-  },
-  icon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: "center",
-    justifyContent: "center",
   },
   centered: {
     textAlign: "center",

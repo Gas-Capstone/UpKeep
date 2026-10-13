@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { ScrollView, StyleSheet, View } from "react-native";
+import { Fragment, useState } from "react";
+import { ScrollView, StyleSheet } from "react-native";
 import { Divider, List, Searchbar, Text } from "react-native-paper";
 
 import { useThemeMode } from "@/components/context/ThemeContext";
@@ -64,7 +64,7 @@ export function SearchSelectList({
           filtered.map((option, index) => {
             const isSelected = option.key === selectedKey;
             return (
-              <View key={option.key}>
+              <Fragment key={option.key}>
                 {index > 0 && <Divider />}
                 <List.Item
                   title={option.title}
@@ -86,7 +86,7 @@ export function SearchSelectList({
                   }
                   accessibilityState={{ selected: isSelected }}
                 />
-              </View>
+              </Fragment>
             );
           })
         )}
