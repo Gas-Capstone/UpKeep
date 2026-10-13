@@ -126,6 +126,8 @@ export default function SettingsScreen() {
   const [sex, setSex] = useState<boolean | null>(null);
   const [currentPassword, setCurrentPassword] = useState("");
   const [password, setPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordStatus, setPasswordStatus] = useState("");
 
   const [mfaEnabled, setMfaEnabled] = useState(false);
   const [mfaFactorId, setMfaFactorId] = useState("");
@@ -401,16 +403,24 @@ export default function SettingsScreen() {
     try {
       const { data: factors, error: factorsError } =
         await supabase.auth.mfa.listFactors();
-      if (factorsError) throw factorsError;
 
-      const verifiedTotp = factors.totp.find(
-        (factor: { status: string }) => factor.status === "verified",
+      if (factorsError) {
+        throw factorsError;
+      }
+
+      const abandonedFactors = factors.all.filter(
+        (factor) =>
+          factor.factor_type === "totp" && factor.status === "unverified",
       );
 
-      if (verifiedTotp) {
-        setMfaEnabled(true);
-        setStatus("Two-factor authentication is already enabled.");
-        return;
+      for (const factor of abandonedFactors) {
+        const { error: unenrollError } = await supabase.auth.mfa.unenroll({
+          factorId: factor.id,
+        });
+
+        if (unenrollError) {
+          throw unenrollError;
+        }
       }
 
       const { data, error: enrollError } = await supabase.auth.mfa.enroll({
@@ -478,8 +488,10 @@ export default function SettingsScreen() {
   }
 
   async function savePassword() {
+    setPasswordError("");
+
     if (!currentPassword) {
-      setError("Enter your current password.");
+      setPasswordError("Enter your current password.");
       return;
     }
 
@@ -491,7 +503,7 @@ export default function SettingsScreen() {
       /[^A-Za-z0-9]/.test(password);
 
     if (!passwordIsValid) {
-      setError(
+      setPasswordError(
         "Password must be at least 10 characters and include an uppercase letter, lowercase letter, number, and special character.",
       );
       return;
@@ -531,10 +543,9 @@ export default function SettingsScreen() {
 
       setCurrentPassword("");
       setPassword("");
-      setStatus("Password updated.");
-      setOpenSection(null);
+      setPasswordStatus("Password updated.");
     } catch (caught) {
-      setError(
+      setPasswordError(
         caught instanceof Error
           ? caught.message
           : "Could not update your password.",
@@ -1174,6 +1185,24 @@ export default function SettingsScreen() {
                   outlineColor={colors.border}
                   activeOutlineColor={colors.brand}
                 />
+                {passwordError ? (
+                  <MessageBox
+                    icon="alert-circle-outline"
+                    text={passwordError}
+                    color={colors.danger}
+                    backgroundColor={
+                      resolvedTheme === "dark" ? "#3A2023" : "#FDECEE"
+                    }
+                  />
+                ) : null}
+                {passwordStatus ? (
+                  <MessageBox
+                    icon="checkmark-circle-outline"
+                    text={passwordStatus}
+                    color={colors.success}
+                    backgroundColor={colors.brandSoft}
+                  />
+                ) : null}
                 <PrimaryAction
                   label="Update password"
                   onPress={savePassword}
