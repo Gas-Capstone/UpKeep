@@ -36,3 +36,14 @@ jobs:
     params:
       platform: android
       profile: preview
+
+  # this should only trigger if get_android_build finds a matching build
+  publish_update:
+    name: Publish update
+    needs: [get_android_build]
+    if: ${{ needs.get_android_build.outputs.build_id }}
+    type: update
+    environment: preview
+    params:
+      platform: android
+      channel: preview
