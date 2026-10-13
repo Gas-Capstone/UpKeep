@@ -1,3 +1,4 @@
+import { useProfileData } from "./profileDataContext";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   createContext,
@@ -35,6 +36,45 @@ import { useMealsData } from "./mealsDataContext";
 import { useUserContext } from "./userContext";
 
 const SETTINGS_STORAGE_KEY = "wellness-app-notification-settings";
+const GOAL_NOTIFICATION_MESSAGES: Record<string, string[]> = {
+  muscle: [
+    "A little strength work today keeps your progress moving.",
+    "Stay consistent with your muscle-building goal.",
+    "Ready to put in some strength work today?",
+    "Small workouts add up. Keep building.",
+  ],
+
+  weight: [
+    "Take a moment to make a choice that supports your goal today.",
+    "Consistency matters more than perfection.",
+    "Plan something healthy for yourself today.",
+    "Keep your daily habits moving in the direction you want.",
+  ],
+
+  endurance: [
+    "A little cardio today can go a long way.",
+    "Keep building your endurance one session at a time.",
+    "Ready to get your heart rate up today?",
+    "Stay consistent and keep your endurance moving forward.",
+  ],
+
+  mobility: [
+    "Take a few minutes to move and loosen up today.",
+    "A little mobility work can make a big difference.",
+    "Keep your body moving today.",
+    "Make some time for movement and flexibility.",
+  ],
+};
+
+function getGoalNotificationMessage(goal: string | null) {
+  if (!goal) return null;
+
+  const messages = GOAL_NOTIFICATION_MESSAGES[goal];
+
+  if (!messages?.length) return null;
+
+  return messages[Math.floor(Math.random() * messages.length)];
+}
 
 type NotificationSettings = {
   enabled: boolean; // daily summary
@@ -67,17 +107,23 @@ export type NotificationsContextType = {
   resync: () => Promise<void>;
 };
 
-export const notificationsContext = createContext<NotificationsContextType | null>(null);
+export const notificationsContext =
+  createContext<NotificationsContextType | null>(null);
 
 type NotificationsProviderProps = {
   children: React.ReactNode;
 };
 
-export const NotificationsProvider = ({ children }: NotificationsProviderProps) => {
+export const NotificationsProvider = ({
+  children,
+}: NotificationsProviderProps) => {
   const { user } = useUserContext();
+  const { profile } = useProfileData();
+  const primaryGoal = profile?.primary_goal ?? null;
   const { habitArray, habitCompletions } = useHabitsContext();
   const { recipes, mealPlanEntries, mealCompletions } = useMealsData();
-  const [settings, setSettings] = useState<NotificationSettings>(DEFAULT_SETTINGS);
+  const [settings, setSettings] =
+    useState<NotificationSettings>(DEFAULT_SETTINGS);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
 
   // notification "runs" are chained so multiple notifs don't cause conflict
@@ -93,19 +139,23 @@ export const NotificationsProvider = ({ children }: NotificationsProviderProps) 
       .finally(() => setSettingsLoaded(true));
   }, []);
 
-  const updateSettings = useCallback((changes: Partial<NotificationSettings>) => {
-    setSettings((prev) => {
-      const next = { ...prev, ...changes };
-      AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(next)).catch((err) =>
-        console.log("Error saving notification settings: ", err),
-      );
-      return next;
-    });
-  }, []);
+  const updateSettings = useCallback(
+    (changes: Partial<NotificationSettings>) => {
+      setSettings((prev) => {
+        const next = { ...prev, ...changes };
+        AsyncStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(next)).catch(
+          (err) => console.log("Error saving notification settings: ", err),
+        );
+        return next;
+      });
+    },
+    [],
+  );
 
   // Changes to habits or planned meals rebuild this, which re-runs resync.
   const loadSummaries = useCallback(
-    async (days: Date[]) => buildDailySummaries(days, habitArray, mealPlanEntries),
+    async (days: Date[]) =>
+      buildDailySummaries(days, habitArray, mealPlanEntries),
     [habitArray, mealPlanEntries],
   );
 
@@ -131,15 +181,29 @@ export const NotificationsProvider = ({ children }: NotificationsProviderProps) 
         const summaries = await loadSummaries(days);
         if (run !== latestRun.current) return;
 
-        await replaceScheduled(
-          "daily-summary",
-          summaryOn
-            ? buildSummaryReminders(summaries, settings.hour, settings.minute)
-            : [],
-        );
+        const summaryReminders = summaryOn
+          ? buildSummaryReminders(
+              summaries,
+              settings.hour,
+              settings.minute,
+            ).map((reminder) => {
+              const goalMessage = getGoalNotificationMessage(primaryGoal);
+
+              return {
+                ...reminder,
+                body: goalMessage
+                  ? `${goalMessage}\n\n${reminder.body}`
+                  : reminder.body,
+              };
+            })
+          : [];
+
+        await replaceScheduled("daily-summary", summaryReminders);
         await replaceScheduled(
           "habit",
-          habitsOn ? buildHabitReminders(days, habitArray, habitCompletions) : [],
+          habitsOn
+            ? buildHabitReminders(days, habitArray, habitCompletions)
+            : [],
         );
         await replaceScheduled(
           "meal",
@@ -161,6 +225,7 @@ export const NotificationsProvider = ({ children }: NotificationsProviderProps) 
     return queue.current;
   }, [
     user,
+    primaryGoal,
     settings,
     settingsLoaded,
     loadSummaries,
@@ -189,10 +254,25 @@ export const NotificationsProvider = ({ children }: NotificationsProviderProps) 
   );
 
   const sendTestSummary = useCallback(async () => {
-    if (!user) throw new Error("You must be logged in.");
+    if (!user) {
+      throw new Error("You must be logged in.");
+    }
+
+    const goalMessage = getGoalNotificationMessage(primaryGoal);
+
+    if (goalMessage) {
+      await sendNotificationNow("UpKeep", goalMessage);
+      return;
+    }
+
+    // Fallback if the user does not have a primary goal.
     const [today] = await loadSummaries(getSummaryDays().slice(0, 1));
-    await sendNotificationNow(SUMMARY_TITLE, formatSummaryBody(today) ?? EMPTY_SUMMARY_BODY);
-  }, [user, loadSummaries]);
+
+    await sendNotificationNow(
+      SUMMARY_TITLE,
+      formatSummaryBody(today) ?? EMPTY_SUMMARY_BODY,
+    );
+  }, [user, primaryGoal, loadSummaries]);
 
   useEffect(() => {
     resync();
@@ -230,7 +310,9 @@ export const NotificationsProvider = ({ children }: NotificationsProviderProps) 
 export function useNotifications() {
   const ctx = useContext(notificationsContext);
   if (!ctx) {
-    throw new Error("useNotifications must be used within a <NotificationsProvider>");
+    throw new Error(
+      "useNotifications must be used within a <NotificationsProvider>",
+    );
   }
   return ctx;
 }

@@ -3,9 +3,10 @@ import { format } from "date-fns";
 import { router } from "expo-router";
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -14,12 +15,8 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import {
-  ActivityIndicator,
-  List,
-  Switch,
-  TextInput,
-} from "react-native-paper";
+import { SvgXml } from "react-native-svg";
+import { ActivityIndicator, List, Switch, TextInput } from "react-native-paper";
 import { DatePickerModal, TimePickerModal } from "react-native-paper-dates";
 
 import {
@@ -43,6 +40,7 @@ type SectionKey =
   | "habitReminders"
   | "mealReminders"
   | "security"
+  | "twoFactor"
   | null;
 
 const GOALS = [
@@ -126,11 +124,20 @@ export default function SettingsScreen() {
   const [heightInches, setHeightInches] = useState("");
   const [weight, setWeight] = useState("");
   const [sex, setSex] = useState<boolean | null>(null);
+  const [currentPassword, setCurrentPassword] = useState("");
   const [password, setPassword] = useState("");
+
+  const [mfaEnabled, setMfaEnabled] = useState(false);
+  const [mfaFactorId, setMfaFactorId] = useState("");
+  const [mfaQrCode, setMfaQrCode] = useState("");
+  const [mfaSecret, setMfaSecret] = useState("");
+  const [mfaCode, setMfaCode] = useState("");
+  const [mfaLoading, setMfaLoading] = useState(false);
 
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [sendingTest, setSendingTest] = useState(false);
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     if (!profile) return;
@@ -147,6 +154,44 @@ export default function SettingsScreen() {
     setWeight(profile.weight?.toString() ?? "");
     setSex(profile.sex);
   }, [profile]);
+
+  useEffect(() => {
+    void refreshMfaStatus();
+  }, []);
+
+  useEffect(() => {
+    if (!error && !status) return;
+
+    Keyboard.dismiss();
+
+    const firstFrame = requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+    });
+
+    const timer = setTimeout(() => {
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+    }, 250);
+
+    return () => {
+      cancelAnimationFrame(firstFrame);
+      clearTimeout(timer);
+    };
+  }, [error, status]);
+
+  async function refreshMfaStatus() {
+    const { data, error: factorsError } = await supabase.auth.mfa.listFactors();
+
+    if (factorsError) {
+      console.warn("Could not load MFA factors:", factorsError.message);
+      return;
+    }
+
+    setMfaEnabled(
+      data.totp.some(
+        (factor: { status: string }) => factor.status === "verified",
+      ),
+    );
+  }
 
   const clearMessages = () => {
     setError("");
@@ -349,20 +394,142 @@ export default function SettingsScreen() {
     }
   }
 
+  async function beginMfaEnrollment() {
+    setMfaLoading(true);
+    clearMessages();
+
+    try {
+      const { data: factors, error: factorsError } =
+        await supabase.auth.mfa.listFactors();
+      if (factorsError) throw factorsError;
+
+      const verifiedTotp = factors.totp.find(
+        (factor: { status: string }) => factor.status === "verified",
+      );
+
+      if (verifiedTotp) {
+        setMfaEnabled(true);
+        setStatus("Two-factor authentication is already enabled.");
+        return;
+      }
+
+      const { data, error: enrollError } = await supabase.auth.mfa.enroll({
+        factorType: "totp",
+        friendlyName: "UpKeep Authenticator",
+      });
+      if (enrollError) throw enrollError;
+
+      setMfaFactorId(data.id);
+      setMfaQrCode(data.totp.qr_code);
+      setMfaSecret(data.totp.secret);
+      setMfaCode("");
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Could not start two-factor authentication setup.",
+      );
+    } finally {
+      setMfaLoading(false);
+    }
+  }
+
+  async function verifyMfaEnrollment() {
+    const code = mfaCode.replace(/\s/g, "");
+
+    if (!mfaFactorId) {
+      setError("Start two-factor authentication setup first.");
+      return;
+    }
+
+    if (!/^\d{6}$/.test(code)) {
+      setError("Enter the 6-digit code from your authenticator app.");
+      return;
+    }
+
+    setMfaLoading(true);
+    clearMessages();
+
+    try {
+      const { error: verifyError } = await supabase.auth.mfa.challengeAndVerify(
+        {
+          factorId: mfaFactorId,
+          code,
+        },
+      );
+      if (verifyError) throw verifyError;
+
+      setMfaEnabled(true);
+      setMfaFactorId("");
+      setMfaQrCode("");
+      setMfaSecret("");
+      setMfaCode("");
+      setStatus("Two-factor authentication enabled.");
+      await refreshMfaStatus();
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Could not verify the authenticator code.",
+      );
+    } finally {
+      setMfaLoading(false);
+    }
+  }
+
   async function savePassword() {
-    if (password.length < 6) {
-      setError("Your new password must be at least 6 characters.");
+    if (!currentPassword) {
+      setError("Enter your current password.");
+      return;
+    }
+
+    const passwordIsValid =
+      password.length >= 10 &&
+      /[A-Z]/.test(password) &&
+      /[a-z]/.test(password) &&
+      /[0-9]/.test(password) &&
+      /[^A-Za-z0-9]/.test(password);
+
+    if (!passwordIsValid) {
+      setError(
+        "Password must be at least 10 characters and include an uppercase letter, lowercase letter, number, and special character.",
+      );
       return;
     }
 
     setSaving(true);
     clearMessages();
-    try {
-      const { error: passwordError } = await supabase.auth.updateUser({
-        password,
-      });
-      if (passwordError) throw passwordError;
 
+    try {
+      const { data, error: functionError } = await supabase.functions.invoke(
+        "change-password",
+        {
+          body: {
+            currentPassword,
+            newPassword: password,
+          },
+        },
+      );
+
+      if (functionError) {
+        let message = functionError.message;
+        const context = (functionError as { context?: Response }).context;
+
+        if (context) {
+          try {
+            const payload = await context.clone().json();
+            if (payload?.error) message = payload.error;
+          } catch {
+            // Fall back to the Supabase function error message.
+          }
+        }
+
+        throw new Error(message);
+      }
+
+      if (data?.error) throw new Error(data.error);
+
+      setCurrentPassword("");
       setPassword("");
       setStatus("Password updated.");
       setOpenSection(null);
@@ -434,6 +601,7 @@ export default function SettingsScreen() {
           </View>
 
           <ScrollView
+            ref={scrollRef}
             style={styles.flex}
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
@@ -850,9 +1018,9 @@ export default function SettingsScreen() {
                 }
               >
                 <ThemedText type="small" themeColor="textSecondary">
-                  Get a reminder at the time you set for each habit, on the
-                  days it&apos;s scheduled. Habits you&apos;ve already checked
-                  off are skipped.
+                  Get a reminder at the time you set for each habit, on the days
+                  it&apos;s scheduled. Habits you&apos;ve already checked off
+                  are skipped.
                 </ThemedText>
               </ExpandableCard>
 
@@ -884,25 +1052,132 @@ export default function SettingsScreen() {
                 subtitle="Keep your account protected"
               />
               <ExpandableCard
+                icon="shield-checkmark-outline"
+                title="Two-factor authentication"
+                summary={mfaEnabled ? "Enabled" : "Add an authenticator app"}
+                open={openSection === "twoFactor"}
+                onPress={() => toggleSection("twoFactor")}
+              >
+                {mfaEnabled ? (
+                  <View style={styles.mfaEnabledRow}>
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={22}
+                      color={colors.brand}
+                    />
+                    <View style={{ flex: 1 }}>
+                      <ThemedText type="smallBold">2FA is enabled</ThemedText>
+                      <ThemedText type="small" themeColor="textSecondary">
+                        Your account has a verified authenticator factor.
+                      </ThemedText>
+                    </View>
+                  </View>
+                ) : mfaQrCode ? (
+                  <>
+                    <ThemedText type="small" themeColor="textSecondary">
+                      Scan this QR code with an authenticator app, then enter
+                      the 6-digit code it gives you.
+                    </ThemedText>
+
+                    <View
+                      style={[
+                        styles.qrCard,
+                        {
+                          backgroundColor: "#FFFFFF",
+                          borderColor: colors.border,
+                        },
+                      ]}
+                    >
+                      <SvgXml xml={mfaQrCode} width={190} height={190} />
+                    </View>
+
+                    <View
+                      style={[
+                        styles.secretCard,
+                        {
+                          backgroundColor: colors.background,
+                          borderColor: colors.border,
+                        },
+                      ]}
+                    >
+                      <ThemedText type="small" themeColor="textSecondary">
+                        Can&apos;t scan it? Enter this setup key manually:
+                      </ThemedText>
+                      <ThemedText type="smallBold" selectable>
+                        {mfaSecret}
+                      </ThemedText>
+                    </View>
+
+                    <TextInput
+                      label="6-digit authenticator code"
+                      mode="outlined"
+                      value={mfaCode}
+                      onChangeText={(value) =>
+                        setMfaCode(value.replace(/\D/g, "").slice(0, 6))
+                      }
+                      keyboardType="number-pad"
+                      maxLength={6}
+                      outlineColor={colors.border}
+                      activeOutlineColor={colors.brand}
+                    />
+
+                    <PrimaryAction
+                      label="Verify and enable 2FA"
+                      onPress={verifyMfaEnrollment}
+                      disabled={mfaLoading || mfaCode.length !== 6}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <ThemedText type="small" themeColor="textSecondary">
+                      Use an authenticator app as a second step when signing in.
+                    </ThemedText>
+                    <PrimaryAction
+                      label="Set up 2FA"
+                      onPress={beginMfaEnrollment}
+                      disabled={mfaLoading}
+                    />
+                  </>
+                )}
+              </ExpandableCard>
+
+              <ExpandableCard
                 icon="lock-closed-outline"
                 title="Password"
                 summary="Change your account password"
                 open={openSection === "security"}
                 onPress={() => toggleSection("security")}
               >
+                <ThemedText type="small" themeColor="textSecondary">
+                  Your new password cannot match either of your two most recent
+                  passwords.
+                </ThemedText>
+
+                <TextInput
+                  label="Current password"
+                  mode="outlined"
+                  value={currentPassword}
+                  onChangeText={setCurrentPassword}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  outlineColor={colors.border}
+                  activeOutlineColor={colors.brand}
+                />
+
                 <TextInput
                   label="New password"
                   mode="outlined"
                   value={password}
                   onChangeText={setPassword}
                   secureTextEntry
+                  autoCapitalize="none"
                   outlineColor={colors.border}
                   activeOutlineColor={colors.brand}
                 />
                 <PrimaryAction
                   label="Update password"
                   onPress={savePassword}
-                  disabled={saving}
+                  disabled={saving || !currentPassword || !password}
                 />
               </ExpandableCard>
 
@@ -925,7 +1200,9 @@ export default function SettingsScreen() {
                   left={(props) => (
                     <List.Icon {...props} icon="map-marker-path" />
                   )}
-                  right={(props) => <List.Icon {...props} icon="chevron-right" />}
+                  right={(props) => (
+                    <List.Icon {...props} icon="chevron-right" />
+                  )}
                   onPress={startTour}
                 />
               </View>
@@ -1044,7 +1321,9 @@ function ExpandableCard({
             pressed && styles.pressed,
           ]}
         >
-          <View style={[styles.cardIcon, { backgroundColor: colors.brandSoft }]}>
+          <View
+            style={[styles.cardIcon, { backgroundColor: colors.brandSoft }]}
+          >
             <Ionicons name={icon} size={20} color={colors.brand} />
           </View>
           <View style={{ flex: 1 }}>
@@ -1242,6 +1521,23 @@ const styles = StyleSheet.create({
     fontSize: 19,
     lineHeight: 24,
     fontWeight: "800",
+  },
+  mfaEnabledRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.three,
+  },
+  qrCard: {
+    alignSelf: "center",
+    padding: Spacing.three,
+    borderWidth: 1,
+    borderRadius: Radius.medium,
+  },
+  secretCard: {
+    gap: Spacing.one,
+    padding: Spacing.three,
+    borderWidth: 1,
+    borderRadius: Radius.medium,
   },
   card: {
     borderWidth: 1,
