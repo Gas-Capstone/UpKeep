@@ -16,7 +16,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { SvgXml } from "react-native-svg";
-import { ActivityIndicator, List, Switch, TextInput } from "react-native-paper";
+import { ActivityIndicator, List, Switch, TextInput, Card } from "react-native-paper";
 import { DatePickerModal, TimePickerModal } from "react-native-paper-dates";
 
 import {
@@ -1214,7 +1214,8 @@ export default function SettingsScreen() {
                 title="Help"
                 subtitle="Get reacquainted with UpKeep"
               />
-              <View
+              <Card
+                mode="contained"
                 style={[
                   styles.card,
                   {
@@ -1234,7 +1235,7 @@ export default function SettingsScreen() {
                   )}
                   onPress={startTour}
                 />
-              </View>
+              </Card>
 
               <SectionLabel
                 title="Account"

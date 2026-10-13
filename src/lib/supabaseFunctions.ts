@@ -382,6 +382,30 @@ export async function markTourSeen(user: UserRef) {
 }
 
 /* --------------
+    APP FEEDBACK
+------------- */
+/**
+ * Saves a survey response. `stars` is 0.5–5 in half steps and is stored
+ * doubled (1–10) so half stars stay whole numbers.
+ */
+export async function submitFeedback(
+  user: UserRef,
+  stars: number,
+  review: string,
+): Promise<void> {
+  const trimmed = review.trim();
+  const { error } = await supabase.from("app_feedback").insert({
+    user_id: user.id,
+    rating: Math.round(stars * 2),
+    review: trimmed === "" ? null : trimmed,
+  });
+  if (error) {
+    console.log("Error submitting feedback: ", error);
+    throw new Error("Couldn't send your feedback. Please try again.");
+  }
+}
+
+/* --------------
     WORKOUT SCHEDULE
 ------------- */
 type ScheduledWorkoutRow = {
