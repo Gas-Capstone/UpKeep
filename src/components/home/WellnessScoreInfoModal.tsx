@@ -45,7 +45,8 @@ export function WellnessScoreInfoModal({
           <Card.Content>
             <Text style={[local.body, { color: theme.textSecondary }]}>
               Your score is the average of up to three equally weighted parts:
-              habit completion over the last 7 days, workouts this week against
+              habit completion over the last 7 days (eating a planned meal or
+              doing a scheduled workout counts as a completed habit), workouts this week against
               a goal of 4, and the share of your matched recipes that are ready
               to cook with what&apos;s in your fridge (needs your biometrics
               set). Parts without enough data yet are left out rather than

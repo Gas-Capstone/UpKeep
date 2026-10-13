@@ -52,20 +52,30 @@ export type HabitConsistency = {
 };
 
 export type HabitConsistencyStats = {
-  rate: number | null; // overall rate across all habits, null if nothing was scheduled
+  // Overall rate across habits and planned meals, null if nothing was scheduled.
+  rate: number | null;
   windowDays: number;
   perHabit: HabitConsistency[]; // only habits scheduled at least once in the window
   mostConsistent: HabitConsistency[];
   mostSkipped: HabitConsistency[];
 };
 
+// Planned meals live on the Habits page and are checked off the same way, so
+// eating a planned meal counts toward the overall rate like a completed habit.
+export type PlannedItem = {
+  isOnDate: (date: string) => boolean;
+  isDoneOn: (date: string) => boolean;
+};
+
 // Looks back `windowDays` (including today) and, for each habit, counts how
-// many of its scheduled occurrences were actually completed.
+// many of its scheduled occurrences were actually completed. Planned meals
+// add to the overall rate but not to the per-habit insights.
 export function getHabitConsistencyStats(
   habitArray: Habit[],
   habitCompletions: CompletionsByDate,
   today: string,
   windowDays = 7,
+  plannedItems: PlannedItem[] = [],
 ): HabitConsistencyStats {
   const todayDate = new Date(`${today}T00:00:00`);
   const window = Array.from({ length: windowDays }, (_, i) =>
@@ -87,8 +97,20 @@ export function getHabitConsistencyStats(
     })
     .filter((h) => h.scheduledCount > 0);
 
-  const totalScheduled = perHabit.reduce((sum, h) => sum + h.scheduledCount, 0);
-  const totalCompleted = perHabit.reduce((sum, h) => sum + h.completedCount, 0);
+  let plannedScheduled = 0;
+  let plannedCompleted = 0;
+  for (const date of window) {
+    for (const item of plannedItems) {
+      if (!item.isOnDate(date)) continue;
+      plannedScheduled += 1;
+      if (item.isDoneOn(date)) plannedCompleted += 1;
+    }
+  }
+
+  const totalScheduled =
+    perHabit.reduce((sum, h) => sum + h.scheduledCount, 0) + plannedScheduled;
+  const totalCompleted =
+    perHabit.reduce((sum, h) => sum + h.completedCount, 0) + plannedCompleted;
   const rate = totalScheduled > 0 ? totalCompleted / totalScheduled : null;
 
   const sortedByRate = [...perHabit].sort((a, b) => b.rate - a.rate);

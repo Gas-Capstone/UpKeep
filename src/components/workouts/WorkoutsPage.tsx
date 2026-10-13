@@ -6,6 +6,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useThemeMode } from "@/components/context/ThemeContext";
 import { useUserContext } from "@/components/context/userContext";
 import { useWorkoutSessionContext } from "@/components/context/workoutSessionContext";
+import { AddHabitModal } from "@/components/habits/AddHabitModal";
 import {
   useWorkoutsData,
   type Workout,
@@ -39,6 +40,7 @@ export default function WorkoutsPage() {
     refreshCompletedWorkouts,
     toggleFavorite,
     createPlan,
+    scheduleWorkout,
   } = useWorkoutsData();
 
   const [workoutTags, setWorkoutTags] = useState<string[]>([]);
@@ -47,6 +49,8 @@ export default function WorkoutsPage() {
   const [startModalVisible, setStartModalVisible] = useState(false);
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [selectedWorkout, setSelectedWorkout] = useState<Workout | null>(null);
+  // Plan being added to the Habits page schedule, or null when closed.
+  const [scheduleTarget, setScheduleTarget] = useState<Workout | null>(null);
   // Plan awaiting delete confirmation.
   const [deleteTarget, setDeleteTarget] = useState<Workout | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -125,6 +129,16 @@ export default function WorkoutsPage() {
             onDismiss={() => setCompletedModalVisible(false)}
             workouts={completedWorkouts}
           />
+
+          {scheduleTarget ? (
+            <AddHabitModal
+              key={String(scheduleTarget.id)}
+              visible
+              onDismiss={() => setScheduleTarget(null)}
+              initialWorkout={scheduleTarget}
+              onSaveWorkout={scheduleWorkout}
+            />
+          ) : null}
 
           {selectedWorkout && (
             <StartWorkoutModal
@@ -314,6 +328,7 @@ export default function WorkoutsPage() {
               onPress={() => handleStart(workout)}
               isFavorited={favoriteIds.has(String(workout.id))}
               onToggleFavorite={() => toggleFavorite(String(workout.id))}
+              onSchedule={() => setScheduleTarget(workout)}
               {...(ownsPlan(workout)
                 ? {
                     onEdit: () => openEditPlan(workout),
