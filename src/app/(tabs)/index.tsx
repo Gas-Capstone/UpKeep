@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useContext, useMemo, useState } from "react";
 import { Image, StyleSheet, View } from "react-native";
+import { useRouter } from "expo-router";
 import {
   ActivityIndicator,
   Avatar,
@@ -399,6 +400,7 @@ function InsightCard({
 
 export default function HomeScreen() {
   const theme = useTheme();
+  const router = useRouter();
   const { resolvedTheme } = useThemeMode();
   const colors = Colors[resolvedTheme];
 
@@ -602,6 +604,15 @@ export default function HomeScreen() {
               </Text>
             </View>
           </View>
+
+          <IconButton
+            icon="robot-outline"
+            size={24}
+            iconColor={colors.brand}
+            style={{ margin: 0 }}
+            onPress={() => router.navigate("/agent")}
+            accessibilityLabel="Open the assistant"
+          />
 
           {profileAvatar}
         </View>

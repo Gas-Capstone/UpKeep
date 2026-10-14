@@ -18,7 +18,6 @@ import { ScreenView } from "@/components/ui/ScreenView";
 import { Colors, Radius, Spacing } from "@/constants/theme";
 import { useSession } from "@/hooks/use-session";
 import {
-  Ingredient,
   Recipe,
   matchRecipes,
   recipeKey,
@@ -29,11 +28,11 @@ import {
   addMealPlanToGroceryList,
   addRecipeToGroceryList,
   deleteCustomRecipe,
+  setCustomRecipeImage,
 } from "@/lib/meals/queries";
+import { pickImage, uploadUserImage } from "@/lib/userImages";
 
-import { AddIngredientsModal } from "./AddIngredientsModal";
 import { AddRecipeModal } from "./AddRecipeModal";
-import { FridgeModal } from "./FridgeModal";
 import { RecipeCard } from "./RecipeCard";
 
 /** How long the grocery-list result stays on screen. */
@@ -52,27 +51,24 @@ export default function MealsScreen() {
     catalogLoading,
     catalogError,
     fridgeIds,
-    fridgeEntries,
     favoriteIds,
-    saveFridge,
     refreshCatalog,
     toggleFavorite,
     createNewRecipe,
-    toggleFridgeItem: toggleFridgeItemShared,
     mealPlanEntries,
     addMealPlanEntry,
   } = useMealsData();
   const { resync } = useNotifications();
 
   const [mutationError, setMutationError] = useState("");
-  const [addIngredientsVisible, setAddIngredientsVisible] = useState(false);
   const [createModalVisible, setCreateModalVisible] = useState(false);
-  const [fridgeModalVisible, setFridgeModalVisible] = useState(false);
   const [planRecipe, setPlanRecipe] = useState<Recipe | null>(null);
   const [addingKey, setAddingKey] = useState<string | null>(null);
   // Recipe awaiting delete confirmation.
   const [deleteTarget, setDeleteTarget] = useState<Recipe | null>(null);
   const [deleting, setDeleting] = useState(false);
+  // Recipe id whose photo is uploading, so only that card's menu reads busy.
+  const [photoUploadingId, setPhotoUploadingId] = useState<string | null>(null);
   const [shopping, setShopping] = useState(false);
   const [shopStatus, setShopStatus] = useState("");
 
@@ -140,9 +136,37 @@ export default function MealsScreen() {
     }
   };
 
-  const openFridge = () => {
-    refreshCatalog();
-    setFridgeModalVisible(true);
+  const openFridge = () => router.navigate("/fridge");
+
+  const changePhoto = async (recipe: Recipe) => {
+    if (!user?.id) return;
+    setMutationError("");
+
+    try {
+      const uri = await pickImage();
+      // Backing out of the picker is not a failure, so it says nothing.
+      if (!uri) return;
+
+      setPhotoUploadingId(recipe.id);
+      const url = await uploadUserImage({
+        uri,
+        userId: user.id,
+        kind: "recipes",
+        itemId: recipe.id,
+      });
+      await setCustomRecipeImage(recipe.id, url);
+      refreshCatalog();
+    } catch (error) {
+      // Only a denied permission tells the user something they can act on;
+      // anything else is a storage or network fault they cannot fix from here.
+      setMutationError(
+        error instanceof Error && error.message.startsWith("Photo access")
+          ? error.message
+          : "Couldn't update that photo. Please try again.",
+      );
+    } finally {
+      setPhotoUploadingId(null);
+    }
   };
 
   const openRecipe = (recipe: Recipe) => {
@@ -174,18 +198,6 @@ export default function MealsScreen() {
   const ingredientName = (id: string) =>
     ingredients.find((ingredient) => ingredient.id === id)?.name ?? "Unknown";
 
-  const toggleFridgeItem = async (ingredient: Ingredient) => {
-    setMutationError("");
-
-    try {
-      await toggleFridgeItemShared(ingredient);
-    } catch (error) {
-      setMutationError(
-        error instanceof Error ? error.message : "Couldn't update your fridge",
-      );
-    }
-  };
-
   const sortedRecipes = useMemo(
     () => sortFavoritesFirst(recipes, favoriteIds),
     [recipes, favoriteIds],
@@ -215,14 +227,6 @@ export default function MealsScreen() {
       contentContainerStyle={styles.screenContent}
       overlay={
         <>
-          <AddIngredientsModal
-            visible={addIngredientsVisible}
-            onDismiss={() => setAddIngredientsVisible(false)}
-            ingredients={ingredients}
-            selectedIds={fridgeIds}
-            onToggle={toggleFridgeItem}
-          />
-
           <AddRecipeModal
             visible={createModalVisible}
             onDismiss={() => setCreateModalVisible(false)}
@@ -230,14 +234,6 @@ export default function MealsScreen() {
             onCreate={async (recipe) => {
               await createNewRecipe(recipe);
             }}
-          />
-
-          <FridgeModal
-            visible={fridgeModalVisible}
-            onDismiss={() => setFridgeModalVisible(false)}
-            ingredients={ingredients}
-            entries={fridgeEntries}
-            onSave={saveFridge}
           />
 
           {planRecipe ? (
@@ -312,27 +308,14 @@ export default function MealsScreen() {
       >
         <View style={styles.quickRow}>
           <QuickAction
-            icon="calendar-month-outline"
-            label="Meal plan"
-            onPress={() => router.navigate("/habits")}
-          />
-          <QuickAction
             icon="cart-outline"
             label="Grocery list"
             onPress={() => router.navigate("/grocery")}
           />
-        </View>
-
-        <View style={styles.quickRow}>
           <QuickAction
             icon="fridge-outline"
             label="View fridge"
             onPress={openFridge}
-          />
-          <QuickAction
-            icon="basket-plus-outline"
-            label="Add ingredients"
-            onPress={() => setAddIngredientsVisible(true)}
           />
         </View>
 
@@ -447,6 +430,8 @@ export default function MealsScreen() {
                   onOpen={() => openRecipe(recipe)}
                   {...(recipe.isCustom
                     ? {
+                        onChangePhoto: () => changePhoto(recipe),
+                        photoUploading: photoUploadingId === recipe.id,
                         onEdit: () => openEditRecipe(recipe),
                         onDelete: () => setDeleteTarget(recipe),
                       }
@@ -485,6 +470,8 @@ export default function MealsScreen() {
                   onOpen={() => openRecipe(recipe)}
                   {...(recipe.isCustom
                     ? {
+                        onChangePhoto: () => changePhoto(recipe),
+                        photoUploading: photoUploadingId === recipe.id,
                         onEdit: () => openEditRecipe(recipe),
                         onDelete: () => setDeleteTarget(recipe),
                       }

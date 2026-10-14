@@ -11,11 +11,12 @@ import {
 } from "react-native-paper";
 
 import { useMealsData } from "@/components/context/mealsDataContext";
+import { BrandImage } from "@/components/ui/BrandImage";
 import { Center } from "@/components/ui/center";
 import { HStack } from "@/components/ui/hstack";
 import { ScreenView } from "@/components/ui/ScreenView";
 import { VStack } from "@/components/ui/vstack";
-import { Spacing, TopBadgeInset } from "@/constants/theme";
+import { Radius, Spacing, TopBadgeInset } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 import { RecipeDetail, parseInstructionSteps } from "@/lib/meals/meals";
 import { loadCookingProgress } from "@/lib/meals/cooking";
@@ -119,6 +120,20 @@ export default function RecipeDetailScreen() {
         ) : (
           <>
             <VStack space="sm" style={{ alignSelf: "stretch" }}>
+              {/* Only when there is a real photo. A full-width placeholder
+                  here would be dead weight on every custom recipe. */}
+              {recipe.imageUrl && (
+                <BrandImage
+                  uri={recipe.imageUrl}
+                  accessibilityLabel={`Photo of ${recipe.name}`}
+                  style={{
+                    width: "100%",
+                    height: 200,
+                    borderRadius: Radius.medium,
+                  }}
+                />
+              )}
+
               <Text variant="headlineSmall">{recipe.name}</Text>
 
               {/* Only the stats that actually have values — a recipe with no

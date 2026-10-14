@@ -63,6 +63,20 @@ const TABS: TabConfig[] = [
     icon: "cart-outline",
     placement: "hidden",
   },
+  {
+    name: "agent",
+    href: "/agent",
+    label: "Assistant",
+    icon: "robot-outline",
+    placement: "hidden",
+  },
+  {
+    name: "fridge",
+    href: "/fridge",
+    label: "My fridge",
+    icon: "fridge-outline",
+    placement: "hidden",
+  },
 ];
 
 export default function AppTabs() {

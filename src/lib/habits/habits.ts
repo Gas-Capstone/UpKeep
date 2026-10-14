@@ -1,4 +1,4 @@
-import { getDay, parse, parseISO } from "date-fns";
+import { getDay, isValid, parse, parseISO } from "date-fns";
 
 export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6
 
@@ -74,9 +74,21 @@ export function isHabitOnDate(habit: Habit, date: string){
     return isOnWeekdays(habit.weekdays ?? [], date)
 }
 
+/**
+ * Minutes since midnight, or NaN when the value cannot be read.
+ *
+ * Habits added in the app are stored as "6:00 PM". The agent wrote 24-hour
+ * "18:00" instead, which parsed as Invalid Date and came back NaN — and
+ * buildHabitReminders drops a habit whose time is NaN, so those habits never
+ * produced a notification. Both shapes are accepted so rows already written
+ * that way keep working.
+ */
 export function timeToMinutes(time: string){
-    const parsed = parse(time, "h:mm aa", new Date())
-    return parsed.getHours() * 60 + parsed.getMinutes()
+    for (const pattern of ["h:mm aa", "HH:mm"]) {
+        const parsed = parse(time, pattern, new Date())
+        if (isValid(parsed)) return parsed.getHours() * 60 + parsed.getMinutes()
+    }
+    return NaN
 }
 
 export function getHabitsForDate(habits: Habit[], date: string){

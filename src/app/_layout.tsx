@@ -1,6 +1,7 @@
 import { router, Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
+import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { PaperProvider } from "react-native-paper";
 import { en, registerTranslation } from "react-native-paper-dates";
@@ -39,8 +40,9 @@ function RootContent() {
   const curTheme = resolvedTheme === "dark" ? paperDarkTheme : paperLightTheme;
 
   return (
-    <SafeAreaProvider>
-      <UserProvider>
+    <KeyboardProvider>
+      <SafeAreaProvider>
+        <UserProvider>
         <WorkoutsDataProvider>
           <MealsDataProvider>
             <ProfileDataProvider>
@@ -75,7 +77,8 @@ function RootContent() {
           </MealsDataProvider>
         </WorkoutsDataProvider>
       </UserProvider>
-    </SafeAreaProvider>
+      </SafeAreaProvider>
+    </KeyboardProvider>
   );
 }
 

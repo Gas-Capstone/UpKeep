@@ -131,6 +131,19 @@ export async function getCompletedWorkouts(user: UserRef) {
 /* --------------
     PLAN EDITING
 ------------- */
+/**
+ * Points a plan at a photo the user uploaded. RLS restricts updates to the
+ * author, so a seeded plan is rejected by the database rather than here.
+ */
+export async function setWorkoutPlanImage(planId: string, imageUrl: string) {
+  const { error } = await supabase
+    .from("workout_plans")
+    .update({ image_url: imageUrl })
+    .eq("id", planId);
+
+  if (error) throw error;
+}
+
 export async function updateWorkoutPlan(
     planId: string,
     plan: { name: string; difficulty: string; target: string; duration_min: number },

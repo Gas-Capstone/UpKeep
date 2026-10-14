@@ -2,7 +2,7 @@ import { StyleSheet, View } from "react-native";
 import { Card, Icon, IconButton, Text } from "react-native-paper";
 
 import { useThemeMode } from "@/components/context/ThemeContext";
-import { BrandImagePlaceholder } from "@/components/ui/BrandImagePlaceholder";
+import { BrandImage } from "@/components/ui/BrandImage";
 import { CardMenu } from "@/components/ui/CardMenu";
 import { Colors, Radius, Spacing } from "@/constants/theme";
 import type { Recipe } from "@/lib/meals/meals";
@@ -19,6 +19,9 @@ type RecipeCardProps = {
   // Omitted for catalog recipes, which the user can't change.
   onEdit?: () => void;
   onDelete?: () => void;
+  onChangePhoto?: () => void;
+  // True while this recipe's photo is uploading, so the menu item can say so.
+  photoUploading?: boolean;
 };
 
 export function RecipeCard({
@@ -32,6 +35,8 @@ export function RecipeCard({
   onOpen,
   onEdit,
   onDelete,
+  onChangePhoto,
+  photoUploading = false,
 }: RecipeCardProps) {
   const { resolvedTheme } = useThemeMode();
   const colors = Colors[resolvedTheme];
@@ -50,9 +55,11 @@ export function RecipeCard({
       ]}
     >
       <Card.Content style={styles.content}>
-        <BrandImagePlaceholder
+        <BrandImage
+          uri={recipe.imageUrl}
           label="Recipe photo"
           icon="silverware-fork-knife"
+          accessibilityLabel={`Photo of ${recipe.name}`}
           style={styles.imageSlot}
         />
 
@@ -120,6 +127,21 @@ export function RecipeCard({
                         label: "Add to meal plan",
                         icon: "calendar-plus",
                         onPress: onAddToPlan,
+                      },
+                    ]
+                  : []),
+                ...(onChangePhoto
+                  ? [
+                      {
+                        key: "photo",
+                        label: photoUploading
+                          ? "Uploading photo…"
+                          : recipe.imageUrl
+                            ? "Change photo"
+                            : "Add photo",
+                        icon: "image-plus",
+                        onPress: onChangePhoto,
+                        disabled: photoUploading,
                       },
                     ]
                   : []),

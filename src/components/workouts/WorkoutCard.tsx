@@ -3,7 +3,7 @@ import { Button, Icon, IconButton, Text } from "react-native-paper";
 
 import { useThemeMode } from "@/components/context/ThemeContext";
 import type { Workout } from "@/components/context/workoutsDataContext";
-import { BrandImagePlaceholder } from "@/components/ui/BrandImagePlaceholder";
+import { BrandImage } from "@/components/ui/BrandImage";
 import { CardMenu } from "@/components/ui/CardMenu";
 import { Colors, Radius, Spacing } from "@/constants/theme";
 
@@ -18,6 +18,9 @@ type WorkoutCardProps = {
   // only offers scheduling.
   onEdit?: () => void;
   onDelete?: () => void;
+  onChangePhoto?: () => void;
+  // True while this plan's photo is uploading, so the menu item can say so.
+  photoUploading?: boolean;
 };
 
 export function WorkoutCard({
@@ -28,6 +31,8 @@ export function WorkoutCard({
   onSchedule,
   onEdit,
   onDelete,
+  onChangePhoto,
+  photoUploading = false,
 }: WorkoutCardProps) {
   const { resolvedTheme } = useThemeMode();
   const colors = Colors[resolvedTheme];
@@ -46,9 +51,11 @@ export function WorkoutCard({
         },
       ]}
     >
-      <BrandImagePlaceholder
+      <BrandImage
+        uri={workout.image_url}
         label="Workout photo"
         icon="dumbbell"
+        accessibilityLabel={`Photo of ${workout.name}`}
         style={styles.imageSlot}
       />
 
@@ -96,6 +103,21 @@ export function WorkoutCard({
                       label: "Schedule",
                       icon: "calendar-plus",
                       onPress: onSchedule,
+                    },
+                  ]
+                : []),
+              ...(onChangePhoto
+                ? [
+                    {
+                      key: "photo",
+                      label: photoUploading
+                        ? "Uploading photo…"
+                        : workout.image_url
+                          ? "Change photo"
+                          : "Add photo",
+                      icon: "image-plus",
+                      onPress: onChangePhoto,
+                      disabled: photoUploading,
                     },
                   ]
                 : []),

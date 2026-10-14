@@ -43,6 +43,7 @@ type RecipeRow = {
   id: string;
   name: string;
   prep_time_min: number;
+  image_url: string | null;
   recipe_ingredients: { ingredient_id: string }[];
 };
 
@@ -50,6 +51,7 @@ type CustomRecipeRow = {
   id: string;
   name: string;
   prep_time_min: number;
+  image_url: string | null;
   custom_recipe_ingredients: { ingredient_id: string }[]
 }
 
@@ -72,7 +74,7 @@ export type CreateRecipeInput = {
 export async function fetchRecipes(): Promise<Recipe[]> {
   const { data, error } = await supabase
     .from("recipes")
-    .select("id, name, prep_time_min, recipe_ingredients(ingredient_id)")
+    .select("id, name, prep_time_min, image_url, recipe_ingredients(ingredient_id)")
     .order("name")
     .returns<RecipeRow[]>();
 
@@ -84,13 +86,14 @@ export async function fetchRecipes(): Promise<Recipe[]> {
     prepTimeMin: row.prep_time_min,
     ingredientIds: row.recipe_ingredients.map((ri) => ri.ingredient_id),
     isCustom: false,
+    imageUrl: row.image_url,
   }));
 }
 
 export async function fetchCustomRecipes(user: { id: string }): Promise<Recipe[]> {
   const { data, error } = await supabase
     .from("custom_recipes")
-    .select("id, name, prep_time_min, custom_recipe_ingredients(ingredient_id)")
+    .select("id, name, prep_time_min, image_url, custom_recipe_ingredients(ingredient_id)")
     .eq("user_id", user.id)
     .order("name")
     .returns<CustomRecipeRow[]>()
@@ -103,6 +106,7 @@ export async function fetchCustomRecipes(user: { id: string }): Promise<Recipe[]
       prepTimeMin: row.prep_time_min,
       ingredientIds: row.custom_recipe_ingredients.map((i) => i.ingredient_id),
       isCustom: true,
+      imageUrl: row.image_url,
     }))
 }
 
@@ -113,6 +117,7 @@ type RecipeDetailRow = {
   calories: number | null;
   protein_g: number | null;
   instructions: string | null;
+  image_url: string | null;
 };
 
 /**
@@ -134,7 +139,7 @@ export async function fetchRecipeDetail(
 
   const { data: recipe, error: recipeError } = await supabase
     .from(recipeTable)
-    .select("id, name, prep_time_min, calories, protein_g, instructions")
+    .select("id, name, prep_time_min, calories, protein_g, instructions, image_url")
     .eq("id", recipeId)
     .returns<RecipeDetailRow[]>()
     .single();
@@ -156,6 +161,7 @@ export async function fetchRecipeDetail(
     proteinG: recipe.protein_g,
     instructions: recipe.instructions,
     isCustom,
+    imageUrl: recipe.image_url,
     ingredients: (ingredientRows ?? []).map((row) => ({
       ingredientId: row.ingredient_id as string,
       quantity: row.quantity as number | null,
@@ -795,6 +801,19 @@ export async function removeCustomFavoriteRecipe(
     return false;
   }
   return true;
+}
+
+/**
+ * Points a user's own recipe at a photo they uploaded. Catalog recipes are not
+ * writable, so this only ever targets custom_recipes.
+ */
+export async function setCustomRecipeImage(recipeId: string, imageUrl: string) {
+  const { error } = await supabase
+    .from("custom_recipes")
+    .update({ image_url: imageUrl })
+    .eq("id", recipeId);
+
+  if (error) throw error;
 }
 
 export async function createRecipe(
