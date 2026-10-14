@@ -11,6 +11,7 @@ import {
 } from "react-native-paper";
 
 import { useMealsData } from "@/components/context/mealsDataContext";
+import { useScreenInteractive } from "@/components/context/startupContext";
 import { Center } from "@/components/ui/center";
 import { HStack } from "@/components/ui/hstack";
 import { ScreenView } from "@/components/ui/ScreenView";
@@ -69,6 +70,7 @@ export default function GroceryListScreen() {
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<ListFilter>("combined");
   const [addVisible, setAddVisible] = useState(false);
+  useScreenInteractive(!sessionLoading && !loading);
 
   const addItem = async (item: {
     ingredientId: string | null;

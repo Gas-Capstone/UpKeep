@@ -1,4 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useScreenInteractive } from "@/components/context/startupContext";
+import { useUserContext } from "@/components/context/userContext";
 import { useContext, useMemo, useState } from "react";
 import { Image, StyleSheet, View } from "react-native";
 import { useRouter } from "expo-router";
@@ -399,6 +401,7 @@ function InsightCard({
 }
 
 export default function HomeScreen() {
+  const { user } = useUserContext();
   const theme = useTheme();
   const router = useRouter();
   const { resolvedTheme } = useThemeMode();
@@ -445,6 +448,10 @@ export default function HomeScreen() {
     profile: null as Profile | null,
     loading: true,
   };
+
+  useScreenInteractive(
+    !!user && !workoutsLoading && !profileLoading && !mealsLoading,
+  );
 
   const streak = getWorkoutStreak(completedWorkouts);
   const workoutsThisWeek = getWorkoutsThisWeek(completedWorkouts);

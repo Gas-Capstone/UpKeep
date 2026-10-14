@@ -6,6 +6,7 @@ import { Image, Pressable, StyleSheet, View } from "react-native";
 import { ActivityIndicator } from "react-native-paper";
 
 import { getAge, useProfileData } from "@/components/context/profileDataContext";
+import { useScreenInteractive } from "@/components/context/startupContext";
 import { useThemeMode } from "@/components/context/ThemeContext";
 import { useUserContext } from "@/components/context/userContext";
 import { ThemedText } from "@/components/themed-text";
@@ -42,6 +43,7 @@ export default function ProfileScreen() {
   const { profile, loading } = useProfileData();
   const { logout } = useUserContext();
   const [loggingOut, setLoggingOut] = useState(false);
+  useScreenInteractive(!loading);
 
   const handleLogout = async () => {
     if (loggingOut) return;
