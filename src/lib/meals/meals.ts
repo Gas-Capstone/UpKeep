@@ -44,6 +44,9 @@ export type Recipe = {
   prepTimeMin: number;
   ingredientIds: string[];
   isCustom: boolean;
+  // Public URL of the recipe photo in Supabase Storage. Null for recipes that
+  // have no photo yet, which fall back to the brand placeholder.
+  imageUrl: string | null;
 };
 
 // Everything the recipe page shows, from whichever table the recipe lives in.
@@ -55,6 +58,7 @@ export type RecipeDetail = {
   proteinG: number | null;
   instructions: string | null;
   isCustom: boolean;
+  imageUrl: string | null;
   ingredients: {
     ingredientId: string;
     quantity: number | null;

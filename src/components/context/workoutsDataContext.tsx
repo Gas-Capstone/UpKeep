@@ -36,6 +36,9 @@ export type Workout = {
   // null on seeded plans, the author's id on user-made ones. Only the author
   // can edit or delete a plan, so the cards need this to decide what to offer.
   created_by?: string | null;
+  // Public URL of the plan photo in Supabase Storage. Null on plans without
+  // one, which fall back to the brand placeholder.
+  image_url?: string | null;
 };
 
 // A logged completion record (from getCompletedWorkouts()) — different shape than Workout, has required completed_at.

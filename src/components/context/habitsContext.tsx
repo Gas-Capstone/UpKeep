@@ -33,6 +33,10 @@ export type HabitsContextType = {
   addHabit: (habit: AddHabitArgs) => void;
   removeHabit: (habitId: string) => void;
   toggleHabit: (args: ToggleHabitArgs) => void;
+  // Re-reads habits and completions from Supabase. Needed because the agent
+  // writes habits directly: without this the provider's load-once effect
+  // leaves the page showing pre-agent state until the app restarts.
+  refreshHabits: () => void;
 };
 
 export const habitsContext = createContext<HabitsContextType | null>(null);
@@ -49,7 +53,7 @@ export const HabitsProvider = ({ children }: HabitsProviderProps) => {
     {},
   );
 
-  useEffect(() => {
+  const refreshHabits = useCallback(() => {
     if (!user) return
 
     Promise.all([
@@ -62,6 +66,10 @@ export const HabitsProvider = ({ children }: HabitsProviderProps) => {
       })
       .catch((err) => console.log(err))
   }, [user])
+
+  useEffect(() => {
+    refreshHabits()
+  }, [refreshHabits])
 
   const toggleHabit = useCallback(({ habitId, habitDate }: ToggleHabitArgs) => {
     if (!user) return
@@ -127,6 +135,7 @@ export const HabitsProvider = ({ children }: HabitsProviderProps) => {
     addHabit,
     removeHabit,
     toggleHabit,
+    refreshHabits,
   };
 
   return (

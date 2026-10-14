@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
-import { Button, Icon, Text } from "react-native-paper";
+import { Button, Icon, Snackbar, Text } from "react-native-paper";
 import { useFocusEffect, useRouter } from "expo-router";
 
 import { useThemeMode } from "@/components/context/ThemeContext";
@@ -15,7 +15,8 @@ import {
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { ScreenView } from "@/components/ui/ScreenView";
 import { Colors, Radius, Spacing } from "@/constants/theme";
-import { deleteWorkoutPlan } from "@/lib/supabaseFunctions";
+import { deleteWorkoutPlan, setWorkoutPlanImage } from "@/lib/supabaseFunctions";
+import { pickImage, uploadUserImage } from "@/lib/userImages";
 import { getWorkoutsWithTag, sortFavoritesFirst } from "@/lib/workouts";
 
 import { CompletedWorkoutsModal } from "./CompletedWorkoutsModal";
@@ -57,11 +58,45 @@ export default function WorkoutsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Workout | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  // Plan id whose photo is uploading, so only that card's menu reads busy.
+  const [photoUploadingId, setPhotoUploadingId] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState("");
 
   // Seeded plans have a null created_by and belong to everyone, so only the
   // author gets edit and delete.
   const ownsPlan = (workout: Workout) =>
     Boolean(user?.id) && workout.created_by === user?.id;
+
+  const changePhoto = async (workout: Workout) => {
+    if (!user?.id) return;
+    setPhotoError("");
+
+    try {
+      const uri = await pickImage();
+      // Backing out of the picker is not a failure, so it says nothing.
+      if (!uri) return;
+
+      setPhotoUploadingId(String(workout.id));
+      const url = await uploadUserImage({
+        uri,
+        userId: user.id,
+        kind: "workouts",
+        itemId: String(workout.id),
+      });
+      await setWorkoutPlanImage(String(workout.id), url);
+      refreshWorkouts();
+    } catch (error) {
+      // Only a denied permission tells the user something they can act on;
+      // anything else is a storage or network fault they cannot fix from here.
+      setPhotoError(
+        error instanceof Error && error.message.startsWith("Photo access")
+          ? error.message
+          : "Couldn't update that photo. Please try again.",
+      );
+    } finally {
+      setPhotoUploadingId(null);
+    }
+  };
 
   const openEditPlan = (workout: Workout) => {
     router.navigate({
@@ -126,6 +161,16 @@ export default function WorkoutsPage() {
       contentContainerStyle={{ gap: Spacing.four }}
       overlay={
         <>
+          {/* Photo upload is started from a card menu, so there is no dialog
+              to report back into — a snackbar is the only surface. */}
+          <Snackbar
+            visible={photoError !== ""}
+            onDismiss={() => setPhotoError("")}
+            duration={4000}
+          >
+            {photoError}
+          </Snackbar>
+
           <CompletedWorkoutsModal
             visible={completedModalVisible}
             onDismiss={() => setCompletedModalVisible(false)}
@@ -333,6 +378,8 @@ export default function WorkoutsPage() {
               onSchedule={() => setScheduleTarget(workout)}
               {...(ownsPlan(workout)
                 ? {
+                    onChangePhoto: () => changePhoto(workout),
+                    photoUploading: photoUploadingId === String(workout.id),
                     onEdit: () => openEditPlan(workout),
                     onDelete: () => setDeleteTarget(workout),
                   }
