@@ -1,7 +1,7 @@
 import { addDays, startOfDay } from "date-fns";
 
 import { Habit, getHabitsForDate } from "@/lib/habits/habits";
-import { MealPlanEntry, toDateKey } from "@/lib/meals/mealPlan";
+import { MealPlanEntry, getMealsForDate, toDateKey } from "@/lib/meals/mealPlan";
 
 export const SUMMARY_DAYS = 7;
 export const DEFAULT_SUMMARY_HOUR = 8;
@@ -25,17 +25,12 @@ export function buildDailySummaries(
   habits: Habit[],
   mealEntries: MealPlanEntry[],
 ): DailySummary[] {
-  const mealsByDate = new Map<string, number>();
-  for (const entry of mealEntries) {
-    mealsByDate.set(entry.plannedDate, (mealsByDate.get(entry.plannedDate) ?? 0) + 1);
-  }
-
   return days.map((day) => {
     const dateKey = toDateKey(day);
     return {
       dateKey,
       habits: getHabitsForDate(habits, dateKey).length,
-      meals: mealsByDate.get(dateKey) ?? 0,
+      meals: getMealsForDate(mealEntries, dateKey).length,
     };
   });
 }

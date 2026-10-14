@@ -1,9 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useContext, useMemo } from "react";
+import { useScreenInteractive } from "@/components/context/startupContext";
+import { useUserContext } from "@/components/context/userContext";
+import { useContext, useMemo, useState } from "react";
 import { Image, StyleSheet, View } from "react-native";
+import { useRouter } from "expo-router";
 import {
   ActivityIndicator,
   Avatar,
+  IconButton,
   ProgressBar,
   Text,
   useTheme,
@@ -12,6 +16,7 @@ import {
 import { habitsContext } from "@/components/context/habitsContext";
 import { mealsDataContext } from "@/components/context/mealsDataContext";
 import {
+  getAge,
   profileDataContext,
   Profile,
 } from "@/components/context/profileDataContext";
@@ -19,12 +24,19 @@ import {
   CompletedWorkout,
   workoutsDataContext,
 } from "@/components/context/workoutsDataContext";
+import { FeedbackCard } from "@/components/home/FeedbackCard";
+import { WellnessScoreInfoModal } from "@/components/home/WellnessScoreInfoModal";
 import { ScreenView } from "@/components/ui/ScreenView";
 import { CircleTimer } from "@/components/ui/CircleTimer";
 import { useThemeMode } from "@/components/context/ThemeContext";
 import { Colors, Radius, Spacing } from "@/constants/theme";
 import { estimateCalorieGoal } from "@/lib/calorieGoal";
-import { getHabitsForDate, isHabitDone } from "@/lib/habits/habits";
+import {
+  getHabitsForDate,
+  isHabitDone,
+  isScheduledOnDate,
+} from "@/lib/habits/habits";
+import { isMealOnDate } from "@/lib/meals/mealPlan";
 import { matchRecipes } from "@/lib/meals/meals";
 import { getTodaysDate } from "@/lib/time_management/week";
 import {
@@ -32,8 +44,10 @@ import {
   getHabitConsistencyStats,
   getNutrientGapStats,
   getWorkoutCategoryStats,
+  PlannedItem,
   WellnessComponent,
 } from "@/lib/wellnessScore";
+import { getSessionDays, isScheduledWorkoutDone } from "@/lib/workoutSchedule";
 
 function getGreeting() {
   const hour = new Date().getHours();
@@ -84,10 +98,11 @@ function hasWorkoutToday(completedWorkouts: CompletedWorkout[]) {
 }
 
 function getCalorieGoal(profile: Profile | null): number | null {
+  const age = getAge(profile);
   if (
     !profile?.height ||
     !profile?.weight ||
-    !profile?.age ||
+    !age ||
     profile.sex === null ||
     profile.sex === undefined
   ) {
@@ -98,7 +113,7 @@ function getCalorieGoal(profile: Profile | null): number | null {
     heightFeet: profile.height,
     weightLbs: profile.weight,
     sex: profile.sex,
-    age: profile.age,
+    age,
   });
 }
 
@@ -386,7 +401,9 @@ function InsightCard({
 }
 
 export default function HomeScreen() {
+  const { user } = useUserContext();
   const theme = useTheme();
+  const router = useRouter();
   const { resolvedTheme } = useThemeMode();
   const colors = Colors[resolvedTheme];
 
@@ -394,10 +411,14 @@ export default function HomeScreen() {
     completedWorkouts,
     workoutList,
     loading: workoutsLoading,
+    scheduledWorkouts,
+    workoutScheduleCompletions,
   } = useContext(workoutsDataContext) ?? {
     completedWorkouts: [] as CompletedWorkout[],
     workoutList: [],
     loading: true,
+    scheduledWorkouts: [],
+    workoutScheduleCompletions: {},
   };
 
   const { habitArray, habitCompletions } = useContext(habitsContext) ?? {
@@ -410,11 +431,15 @@ export default function HomeScreen() {
     recipes,
     fridgeIds,
     catalogLoading: mealsLoading,
+    mealPlanEntries,
+    mealCompletions,
   } = useContext(mealsDataContext) ?? {
     ingredients: [],
     recipes: [],
     fridgeIds: new Set<string>(),
     catalogLoading: true,
+    mealPlanEntries: [],
+    mealCompletions: {},
   };
 
   const { profile, loading: profileLoading } = useContext(
@@ -424,38 +449,47 @@ export default function HomeScreen() {
     loading: true,
   };
 
-  const streak = useMemo(
-    () => getWorkoutStreak(completedWorkouts),
-    [completedWorkouts],
+  useScreenInteractive(
+    !!user && !workoutsLoading && !profileLoading && !mealsLoading,
   );
 
-  const workoutsThisWeek = useMemo(
-    () => getWorkoutsThisWeek(completedWorkouts),
-    [completedWorkouts],
-  );
-
-  const workoutDoneToday = useMemo(
-    () => hasWorkoutToday(completedWorkouts),
-    [completedWorkouts],
-  );
+  const streak = getWorkoutStreak(completedWorkouts);
+  const workoutsThisWeek = getWorkoutsThisWeek(completedWorkouts);
+  const workoutDoneToday = hasWorkoutToday(completedWorkouts);
 
   const today = getTodaysDate();
 
-  const habitsToday = useMemo(
-    () => getHabitsForDate(habitArray, today),
-    [habitArray, today],
-  );
+  // Planned meals sit on the Habits page and are checked off the same way,
+  // so today's tile counts them alongside habits.
+  // Planned meals and scheduled workouts sit on the Habits page and are
+  // checked off the same way, so the Today tile and the wellness score count
+  // them alongside habits.
+  const sessionDays = getSessionDays(completedWorkouts);
+  const plannedItems: PlannedItem[] = [
+    ...mealPlanEntries.map((entry) => ({
+      isOnDate: (date: string) => isMealOnDate(entry, date),
+      isDoneOn: (date: string) => isHabitDone(entry.id, date, mealCompletions),
+    })),
+    ...scheduledWorkouts.map((entry) => ({
+      isOnDate: (date: string) => isScheduledOnDate(entry, date),
+      isDoneOn: (date: string) =>
+        isScheduledWorkoutDone(
+          entry,
+          date,
+          workoutScheduleCompletions,
+          sessionDays,
+        ),
+    })),
+  ];
 
-  const habitsCompleteToday = useMemo(
-    () =>
-      habitsToday.filter((habit) =>
-        isHabitDone(habit.id, today, habitCompletions),
-      ).length,
-    [habitsToday, today, habitCompletions],
-  );
+  const habitsToday = getHabitsForDate(habitArray, today);
+  const plannedToday = plannedItems.filter((item) => item.isOnDate(today));
+  const scheduledToday = habitsToday.length + plannedToday.length;
+  const completedToday =
+    habitsToday.filter((habit) => isHabitDone(habit.id, today, habitCompletions))
+      .length + plannedToday.filter((item) => item.isDoneOn(today)).length;
 
-  const habitsProgress =
-    habitsToday.length > 0 ? habitsCompleteToday / habitsToday.length : 0;
+  const habitsProgress = scheduledToday > 0 ? completedToday / scheduledToday : 0;
 
   const { ready: readyRecipes, almost: almostRecipes } = useMemo(
     () => matchRecipes(recipes, fridgeIds),
@@ -470,20 +504,19 @@ export default function HomeScreen() {
 
   const calorieGoal = useMemo(() => getCalorieGoal(profile), [profile]);
 
-  const habitStats = useMemo(
-    () => getHabitConsistencyStats(habitArray, habitCompletions, today, 7),
-    [habitArray, habitCompletions, today],
+  const habitStats = getHabitConsistencyStats(
+    habitArray,
+    habitCompletions,
+    today,
+    7,
+    plannedItems,
   );
 
-  const workoutStats = useMemo(
-    () =>
-      getWorkoutCategoryStats(
-        workoutList,
-        completedWorkouts,
-        workoutsThisWeek,
-        4,
-      ),
-    [workoutList, completedWorkouts, workoutsThisWeek],
+  const workoutStats = getWorkoutCategoryStats(
+    workoutList,
+    completedWorkouts,
+    workoutsThisWeek,
+    4,
   );
 
   const calorieReadiness: number | null =
@@ -505,8 +538,8 @@ export default function HomeScreen() {
       value: habitStats.rate,
       detail:
         habitStats.rate !== null
-          ? `${Math.round(habitStats.rate * 100)}% of scheduled habits completed in the last 7 days`
-          : "No habits scheduled yet",
+          ? `${Math.round(habitStats.rate * 100)}% of scheduled habits, meals, and workouts completed in the last 7 days`
+          : "No habits, meals, or workouts scheduled yet",
     },
     {
       key: "workouts",
@@ -535,6 +568,8 @@ export default function HomeScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [habitStats.rate, workoutStats.weeklyRate, calorieReadiness],
   );
+
+  const [showScoreInfo, setShowScoreInfo] = useState(false);
 
   const displayName = profileLoading ? "..." : profile?.display_name || "there";
   const isLoadingAnyData = workoutsLoading || profileLoading || mealsLoading;
@@ -577,10 +612,25 @@ export default function HomeScreen() {
             </View>
           </View>
 
+          <IconButton
+            icon="robot-outline"
+            size={24}
+            iconColor={colors.brand}
+            style={{ margin: 0 }}
+            onPress={() => router.navigate("/agent")}
+            accessibilityLabel="Open the assistant"
+          />
+
           {profileAvatar}
         </View>
       }
       contentContainerStyle={homeStyles.content}
+      overlay={
+        <WellnessScoreInfoModal
+          visible={showScoreInfo}
+          onDismiss={() => setShowScoreInfo(false)}
+        />
+      }
     >
       <View style={homeStyles.metricRow}>
         <MetricTile
@@ -640,7 +690,7 @@ export default function HomeScreen() {
               <Text
                 style={[homeStyles.goalNote, { color: colors.textSecondary }]}
               >
-                Add height, weight, age, and sex in Settings to calculate it.
+                Add your birthday, height, weight, and sex in Settings to calculate it.
               </Text>
             </>
           )}
@@ -660,7 +710,7 @@ export default function HomeScreen() {
         <TodayTile
           icon="checkmark-circle-outline"
           title="Habits"
-          value={`${habitsCompleteToday}/${habitsToday.length}`}
+          value={`${completedToday}/${scheduledToday}`}
           progress={habitsProgress}
         />
         <TodayTile
@@ -699,6 +749,15 @@ export default function HomeScreen() {
           },
         ]}
       >
+        <IconButton
+          icon="information-outline"
+          size={18}
+          iconColor={colors.textSecondary}
+          onPress={() => setShowScoreInfo(true)}
+          accessibilityLabel="How the wellness score is calculated"
+          style={homeStyles.infoButton}
+        />
+
         <View style={homeStyles.scoreWrap}>
           {isLoadingAnyData && wellnessScore === null ? (
             <View style={homeStyles.scoreLoader}>
@@ -781,6 +840,17 @@ export default function HomeScreen() {
         rightItems={nutrientStats.possiblyMissing}
         emptyText="Add ingredients to your fridge to see nutrition patterns."
       />
+
+      <View style={homeStyles.sectionHeader}>
+        <Text style={[homeStyles.sectionTitle, { color: colors.text }]}>
+          Feedback
+        </Text>
+        <Text style={[homeStyles.sectionHint, { color: colors.textSecondary }]}>
+          Help shape what UpKeep does next
+        </Text>
+      </View>
+
+      <FeedbackCard />
     </ScreenView>
   );
 }
@@ -973,9 +1043,17 @@ const homeStyles = StyleSheet.create({
     borderRadius: Radius.large,
     borderWidth: StyleSheet.hairlineWidth,
     padding: Spacing.three,
+    paddingTop: Spacing.four,
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.three,
+  },
+  infoButton: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    margin: 0,
+    zIndex: 1,
   },
   scoreWrap: {
     width: 116,

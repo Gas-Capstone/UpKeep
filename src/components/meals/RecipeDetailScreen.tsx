@@ -1,16 +1,25 @@
 import { useCallback, useMemo, useState } from "react";
 import { View } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { ActivityIndicator, Divider, Icon, IconButton, Text } from "react-native-paper";
+import {
+  ActivityIndicator,
+  Button,
+  Divider,
+  Icon,
+  IconButton,
+  Text,
+} from "react-native-paper";
 
 import { useMealsData } from "@/components/context/mealsDataContext";
+import { BrandImage } from "@/components/ui/BrandImage";
 import { Center } from "@/components/ui/center";
 import { HStack } from "@/components/ui/hstack";
 import { ScreenView } from "@/components/ui/ScreenView";
 import { VStack } from "@/components/ui/vstack";
-import { Spacing, TopBadgeInset } from "@/constants/theme";
+import { Radius, Spacing, TopBadgeInset } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 import { RecipeDetail, parseInstructionSteps } from "@/lib/meals/meals";
+import { loadCookingProgress } from "@/lib/meals/cooking";
 import { fetchRecipeDetail } from "@/lib/meals/queries";
 
 const ERROR_COLOR = "#ff4d4f";
@@ -51,6 +60,33 @@ export default function RecipeDetailScreen() {
 
   const steps = parseInstructionSteps(recipe?.instructions ?? null);
 
+  // Steps already checked off in an unfinished cooking session, so the button
+  // can offer to resume. Reloaded on focus to pick up changes made while
+  // cooking.
+  const [checkedCount, setCheckedCount] = useState(0);
+  useFocusEffect(
+    useCallback(() => {
+      if (!recipe || steps.length === 0) return;
+      loadCookingProgress(recipe, steps.length).then((checked) =>
+        setCheckedCount(checked.size),
+      );
+    }, [recipe, steps.length]),
+  );
+
+  // Shown on the button as a heads-up only — cooking stays available, since
+  // people don't always log everything they have in the fridge.
+  const missingCount = recipe
+    ? recipe.ingredients.filter((line) => !fridgeIds.has(line.ingredientId)).length
+    : 0;
+
+  const startCooking = () => {
+    if (!recipe) return;
+    router.navigate({
+      pathname: "/cooking",
+      params: { id: String(recipe.id), isCustom: String(recipe.isCustom) },
+    });
+  };
+
   return (
     <ScreenView
       header={
@@ -84,6 +120,20 @@ export default function RecipeDetailScreen() {
         ) : (
           <>
             <VStack space="sm" style={{ alignSelf: "stretch" }}>
+              {/* Only when there is a real photo. A full-width placeholder
+                  here would be dead weight on every custom recipe. */}
+              {recipe.imageUrl && (
+                <BrandImage
+                  uri={recipe.imageUrl}
+                  accessibilityLabel={`Photo of ${recipe.name}`}
+                  style={{
+                    width: "100%",
+                    height: 200,
+                    borderRadius: Radius.medium,
+                  }}
+                />
+              )}
+
               <Text variant="headlineSmall">{recipe.name}</Text>
 
               {/* Only the stats that actually have values — a recipe with no
@@ -99,6 +149,17 @@ export default function RecipeDetailScreen() {
                   <Stat label="Protein" value={`${recipe.proteinG} g`} />
                 )}
               </HStack>
+
+              {/* Nothing to check off without steps, so no button either. */}
+              {steps.length > 0 && (
+                <Button mode="contained" icon="chef-hat" onPress={startCooking}>
+                  {checkedCount > 0
+                    ? `Resume cooking · ${checkedCount}/${steps.length} steps`
+                    : missingCount > 0
+                      ? `Start cooking (missing ${missingCount} ingredient${missingCount === 1 ? "" : "s"})`
+                      : "Start cooking"}
+                </Button>
+              )}
             </VStack>
 
             <Divider bold />

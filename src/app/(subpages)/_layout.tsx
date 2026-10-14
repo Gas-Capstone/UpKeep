@@ -19,6 +19,10 @@ export default function SubpagesLayout() {
         }}
       />
       <Stack.Screen
+        name="cooking"
+        options={{ title: "Cooking", presentation: "card" }}
+      />
+      <Stack.Screen
         name="edit-recipe"
         options={{ title: "Edit Recipe", presentation: "card" }}
       />

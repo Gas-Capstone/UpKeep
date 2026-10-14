@@ -1,8 +1,9 @@
-import DateTimePicker from "@react-native-community/datetimepicker";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { useScreenInteractive } from "@/components/context/startupContext";
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
+import { format } from "date-fns";
 import { useState } from "react";
 import {
   Image,
@@ -13,6 +14,7 @@ import {
   StyleSheet,
   View,
 } from "react-native";
+import { DatePickerModal } from "react-native-paper-dates";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useThemeMode } from "@/components/context/ThemeContext";
@@ -52,6 +54,7 @@ function formatBirthday(date: Date | null) {
 }
 
 export default function SetupProfileScreen() {
+  useScreenInteractive();
   const { resolvedTheme } = useThemeMode();
   const { refreshProfile } = useProfileData();
   const colors = Colors[resolvedTheme];
@@ -64,7 +67,6 @@ export default function SetupProfileScreen() {
   const [heightFeet, setHeightFeet] = useState("");
   const [heightInches, setHeightInches] = useState("");
   const [weight, setWeight] = useState("");
-  const [age, setAge] = useState("");
   const [sex, setSex] = useState<boolean | null>(null);
 
   const [error, setError] = useState("");
@@ -172,11 +174,12 @@ export default function SetupProfileScreen() {
         .from("profiles")
         .update({
           display_name: displayName.trim() || null,
-          birthdate: birthdate ? birthdate.toISOString().split("T")[0] : null,
+          // Formatted locally: toISOString() would shift the day for anyone
+          // east of UTC, and age is worked out from this date.
+          birthdate: birthdate ? format(birthdate, "yyyy-MM-dd") : null,
           avatar_url: avatarUrl,
           height: buildHeightValue(heightFeet, heightInches),
           weight: weight ? Number(weight) : null,
-          age: age ? Number(age) : null,
           sex,
           onboarding_complete: true,
         })
@@ -312,7 +315,7 @@ export default function SetupProfileScreen() {
                       Your profile
                     </ThemedText>
                     <ThemedText type="small" themeColor="textSecondary">
-                      Choose how you'll appear in the app.
+                      {"Choose how you'll appear in the app."}
                     </ThemedText>
                   </View>
                 </View>
@@ -411,32 +414,20 @@ export default function SetupProfileScreen() {
                   />
                 </Pressable>
 
-                {showDatePicker && (
-                  <DateTimePicker
-                    value={birthdate || new Date()}
-                    mode="date"
-                    maximumDate={new Date()}
-                    display={Platform.OS === "ios" ? "spinner" : "calendar"}
-                    onValueChange={(_event, selectedDate) => {
-                      setBirthdate(selectedDate);
-                    }}
-                    onDismiss={() => setShowDatePicker(false)}
-                  />
-                )}
-
-                {showDatePicker && Platform.OS === "ios" && (
-                  <Pressable
-                    onPress={() => setShowDatePicker(false)}
-                    style={styles.doneDate}
-                  >
-                    <ThemedText
-                      type="smallBold"
-                      style={{ color: colors.brand }}
-                    >
-                      Done
-                    </ThemedText>
-                  </Pressable>
-                )}
+                <DatePickerModal
+                  mode="single"
+                  locale="en"
+                  visible={showDatePicker}
+                  date={birthdate ?? undefined}
+                  startYear={1900}
+                  endYear={new Date().getFullYear()}
+                  validRange={{ endDate: new Date() }}
+                  onDismiss={() => setShowDatePicker(false)}
+                  onConfirm={({ date }) => {
+                    if (date) setBirthdate(date);
+                    setShowDatePicker(false);
+                  }}
+                />
               </ThemedView>
 
               <ThemedView
@@ -488,37 +479,22 @@ export default function SetupProfileScreen() {
                   </View>
                 </View>
 
-                <View style={styles.twoColumnRow}>
-                  <View style={styles.column}>
-                    <FieldLabel>Weight</FieldLabel>
-                    <View style={styles.inputWithSuffixWrap}>
-                      <Input
-                        placeholder="Weight"
-                        value={weight}
-                        onChangeText={setWeight}
-                        keyboardType="decimal-pad"
-                        style={styles.inputWithSuffix}
-                      />
-                      <ThemedText
-                        type="small"
-                        themeColor="textSecondary"
-                        style={styles.inputSuffix}
-                      >
-                        lb
-                      </ThemedText>
-                    </View>
-                  </View>
-
-                  <View style={styles.column}>
-                    <FieldLabel>Age</FieldLabel>
-                    <Input
-                      placeholder="Age"
-                      value={age}
-                      onChangeText={setAge}
-                      keyboardType="number-pad"
-                      maxLength={3}
-                    />
-                  </View>
+                <FieldLabel>Weight</FieldLabel>
+                <View style={[styles.inputWithSuffixWrap, styles.inputSpacing]}>
+                  <Input
+                    placeholder="Weight"
+                    value={weight}
+                    onChangeText={setWeight}
+                    keyboardType="decimal-pad"
+                    style={styles.inputWithSuffix}
+                  />
+                  <ThemedText
+                    type="small"
+                    themeColor="textSecondary"
+                    style={styles.inputSuffix}
+                  >
+                    lb
+                  </ThemedText>
                 </View>
 
                 <FieldLabel>Sex</FieldLabel>
@@ -757,12 +733,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-  },
-  doneDate: {
-    alignSelf: "flex-end",
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-    marginBottom: Spacing.two,
   },
   twoColumnRow: {
     flexDirection: "row",

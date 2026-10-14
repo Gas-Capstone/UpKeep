@@ -1,15 +1,19 @@
-import { useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
-import { Icon, IconButton, Menu, Text } from "react-native-paper";
+import { Icon, Text } from "react-native-paper";
 
 import { useThemeMode } from "@/components/context/ThemeContext";
+import { CardMenu } from "@/components/ui/CardMenu";
 import { Colors, Radius, Spacing } from "@/constants/theme";
 import type { Weekday } from "@/lib/habits/habits";
 
 type HabitCardProps = {
   title: string;
   time: string;
-  weekdays: Weekday[];
+  // Shown after the time, e.g. "Mon, Wed" or "Once". Planned meals pass their own.
+  scheduleLabel: string;
+  // Small label before the title, e.g. a planned meal's "Dinner".
+  tag?: { icon: string; label: string };
+  deleteLabel?: string;
   isDone?: boolean;
   onToggle: () => void;
   onDelete: () => void;
@@ -17,7 +21,7 @@ type HabitCardProps = {
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 
-function getScheduleLabel(weekdays: Weekday[]) {
+export function getScheduleLabel(weekdays: Weekday[]) {
   if (!weekdays || weekdays.length === 0 || weekdays.length === 7) {
     return "Every day";
   }
@@ -31,14 +35,15 @@ function getScheduleLabel(weekdays: Weekday[]) {
 export function HabitCard({
   title,
   time,
-  weekdays,
+  scheduleLabel,
+  tag,
+  deleteLabel = "Delete habit",
   isDone = false,
   onToggle,
   onDelete,
 }: HabitCardProps) {
   const { resolvedTheme } = useThemeMode();
   const colors = Colors[resolvedTheme];
-  const [menuVisible, setMenuVisible] = useState(false);
 
   return (
     <View
@@ -70,6 +75,14 @@ export function HabitCard({
       </Pressable>
 
       <View style={styles.copy}>
+        {tag ? (
+          <View style={styles.metaItem}>
+            <Icon source={tag.icon} size={14} color={colors.accentMeals} />
+            <Text variant="labelSmall" style={{ color: colors.accentMeals }}>
+              {tag.label.toUpperCase()}
+            </Text>
+          </View>
+        ) : null}
         <Text
           variant="titleMedium"
           numberOfLines={2}
@@ -104,34 +117,25 @@ export function HabitCard({
             numberOfLines={1}
             style={[styles.schedule, { color: colors.textSecondary }]}
           >
-            {getScheduleLabel(weekdays)}
+            {scheduleLabel}
           </Text>
         </View>
       </View>
 
-      <Menu
-        visible={menuVisible}
-        onDismiss={() => setMenuVisible(false)}
-        anchor={
-          <IconButton
-            icon="dots-horizontal"
-            size={21}
-            iconColor={colors.textSecondary}
-            style={styles.menuButton}
-            onPress={() => setMenuVisible(true)}
-            accessibilityLabel={`More options for ${title}`}
-          />
-        }
-      >
-        <Menu.Item
-          leadingIcon="delete-outline"
-          title="Delete habit"
-          onPress={() => {
-            setMenuVisible(false);
-            onDelete();
-          }}
-        />
-      </Menu>
+      <CardMenu
+        icon="dots-horizontal"
+        size={21}
+        accessibilityLabel={`More options for ${title}`}
+        actions={[
+          {
+            key: "delete",
+            label: deleteLabel,
+            icon: "delete-outline",
+            destructive: true,
+            onPress: onDelete,
+          },
+        ]}
+      />
     </View>
   );
 }
@@ -183,8 +187,5 @@ const styles = StyleSheet.create({
   schedule: {
     flex: 1,
     minWidth: 0,
-  },
-  menuButton: {
-    margin: 0,
   },
 });

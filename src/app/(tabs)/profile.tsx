@@ -5,7 +5,8 @@ import { useState } from "react";
 import { Image, Pressable, StyleSheet, View } from "react-native";
 import { ActivityIndicator } from "react-native-paper";
 
-import { useProfileData } from "@/components/context/profileDataContext";
+import { getAge, useProfileData } from "@/components/context/profileDataContext";
+import { useScreenInteractive } from "@/components/context/startupContext";
 import { useThemeMode } from "@/components/context/ThemeContext";
 import { useUserContext } from "@/components/context/userContext";
 import { ThemedText } from "@/components/themed-text";
@@ -26,6 +27,10 @@ function formatHeight(height: number | null) {
   return `${feet}' ${Number(inches)}\"`;
 }
 
+function formatAge(age: number | null) {
+  return age === null ? "Add your birthday" : `${age}`;
+}
+
 function formatSex(sex: boolean | null) {
   if (sex === true) return "Male";
   if (sex === false) return "Female";
@@ -38,6 +43,7 @@ export default function ProfileScreen() {
   const { profile, loading } = useProfileData();
   const { logout } = useUserContext();
   const [loggingOut, setLoggingOut] = useState(false);
+  useScreenInteractive(!loading);
 
   const handleLogout = async () => {
     if (loggingOut) return;
@@ -210,7 +216,7 @@ export default function ProfileScreen() {
         <DetailTile
           icon="calendar-outline"
           label="Age"
-          value={loading ? "..." : profile?.age ? `${profile.age}` : "Not set"}
+          value={loading ? "..." : formatAge(getAge(profile))}
         />
         <DetailTile
           icon="person-outline"

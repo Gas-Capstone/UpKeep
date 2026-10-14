@@ -29,6 +29,7 @@ npx expo start
 ###  Current features
 - Authentication via email/password
 - After first login/registration, asks for information such as display name, profile pic, and date of birth then never asks again
+	- Age is never typed in: it is worked out from your birthday everywhere it is used (profile, calorie goal), so it stays current. Older accounts that saved an age before this keep using it until a birthday is added
 - If it is your birthday, displays happy birthday message as an alert.
 - Home page displaying information from the various pages in the app
 - Workouts page with a list of workouts, and the ability to time each workout
@@ -36,11 +37,18 @@ npx expo start
 	- Completed workouts can be viewed from this page
    	- Users can create their own workout plans
 - Meal planner page keeps track of ingredients you currently have, and suggests meals to make
-  	- Users can create their own recipes
+  	- Users can create their own recipes, including their own steps. Steps can be added, edited, reordered, and removed when creating or editing a custom recipe (catalog recipes are shared, so their steps can't be changed). Editing a recipe's steps resets any cooking in progress for it
   	- Users can create a weekly mealplan
+  	- Users can cook a recipe step by step: "Start cooking" on a recipe opens a checklist of its steps. Checked steps are saved on the device, so leaving the screen pauses cooking and the button changes to "Resume cooking". Checking every step shows a finished message, and "Done" clears the progress for next time
 - Habits page allows you to create, schedule, and keep track of habits you want to keep
 	- Habits can be scheduled for separate weekdays (i.e. only M/W/F)
  - Settings page allows changing of display name, profile picture, date of birth, and switch between light and dark modes
+- Notifications, each turned on separately in Settings > Notifications
+	- Daily summary of the day's planned habits and meals, at a time you choose
+	- Habit reminders at each habit's scheduled time, skipping habits already checked off that day
+	- Meal reminders at each planned meal's time, on the days it's scheduled, skipping meals already checked off that day
+	- Habit and meal reminders pop up as a banner but are silent, like the daily summary
+	- Reminders are scheduled a week ahead and refreshed whenever the app is opened or your habits/meal plan change
 ### Planned features
 - Integrate habits page with backend
 - Add more features to profile page such as name change, profile picture

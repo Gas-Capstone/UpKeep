@@ -1,13 +1,14 @@
-import DateTimePicker from "@react-native-community/datetimepicker";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import { format } from "date-fns";
 import { router } from "expo-router";
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
-  Alert,
   Image,
+  InteractionManager,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -16,22 +17,98 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ActivityIndicator, Switch, TextInput } from "react-native-paper";
+import { SvgXml } from "react-native-svg";
+import { ActivityIndicator, List, Switch, TextInput, Card } from "react-native-paper";
+import { DatePickerModal, TimePickerModal } from "react-native-paper-dates";
 
-import { useNotifications } from "@/components/context/notificationsContext";
+import {
+  useNotifications,
+  type NotificationToggle,
+} from "@/components/context/notificationsContext";
 import { useProfileData } from "@/components/context/profileDataContext";
 import { useThemeMode } from "@/components/context/ThemeContext";
+import { useTour } from "@/components/context/tourContext";
+import { useUserContext } from "@/components/context/userContext";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Colors, MaxContentWidth, Radius, Spacing } from "@/constants/theme";
 import { supabase } from "@/lib/supabaseClient";
+
+const MFA_QR_DISPLAY_SIZE = 160;
+
+type PendingMfaEnrollment = {
+  factorId: string;
+  qrCode: string;
+  secret: string;
+};
+
+function mfaEnrollmentStorageKey(userId: string) {
+  return `mfa-pending-enrollment:${userId}`;
+}
+
+async function loadPendingMfaEnrollment(
+  userId: string,
+): Promise<PendingMfaEnrollment | null> {
+  try {
+    const raw = await AsyncStorage.getItem(mfaEnrollmentStorageKey(userId));
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw) as PendingMfaEnrollment;
+    if (!parsed.factorId || !parsed.qrCode || !parsed.secret) return null;
+
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+async function savePendingMfaEnrollment(
+  userId: string,
+  enrollment: PendingMfaEnrollment,
+) {
+  await AsyncStorage.setItem(
+    mfaEnrollmentStorageKey(userId),
+    JSON.stringify(enrollment),
+  );
+}
+
+async function clearPendingMfaEnrollment(userId: string) {
+  await AsyncStorage.removeItem(mfaEnrollmentStorageKey(userId));
+}
+
+/** Supabase QR SVGs lack a viewBox, so SvgXml won't scale them and they overflow. */
+function normalizeTotpQrSvg(qrCode: string): string {
+  let xml = qrCode.trim();
+
+  if (xml.startsWith("data:image/svg+xml")) {
+    const commaIndex = xml.indexOf(",");
+    if (commaIndex !== -1) {
+      xml = decodeURIComponent(xml.slice(commaIndex + 1));
+    }
+  }
+
+  if (/\bviewBox=/i.test(xml)) return xml;
+
+  const widthMatch = xml.match(/\bwidth="(\d+(?:\.\d+)?)"/i);
+  const heightMatch = xml.match(/\bheight="(\d+(?:\.\d+)?)"/i);
+  if (!widthMatch || !heightMatch) return xml;
+
+  return xml.replace(
+    /<svg\b/i,
+    `<svg viewBox="0 0 ${widthMatch[1]} ${heightMatch[1]}"`,
+  );
+}
 
 type SectionKey =
   | "profile"
   | "goal"
   | "wellness"
   | "notifications"
+  | "habitReminders"
+  | "mealReminders"
   | "security"
+  | "twoFactor"
   | null;
 
 const GOALS = [
@@ -77,6 +154,7 @@ function formatBirthday(value: string | null | undefined) {
 export default function SettingsScreen() {
   const { theme, setTheme, resolvedTheme } = useThemeMode();
   const colors = Colors[resolvedTheme];
+  const { user } = useUserContext();
   const {
     profile,
     updateDisplayName,
@@ -89,10 +167,13 @@ export default function SettingsScreen() {
     enabled: notificationsEnabled,
     hour: summaryHour,
     minute: summaryMinute,
-    setEnabled: setNotificationsEnabled,
+    habitReminders,
+    mealReminders,
+    setToggle: setNotificationToggle,
     setSummaryTime,
     sendTestSummary,
   } = useNotifications();
+  const { startTour } = useTour();
 
   const summaryTime = new Date();
   summaryTime.setHours(summaryHour, summaryMinute, 0, 0);
@@ -111,13 +192,23 @@ export default function SettingsScreen() {
   const [heightFeet, setHeightFeet] = useState("");
   const [heightInches, setHeightInches] = useState("");
   const [weight, setWeight] = useState("");
-  const [age, setAge] = useState("");
   const [sex, setSex] = useState<boolean | null>(null);
+  const [currentPassword, setCurrentPassword] = useState("");
   const [password, setPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordStatus, setPasswordStatus] = useState("");
+
+  const [mfaEnabled, setMfaEnabled] = useState(false);
+  const [mfaFactorId, setMfaFactorId] = useState("");
+  const [mfaQrCode, setMfaQrCode] = useState("");
+  const [mfaSecret, setMfaSecret] = useState("");
+  const [mfaCode, setMfaCode] = useState("");
+  const [mfaLoading, setMfaLoading] = useState(false);
 
   const [showTimePicker, setShowTimePicker] = useState(false);
-  const [draftTime, setDraftTime] = useState(summaryTime);
   const [sendingTest, setSendingTest] = useState(false);
+  const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     if (!profile) return;
@@ -132,9 +223,76 @@ export default function SettingsScreen() {
     setHeightFeet(storedHeight.feet);
     setHeightInches(storedHeight.inches);
     setWeight(profile.weight?.toString() ?? "");
-    setAge(profile.age?.toString() ?? "");
     setSex(profile.sex);
   }, [profile]);
+
+  useEffect(() => {
+    void refreshMfaStatus();
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!error && !status) return;
+
+    Keyboard.dismiss();
+
+    const firstFrame = requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+    });
+
+    const timer = setTimeout(() => {
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+    }, 250);
+
+    return () => {
+      cancelAnimationFrame(firstFrame);
+      clearTimeout(timer);
+    };
+  }, [error, status]);
+
+  async function refreshMfaStatus() {
+    const { data, error: factorsError } = await supabase.auth.mfa.listFactors();
+
+    if (factorsError) {
+      console.warn("Could not load MFA factors:", factorsError.message);
+      return;
+    }
+
+    const hasVerified = data.totp.some(
+      (factor: { status: string }) => factor.status === "verified",
+    );
+    setMfaEnabled(hasVerified);
+
+    if (!user?.id) return;
+
+    if (hasVerified) {
+      await clearPendingMfaEnrollment(user.id);
+      setMfaFactorId("");
+      setMfaQrCode("");
+      setMfaSecret("");
+      setMfaCode("");
+      return;
+    }
+
+    const pending = await loadPendingMfaEnrollment(user.id);
+    const abandonedFactors = data.all.filter(
+      (factor) =>
+        factor.factor_type === "totp" && factor.status === "unverified",
+    );
+    const reusable =
+      pending &&
+      abandonedFactors.some((factor) => factor.id === pending.factorId);
+
+    if (pending && reusable) {
+      setMfaFactorId(pending.factorId);
+      setMfaQrCode(pending.qrCode);
+      setMfaSecret(pending.secret);
+      return;
+    }
+
+    if (pending) {
+      await clearPendingMfaEnrollment(user.id);
+    }
+  }
 
   const clearMessages = () => {
     setError("");
@@ -146,10 +304,13 @@ export default function SettingsScreen() {
     setOpenSection((current) => (current === section ? null : section));
   };
 
-  async function toggleNotifications(value: boolean) {
+  async function toggleNotifications(
+    toggle: NotificationToggle,
+    value: boolean,
+  ) {
     clearMessages();
     try {
-      await setNotificationsEnabled(value);
+      await setNotificationToggle(toggle, value);
     } catch (caught) {
       setError(
         caught instanceof Error
@@ -160,21 +321,12 @@ export default function SettingsScreen() {
   }
 
   function openTimePicker() {
-    setDraftTime(summaryTime);
     setShowTimePicker(true);
   }
 
   function saveSummaryTime(time: Date) {
     setSummaryTime(time.getHours(), time.getMinutes());
     setShowTimePicker(false);
-  }
-
-  function handleTimeValueChange(_event: unknown, selectedTime: Date) {
-    if (Platform.OS === "android") {
-      saveSummaryTime(selectedTime);
-    } else {
-      setDraftTime(selectedTime);
-    }
   }
 
   async function sendTestNotification() {
@@ -254,7 +406,9 @@ export default function SettingsScreen() {
     try {
       await updateDisplayName(cleanedName);
       await updateBirthdate(
-        birthdate ? birthdate.toISOString().split("T")[0] : null,
+        // Formatted locally: toISOString() would shift the day for anyone
+        // east of UTC, and age is worked out from this date.
+        birthdate ? format(birthdate, "yyyy-MM-dd") : null,
       );
 
       if (avatarUri) {
@@ -314,7 +468,6 @@ export default function SettingsScreen() {
     try {
       const height = buildHeightValue(heightFeet, heightInches);
       const parsedWeight = weight.trim() ? Number(weight) : null;
-      const parsedAge = age.trim() ? Number(age) : null;
 
       if (
         weight.trim() &&
@@ -322,17 +475,10 @@ export default function SettingsScreen() {
       ) {
         throw new Error("Enter a valid weight.");
       }
-      if (
-        age.trim() &&
-        (!Number.isFinite(parsedAge) || (parsedAge ?? 0) <= 0)
-      ) {
-        throw new Error("Enter a valid age.");
-      }
 
       await updateBiometrics({
         height,
         weight: parsedWeight,
-        age: parsedAge,
         sex,
       });
 
@@ -349,25 +495,186 @@ export default function SettingsScreen() {
     }
   }
 
+  async function beginMfaEnrollment() {
+    setMfaLoading(true);
+    clearMessages();
+
+    try {
+      if (!user?.id) {
+        throw new Error("You must be signed in to set up two-factor authentication.");
+      }
+
+      const { data: factors, error: factorsError } =
+        await supabase.auth.mfa.listFactors();
+
+      if (factorsError) {
+        throw factorsError;
+      }
+
+      const abandonedFactors = factors.all.filter(
+        (factor) =>
+          factor.factor_type === "totp" && factor.status === "unverified",
+      );
+
+      const pending = await loadPendingMfaEnrollment(user.id);
+      const reusableFactor =
+        pending &&
+        abandonedFactors.find((factor) => factor.id === pending.factorId);
+
+      // Supabase only returns the TOTP secret at enroll time, so resume from
+      // the cached enrollment when the same unverified factor is still present.
+      if (pending && reusableFactor) {
+        setMfaFactorId(pending.factorId);
+        setMfaQrCode(pending.qrCode);
+        setMfaSecret(pending.secret);
+        setMfaCode("");
+        return;
+      }
+
+      for (const factor of abandonedFactors) {
+        const { error: unenrollError } = await supabase.auth.mfa.unenroll({
+          factorId: factor.id,
+        });
+
+        if (unenrollError) {
+          throw unenrollError;
+        }
+      }
+
+      const { data, error: enrollError } = await supabase.auth.mfa.enroll({
+        factorType: "totp",
+        friendlyName: "UpKeep Authenticator",
+      });
+      if (enrollError) throw enrollError;
+
+      const enrollment: PendingMfaEnrollment = {
+        factorId: data.id,
+        qrCode: data.totp.qr_code,
+        secret: data.totp.secret,
+      };
+      await savePendingMfaEnrollment(user.id, enrollment);
+
+      setMfaFactorId(enrollment.factorId);
+      setMfaQrCode(enrollment.qrCode);
+      setMfaSecret(enrollment.secret);
+      setMfaCode("");
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Could not start two-factor authentication setup.",
+      );
+    } finally {
+      setMfaLoading(false);
+    }
+  }
+
+  async function verifyMfaEnrollment() {
+    const code = mfaCode.replace(/\s/g, "");
+
+    if (!mfaFactorId) {
+      setError("Start two-factor authentication setup first.");
+      return;
+    }
+
+    if (!/^\d{6}$/.test(code)) {
+      setError("Enter the 6-digit code from your authenticator app.");
+      return;
+    }
+
+    setMfaLoading(true);
+    clearMessages();
+
+    try {
+      const { error: verifyError } = await supabase.auth.mfa.challengeAndVerify(
+        {
+          factorId: mfaFactorId,
+          code,
+        },
+      );
+      if (verifyError) throw verifyError;
+
+      if (user?.id) {
+        await clearPendingMfaEnrollment(user.id);
+      }
+
+      setMfaEnabled(true);
+      setMfaFactorId("");
+      setMfaQrCode("");
+      setMfaSecret("");
+      setMfaCode("");
+      setStatus("Two-factor authentication enabled.");
+      await refreshMfaStatus();
+    } catch (caught) {
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Could not verify the authenticator code.",
+      );
+    } finally {
+      setMfaLoading(false);
+    }
+  }
+
   async function savePassword() {
-    if (password.length < 6) {
-      setError("Your new password must be at least 6 characters.");
+    setPasswordError("");
+
+    if (!currentPassword) {
+      setPasswordError("Enter your current password.");
+      return;
+    }
+
+    const passwordIsValid =
+      password.length >= 10 &&
+      /[A-Z]/.test(password) &&
+      /[a-z]/.test(password) &&
+      /[0-9]/.test(password) &&
+      /[^A-Za-z0-9]/.test(password);
+
+    if (!passwordIsValid) {
+      setPasswordError(
+        "Password must be at least 10 characters and include an uppercase letter, lowercase letter, number, and special character.",
+      );
       return;
     }
 
     setSaving(true);
     clearMessages();
-    try {
-      const { error: passwordError } = await supabase.auth.updateUser({
-        password,
-      });
-      if (passwordError) throw passwordError;
 
+    try {
+      const { data, error: functionError } = await supabase.functions.invoke(
+        "change-password",
+        {
+          body: {
+            currentPassword,
+            newPassword: password,
+          },
+        },
+      );
+
+      if (functionError) {
+        let message = functionError.message;
+        const context = (functionError as { context?: Response }).context;
+
+        if (context) {
+          try {
+            const payload = await context.clone().json();
+            if (payload?.error) message = payload.error;
+          } catch {
+            // Fall back to the Supabase function error message.
+          }
+        }
+
+        throw new Error(message);
+      }
+
+      if (data?.error) throw new Error(data.error);
+
+      setCurrentPassword("");
       setPassword("");
-      setStatus("Password updated.");
-      setOpenSection(null);
+      setPasswordStatus("Password updated.");
     } catch (caught) {
-      setError(
+      setPasswordError(
         caught instanceof Error
           ? caught.message
           : "Could not update your password.",
@@ -377,36 +684,23 @@ export default function SettingsScreen() {
     }
   }
 
-  function confirmDeleteAccount() {
-    Alert.alert(
-      "Delete account?",
-      "This permanently deletes your account and cannot be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete account",
-          style: "destructive",
-          onPress: async () => {
-            setSaving(true);
-            clearMessages();
-            try {
-              const { error: deleteError } = await supabase.rpc(
-                "delete_user_account",
-              );
-              if (deleteError) throw deleteError;
-              router.replace("/(auth)/login");
-            } catch (caught) {
-              setError(
-                caught instanceof Error
-                  ? caught.message
-                  : "Could not delete your account.",
-              );
-              setSaving(false);
-            }
-          },
-        },
-      ],
-    );
+  async function deleteAccount() {
+    setSaving(true);
+    clearMessages();
+    try {
+      const { error: deleteError } = await supabase.rpc("delete_user_account");
+      if (deleteError) throw deleteError;
+      setDeleteDialogVisible(false);
+      router.replace("/(auth)/login");
+    } catch (caught) {
+      setDeleteDialogVisible(false);
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Could not delete your account.",
+      );
+      setSaving(false);
+    }
   }
 
   const avatarSource = avatarUri || profile?.avatar_url || "";
@@ -447,6 +741,7 @@ export default function SettingsScreen() {
           </View>
 
           <ScrollView
+            ref={scrollRef}
             style={styles.flex}
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
@@ -632,35 +927,20 @@ export default function SettingsScreen() {
                   />
                 </Pressable>
 
-                {showDatePicker ? (
-                  <View
-                    style={[styles.pickerWrap, { borderColor: colors.border }]}
-                  >
-                    <DateTimePicker
-                      value={birthdate || new Date()}
-                      mode="date"
-                      maximumDate={new Date()}
-                      display={Platform.OS === "ios" ? "spinner" : "calendar"}
-                      onValueChange={(_event, selectedDate) =>
-                        setBirthdate(selectedDate)
-                      }
-                      onDismiss={() => setShowDatePicker(false)}
-                    />
-                    {Platform.OS === "ios" ? (
-                      <Pressable
-                        onPress={() => setShowDatePicker(false)}
-                        style={styles.doneButton}
-                      >
-                        <ThemedText
-                          type="smallBold"
-                          style={{ color: colors.brand }}
-                        >
-                          Done
-                        </ThemedText>
-                      </Pressable>
-                    ) : null}
-                  </View>
-                ) : null}
+                <DatePickerModal
+                  mode="single"
+                  locale="en"
+                  visible={showDatePicker}
+                  date={birthdate ?? undefined}
+                  startYear={1900}
+                  endYear={new Date().getFullYear()}
+                  validRange={{ endDate: new Date() }}
+                  onDismiss={() => setShowDatePicker(false)}
+                  onConfirm={({ date }) => {
+                    if (date) setBirthdate(date);
+                    setShowDatePicker(false);
+                  }}
+                />
 
                 <PrimaryAction
                   label="Save profile details"
@@ -730,7 +1010,7 @@ export default function SettingsScreen() {
               <ExpandableCard
                 icon="fitness-outline"
                 title="Wellness details"
-                summary="Height, weight, age, and sex"
+                summary="Height, weight, and sex"
                 open={openSection === "wellness"}
                 onPress={() => toggleSection("wellness")}
               >
@@ -767,16 +1047,6 @@ export default function SettingsScreen() {
                   activeOutlineColor={colors.brand}
                 />
 
-                <TextInput
-                  label="Age"
-                  mode="outlined"
-                  value={age}
-                  onChangeText={setAge}
-                  keyboardType="number-pad"
-                  outlineColor={colors.border}
-                  activeOutlineColor={colors.brand}
-                />
-
                 <View style={styles.sexRow}>
                   <ChoiceButton
                     label="Male"
@@ -799,7 +1069,7 @@ export default function SettingsScreen() {
 
               <SectionLabel
                 title="Notifications"
-                subtitle="A rundown of your habits and meals"
+                subtitle="Summaries and reminders for your habits and meals"
               />
               <ExpandableCard
                 icon="notifications-outline"
@@ -817,7 +1087,9 @@ export default function SettingsScreen() {
                 headerAction={
                   <Switch
                     value={notificationsEnabled}
-                    onValueChange={toggleNotifications}
+                    onValueChange={(value) =>
+                      toggleNotifications("enabled", value)
+                    }
                     color={colors.brand}
                   />
                 }
@@ -848,33 +1120,19 @@ export default function SettingsScreen() {
                   />
                 </Pressable>
 
-                {showTimePicker ? (
-                  <View
-                    style={[styles.pickerWrap, { borderColor: colors.border }]}
-                  >
-                    <DateTimePicker
-                      value={draftTime}
-                      mode="time"
-                      display={Platform.OS === "ios" ? "spinner" : "default"}
-                      is24Hour={false}
-                      onValueChange={handleTimeValueChange}
-                      onDismiss={() => setShowTimePicker(false)}
-                    />
-                    {Platform.OS === "ios" ? (
-                      <Pressable
-                        onPress={() => saveSummaryTime(draftTime)}
-                        style={styles.doneButton}
-                      >
-                        <ThemedText
-                          type="smallBold"
-                          style={{ color: colors.brand }}
-                        >
-                          Done
-                        </ThemedText>
-                      </Pressable>
-                    ) : null}
-                  </View>
-                ) : null}
+                <TimePickerModal
+                  visible={showTimePicker}
+                  locale="en"
+                  use24HourClock={false}
+                  hours={summaryHour}
+                  minutes={summaryMinute}
+                  onDismiss={() => setShowTimePicker(false)}
+                  onConfirm={({ hours, minutes }) => {
+                    const next = new Date();
+                    next.setHours(hours, minutes, 0, 0);
+                    saveSummaryTime(next);
+                  }}
+                />
 
                 <PrimaryAction
                   label="Send test notification"
@@ -883,10 +1141,146 @@ export default function SettingsScreen() {
                 />
               </ExpandableCard>
 
+              <ExpandableCard
+                icon="checkmark-circle-outline"
+                title="Habit reminders"
+                summary={habitReminders ? "At each habit's time" : "Off"}
+                open={openSection === "habitReminders"}
+                onPress={() => toggleSection("habitReminders")}
+                headerAction={
+                  <Switch
+                    value={habitReminders}
+                    onValueChange={(value) =>
+                      toggleNotifications("habitReminders", value)
+                    }
+                    color={colors.brand}
+                  />
+                }
+              >
+                <ThemedText type="small" themeColor="textSecondary">
+                  Get a reminder at the time you set for each habit, on the days
+                  it&apos;s scheduled. Habits you&apos;ve already checked off
+                  are skipped.
+                </ThemedText>
+              </ExpandableCard>
+
+              <ExpandableCard
+                icon="restaurant-outline"
+                title="Meal reminders"
+                summary={mealReminders ? "For meals on your plan" : "Off"}
+                open={openSection === "mealReminders"}
+                onPress={() => toggleSection("mealReminders")}
+                headerAction={
+                  <Switch
+                    value={mealReminders}
+                    onValueChange={(value) =>
+                      toggleNotifications("mealReminders", value)
+                    }
+                    color={colors.brand}
+                  />
+                }
+              >
+                <ThemedText type="small" themeColor="textSecondary">
+                  Get a reminder at the time set for each planned meal, on the
+                  days it&apos;s scheduled. Meals you&apos;ve already checked
+                  off are skipped.
+                </ThemedText>
+              </ExpandableCard>
+
               <SectionLabel
                 title="Security"
                 subtitle="Keep your account protected"
               />
+              <ExpandableCard
+                icon="shield-checkmark-outline"
+                title="Two-factor authentication"
+                summary={mfaEnabled ? "Enabled" : "Add an authenticator app"}
+                open={openSection === "twoFactor"}
+                onPress={() => toggleSection("twoFactor")}
+              >
+                {mfaEnabled ? (
+                  <View style={styles.mfaEnabledRow}>
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={22}
+                      color={colors.brand}
+                    />
+                    <View style={{ flex: 1 }}>
+                      <ThemedText type="smallBold">2FA is enabled</ThemedText>
+                      <ThemedText type="small" themeColor="textSecondary">
+                        Your account has a verified authenticator factor.
+                      </ThemedText>
+                    </View>
+                  </View>
+                ) : mfaQrCode ? (
+                  <>
+                    <ThemedText type="small" themeColor="textSecondary">
+                      Scan this QR code with an authenticator app, then enter
+                      the 6-digit code it gives you.
+                    </ThemedText>
+
+                    <View
+                      style={[
+                        styles.qrCard,
+                        {
+                          backgroundColor: "#FFFFFF",
+                          borderColor: colors.border,
+                        },
+                      ]}
+                    >
+                      <DeferredMfaQr qrCode={mfaQrCode} />
+                    </View>
+
+                    <View
+                      style={[
+                        styles.secretCard,
+                        {
+                          backgroundColor: colors.background,
+                          borderColor: colors.border,
+                        },
+                      ]}
+                    >
+                      <ThemedText type="small" themeColor="textSecondary">
+                        Can&apos;t scan it? Enter this setup key manually:
+                      </ThemedText>
+                      <ThemedText type="smallBold" selectable>
+                        {mfaSecret}
+                      </ThemedText>
+                    </View>
+
+                    <TextInput
+                      label="6-digit authenticator code"
+                      mode="outlined"
+                      value={mfaCode}
+                      onChangeText={(value) =>
+                        setMfaCode(value.replace(/\D/g, "").slice(0, 6))
+                      }
+                      keyboardType="number-pad"
+                      maxLength={6}
+                      outlineColor={colors.border}
+                      activeOutlineColor={colors.brand}
+                    />
+
+                    <PrimaryAction
+                      label="Verify and enable 2FA"
+                      onPress={verifyMfaEnrollment}
+                      disabled={mfaLoading || mfaCode.length !== 6}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <ThemedText type="small" themeColor="textSecondary">
+                      Use an authenticator app as a second step when signing in.
+                    </ThemedText>
+                    <PrimaryAction
+                      label="Set up 2FA"
+                      onPress={beginMfaEnrollment}
+                      disabled={mfaLoading}
+                    />
+                  </>
+                )}
+              </ExpandableCard>
+
               <ExpandableCard
                 icon="lock-closed-outline"
                 title="Password"
@@ -894,28 +1288,90 @@ export default function SettingsScreen() {
                 open={openSection === "security"}
                 onPress={() => toggleSection("security")}
               >
+                <ThemedText type="small" themeColor="textSecondary">
+                  Your new password cannot match either of your two most recent
+                  passwords.
+                </ThemedText>
+
+                <TextInput
+                  label="Current password"
+                  mode="outlined"
+                  value={currentPassword}
+                  onChangeText={setCurrentPassword}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  outlineColor={colors.border}
+                  activeOutlineColor={colors.brand}
+                />
+
                 <TextInput
                   label="New password"
                   mode="outlined"
                   value={password}
                   onChangeText={setPassword}
                   secureTextEntry
+                  autoCapitalize="none"
                   outlineColor={colors.border}
                   activeOutlineColor={colors.brand}
                 />
+                {passwordError ? (
+                  <MessageBox
+                    icon="alert-circle-outline"
+                    text={passwordError}
+                    color={colors.danger}
+                    backgroundColor={
+                      resolvedTheme === "dark" ? "#3A2023" : "#FDECEE"
+                    }
+                  />
+                ) : null}
+                {passwordStatus ? (
+                  <MessageBox
+                    icon="checkmark-circle-outline"
+                    text={passwordStatus}
+                    color={colors.success}
+                    backgroundColor={colors.brandSoft}
+                  />
+                ) : null}
                 <PrimaryAction
                   label="Update password"
                   onPress={savePassword}
-                  disabled={saving}
+                  disabled={saving || !currentPassword || !password}
                 />
               </ExpandableCard>
+
+              <SectionLabel
+                title="Help"
+                subtitle="Get reacquainted with UpKeep"
+              />
+              <Card
+                mode="contained"
+                style={[
+                  styles.card,
+                  {
+                    backgroundColor: colors.backgroundElement,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <List.Item
+                  title="Replay app tour"
+                  description="A quick walkthrough of each tab"
+                  left={(props) => (
+                    <List.Icon {...props} icon="map-marker-path" />
+                  )}
+                  right={(props) => (
+                    <List.Icon {...props} icon="chevron-right" />
+                  )}
+                  onPress={startTour}
+                />
+              </Card>
 
               <SectionLabel
                 title="Account"
                 subtitle="Permanent account actions"
               />
               <Pressable
-                onPress={confirmDeleteAccount}
+                onPress={() => setDeleteDialogVisible(true)}
                 disabled={saving}
                 style={({ pressed }) => [
                   styles.deleteCard,
@@ -955,6 +1411,16 @@ export default function SettingsScreen() {
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      <ConfirmDialog
+        visible={deleteDialogVisible}
+        title="Delete account?"
+        message="This permanently deletes your account and cannot be undone."
+        confirmLabel="Delete account"
+        onConfirm={deleteAccount}
+        onDismiss={() => setDeleteDialogVisible(false)}
+        loading={saving}
+      />
     </ThemedView>
   );
 }
@@ -973,6 +1439,34 @@ function SectionLabel({
         {subtitle}
       </ThemedText>
     </View>
+  );
+}
+
+function DeferredMfaQr({ qrCode }: { qrCode: string }) {
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    setReady(false);
+    const task = InteractionManager.runAfterInteractions(() => {
+      setReady(true);
+    });
+    return () => task.cancel();
+  }, [qrCode]);
+
+  if (!ready) {
+    return (
+      <View style={styles.qrPlaceholder}>
+        <ActivityIndicator />
+      </View>
+    );
+  }
+
+  return (
+    <SvgXml
+      xml={normalizeTotpQrSvg(qrCode)}
+      width={MFA_QR_DISPLAY_SIZE}
+      height={MFA_QR_DISPLAY_SIZE}
+    />
   );
 }
 
@@ -1014,7 +1508,9 @@ function ExpandableCard({
             pressed && styles.pressed,
           ]}
         >
-          <View style={[styles.cardIcon, { backgroundColor: colors.brandSoft }]}>
+          <View
+            style={[styles.cardIcon, { backgroundColor: colors.brandSoft }]}
+          >
             <Ionicons name={icon} size={20} color={colors.brand} />
           </View>
           <View style={{ flex: 1 }}>
@@ -1213,6 +1709,34 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     fontWeight: "800",
   },
+  mfaEnabledRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.three,
+  },
+  qrCard: {
+    alignSelf: "center",
+    width: MFA_QR_DISPLAY_SIZE + Spacing.three * 2,
+    height: MFA_QR_DISPLAY_SIZE + Spacing.three * 2,
+    padding: Spacing.three,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderRadius: Radius.medium,
+  },
+  qrPlaceholder: {
+    width: MFA_QR_DISPLAY_SIZE,
+    height: MFA_QR_DISPLAY_SIZE,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  secretCard: {
+    gap: Spacing.one,
+    padding: Spacing.three,
+    borderWidth: 1,
+    borderRadius: Radius.medium,
+  },
   card: {
     borderWidth: 1,
     borderRadius: Radius.large,
@@ -1296,17 +1820,6 @@ const styles = StyleSheet.create({
   },
   fieldButtonCopy: {
     gap: 1,
-  },
-  pickerWrap: {
-    borderWidth: 1,
-    borderRadius: Radius.medium,
-    overflow: "hidden",
-    paddingBottom: Platform.OS === "ios" ? Spacing.two : 0,
-  },
-  doneButton: {
-    alignSelf: "flex-end",
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
   },
   goalGrid: {
     flexDirection: "row",

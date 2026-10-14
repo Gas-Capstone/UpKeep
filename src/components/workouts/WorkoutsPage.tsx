@@ -1,18 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
-import { Button, Dialog, Icon, Portal, Text } from "react-native-paper";
+import { Button, Icon, Snackbar, Text } from "react-native-paper";
 import { useFocusEffect, useRouter } from "expo-router";
 
 import { useThemeMode } from "@/components/context/ThemeContext";
+import { useScreenInteractive } from "@/components/context/startupContext";
 import { useUserContext } from "@/components/context/userContext";
 import { useWorkoutSessionContext } from "@/components/context/workoutSessionContext";
+import { AddHabitModal } from "@/components/habits/AddHabitModal";
 import {
   useWorkoutsData,
   type Workout,
 } from "@/components/context/workoutsDataContext";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { ScreenView } from "@/components/ui/ScreenView";
 import { Colors, Radius, Spacing } from "@/constants/theme";
-import { deleteWorkoutPlan } from "@/lib/supabaseFunctions";
+import { deleteWorkoutPlan, setWorkoutPlanImage } from "@/lib/supabaseFunctions";
+import { pickImage, uploadUserImage } from "@/lib/userImages";
 import { getWorkoutsWithTag, sortFavoritesFirst } from "@/lib/workouts";
 
 import { CompletedWorkoutsModal } from "./CompletedWorkoutsModal";
@@ -38,7 +42,9 @@ export default function WorkoutsPage() {
     refreshCompletedWorkouts,
     toggleFavorite,
     createPlan,
+    scheduleWorkout,
   } = useWorkoutsData();
+  useScreenInteractive(!loading);
 
   const [workoutTags, setWorkoutTags] = useState<string[]>([]);
   const [selectedTag, setSelectedTag] = useState("all");
@@ -46,15 +52,51 @@ export default function WorkoutsPage() {
   const [startModalVisible, setStartModalVisible] = useState(false);
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [selectedWorkout, setSelectedWorkout] = useState<Workout | null>(null);
+  // Plan being added to the Habits page schedule, or null when closed.
+  const [scheduleTarget, setScheduleTarget] = useState<Workout | null>(null);
   // Plan awaiting delete confirmation.
   const [deleteTarget, setDeleteTarget] = useState<Workout | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  // Plan id whose photo is uploading, so only that card's menu reads busy.
+  const [photoUploadingId, setPhotoUploadingId] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState("");
 
   // Seeded plans have a null created_by and belong to everyone, so only the
   // author gets edit and delete.
   const ownsPlan = (workout: Workout) =>
     Boolean(user?.id) && workout.created_by === user?.id;
+
+  const changePhoto = async (workout: Workout) => {
+    if (!user?.id) return;
+    setPhotoError("");
+
+    try {
+      const uri = await pickImage();
+      // Backing out of the picker is not a failure, so it says nothing.
+      if (!uri) return;
+
+      setPhotoUploadingId(String(workout.id));
+      const url = await uploadUserImage({
+        uri,
+        userId: user.id,
+        kind: "workouts",
+        itemId: String(workout.id),
+      });
+      await setWorkoutPlanImage(String(workout.id), url);
+      refreshWorkouts();
+    } catch (error) {
+      // Only a denied permission tells the user something they can act on;
+      // anything else is a storage or network fault they cannot fix from here.
+      setPhotoError(
+        error instanceof Error && error.message.startsWith("Photo access")
+          ? error.message
+          : "Couldn't update that photo. Please try again.",
+      );
+    } finally {
+      setPhotoUploadingId(null);
+    }
+  };
 
   const openEditPlan = (workout: Workout) => {
     router.navigate({
@@ -119,11 +161,31 @@ export default function WorkoutsPage() {
       contentContainerStyle={{ gap: Spacing.four }}
       overlay={
         <>
+          {/* Photo upload is started from a card menu, so there is no dialog
+              to report back into — a snackbar is the only surface. */}
+          <Snackbar
+            visible={photoError !== ""}
+            onDismiss={() => setPhotoError("")}
+            duration={4000}
+          >
+            {photoError}
+          </Snackbar>
+
           <CompletedWorkoutsModal
             visible={completedModalVisible}
             onDismiss={() => setCompletedModalVisible(false)}
             workouts={completedWorkouts}
           />
+
+          {scheduleTarget ? (
+            <AddHabitModal
+              key={String(scheduleTarget.id)}
+              visible
+              onDismiss={() => setScheduleTarget(null)}
+              initialWorkout={scheduleTarget}
+              onSaveWorkout={scheduleWorkout}
+            />
+          ) : null}
 
           {selectedWorkout && (
             <StartWorkoutModal
@@ -141,39 +203,16 @@ export default function WorkoutsPage() {
             onCreate={createPlan}
           />
 
-          <Portal>
-            <Dialog
-              visible={deleteTarget !== null}
-              onDismiss={() => setDeleteTarget(null)}
-            >
-              <Dialog.Title>Delete plan?</Dialog.Title>
-              <Dialog.Content>
-                <Text>
-                  {deleteTarget?.name} and its exercises will be removed.
-                  Workouts you already completed stay in your history, but will
-                  no longer show the plan&apos;s name. This can&apos;t be undone.
-                </Text>
-                {deleteError !== "" && (
-                  <Text style={{ color: colors.danger, marginTop: Spacing.two }}>
-                    {deleteError}
-                  </Text>
-                )}
-              </Dialog.Content>
-              <Dialog.Actions>
-                <Button onPress={() => setDeleteTarget(null)} disabled={deleting}>
-                  Cancel
-                </Button>
-                <Button
-                  onPress={confirmDelete}
-                  loading={deleting}
-                  disabled={deleting}
-                  textColor={colors.danger}
-                >
-                  Delete
-                </Button>
-              </Dialog.Actions>
-            </Dialog>
-          </Portal>
+          <ConfirmDialog
+            visible={deleteTarget !== null}
+            title="Delete plan?"
+            message={`${deleteTarget?.name ?? "This plan"} and its exercises will be removed. Workouts you already completed stay in your history, but will no longer show the plan's name. This can't be undone.`}
+            confirmLabel="Delete"
+            onConfirm={confirmDelete}
+            onDismiss={() => setDeleteTarget(null)}
+            loading={deleting}
+            error={deleteError}
+          />
         </>
       }
     >
@@ -336,8 +375,11 @@ export default function WorkoutsPage() {
               onPress={() => handleStart(workout)}
               isFavorited={favoriteIds.has(String(workout.id))}
               onToggleFavorite={() => toggleFavorite(String(workout.id))}
+              onSchedule={() => setScheduleTarget(workout)}
               {...(ownsPlan(workout)
                 ? {
+                    onChangePhoto: () => changePhoto(workout),
+                    photoUploading: photoUploadingId === String(workout.id),
                     onEdit: () => openEditPlan(workout),
                     onDelete: () => setDeleteTarget(workout),
                   }

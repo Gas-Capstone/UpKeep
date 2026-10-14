@@ -1,6 +1,6 @@
 {
   "cli": {
-    "version": ">= 20.5.1",
+    "version": ">= 22.0.0",
     "appVersionSource": "remote"
   },
   "build": {
@@ -9,13 +9,17 @@
         "simulator": true
       },
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "autoIncrement": true,
+      "channel": "preview"
     },
     "production": {
-      "autoIncrement": true
+      "uploadSourceMaps": true,
+      "autoIncrement": true,
+      "channel": "production"
     }
   },
   "submit": {

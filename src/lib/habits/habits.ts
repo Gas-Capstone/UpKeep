@@ -1,4 +1,4 @@
-import { getDay, parse, parseISO } from "date-fns";
+import { getDay, isValid, parse, parseISO } from "date-fns";
 
 export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6
 
@@ -52,14 +52,43 @@ export function removeHabitFromList(habits: Habit[], habitId: string) {
     return habits.filter((habit) => habit.id !== habitId)
 }
 
-export function isHabitOnDate(habit: Habit, date: string){
-    if (!habit.weekdays || habit.weekdays.length === 0) return true;
-    return habit.weekdays.includes(getDay(parseISO(date)) as Weekday)
+// Shared by habits and repeating planned meals: an empty list means every day.
+export function isOnWeekdays(weekdays: Weekday[], date: string){
+    if (weekdays.length === 0) return true;
+    return weekdays.includes(getDay(parseISO(date)) as Weekday)
 }
 
+// Planned meals and scheduled workouts either repeat on weekdays (like a
+// habit) or fall on a single date. Exactly one of the two is set.
+export type DatedSchedule = {
+    weekdays: Weekday[] | null;
+    plannedDate: string | null;
+}
+
+export function isScheduledOnDate(schedule: DatedSchedule, date: string){
+    if (schedule.weekdays === null) return schedule.plannedDate === date;
+    return isOnWeekdays(schedule.weekdays, date);
+}
+
+export function isHabitOnDate(habit: Habit, date: string){
+    return isOnWeekdays(habit.weekdays ?? [], date)
+}
+
+/**
+ * Minutes since midnight, or NaN when the value cannot be read.
+ *
+ * Habits added in the app are stored as "6:00 PM". The agent wrote 24-hour
+ * "18:00" instead, which parsed as Invalid Date and came back NaN — and
+ * buildHabitReminders drops a habit whose time is NaN, so those habits never
+ * produced a notification. Both shapes are accepted so rows already written
+ * that way keep working.
+ */
 export function timeToMinutes(time: string){
-    const parsed = parse(time, "h:mm aa", new Date())
-    return parsed.getHours() * 60 + parsed.getMinutes()
+    for (const pattern of ["h:mm aa", "HH:mm"]) {
+        const parsed = parse(time, pattern, new Date())
+        if (isValid(parsed)) return parsed.getHours() * 60 + parsed.getMinutes()
+    }
+    return NaN
 }
 
 export function getHabitsForDate(habits: Habit[], date: string){

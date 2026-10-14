@@ -1,19 +1,58 @@
 import { useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { format, isToday, parseISO } from "date-fns";
+import { useFocusEffect } from "expo-router";
 import { Button, Icon, ProgressBar, Text } from "react-native-paper";
 
 import { useHabitsContext } from "@/components/context/habitsContext";
+import { useScreenInteractive } from "@/components/context/startupContext";
+import { useMealsData } from "@/components/context/mealsDataContext";
 import { useThemeMode } from "@/components/context/ThemeContext";
+import { useWorkoutsData } from "@/components/context/workoutsDataContext";
 import { ScreenView } from "@/components/ui/ScreenView";
 import { Colors, Radius, Spacing } from "@/constants/theme";
-import { getHabitsForDate, isHabitDone } from "@/lib/habits/habits";
+import {
+  Habit,
+  getHabitsForDate,
+  isHabitDone,
+  timeToMinutes,
+} from "@/lib/habits/habits";
+import { recipeKey } from "@/lib/meals/meals";
+import {
+  MEAL_TYPE_LABELS,
+  MealPlanEntry,
+  getMealsForDate,
+} from "@/lib/meals/mealPlan";
+import {
+  ScheduledWorkout,
+  getScheduledWorkoutsForDate,
+  getSessionDays,
+  isScheduledWorkoutDone,
+  wasLoggedOn,
+} from "@/lib/workoutSchedule";
 
 import { AddHabitModal } from "./AddHabitModal";
-import { HabitCard } from "./HabitCard";
+import { HabitCard, getScheduleLabel } from "./HabitCard";
 import { WeekStrip } from "./WeekStrip";
 
+// Habits, planned meals, and scheduled workouts share one timeline for the
+// selected day.
+type DayItem =
+  | { kind: "habit"; habit: Habit }
+  | { kind: "meal"; entry: MealPlanEntry }
+  | { kind: "workout"; entry: ScheduledWorkout };
+
+function itemTime(item: DayItem) {
+  return item.kind === "habit" ? item.habit.time : item.entry.time;
+}
+
+function scheduleLabelFor(entry: { weekdays: Habit["weekdays"] | null }) {
+  return entry.weekdays ? getScheduleLabel(entry.weekdays) : "Once";
+}
+
 export default function HabitsScreen() {
+  // This tab stays interactive while its providers refresh in the background.
+  useScreenInteractive();
   const { resolvedTheme } = useThemeMode();
   const colors = Colors[resolvedTheme];
   const {
@@ -25,6 +64,28 @@ export default function HabitsScreen() {
     removeHabit,
     toggleHabit,
   } = useHabitsContext();
+  const {
+    recipes,
+    mealPlanEntries,
+    mealCompletions,
+    addMealPlanEntry,
+    removeMealPlanEntry,
+    toggleMeal,
+  } = useMealsData();
+  const {
+    workoutList,
+    completedWorkouts,
+    refreshCompletedWorkouts,
+    scheduledWorkouts,
+    workoutScheduleCompletions,
+    scheduleWorkout,
+    unscheduleWorkout,
+    toggleScheduledWorkout,
+  } = useWorkoutsData();
+
+  // Finishing a workout elsewhere checks off its scheduled slot here, so pick
+  // up newly logged sessions whenever this tab comes into view.
+  useFocusEffect(refreshCompletedWorkouts);
 
   const [modalVisible, setModalVisible] = useState(false);
 
@@ -33,15 +94,35 @@ export default function HabitsScreen() {
     [habitArray, selectedDate],
   );
 
-  const habitsComplete = useMemo(
-    () =>
-      habitsForDay.filter((habit) =>
-        isHabitDone(habit.id, selectedDate, habitCompletions),
-      ).length,
-    [habitsForDay, selectedDate, habitCompletions],
-  );
+  const recipeNameByKey = new Map(recipes.map((r) => [recipeKey(r), r.name]));
+  const planNameById = new Map(workoutList.map((w) => [String(w.id), w.name]));
+  const sessionDays = getSessionDays(completedWorkouts);
 
-  const total = habitsForDay.length;
+  const itemsForDay: DayItem[] = [
+    ...habitsForDay.map((habit) => ({ kind: "habit" as const, habit })),
+    ...getMealsForDate(mealPlanEntries, selectedDate).map((entry) => ({
+      kind: "meal" as const,
+      entry,
+    })),
+    ...getScheduledWorkoutsForDate(scheduledWorkouts, selectedDate).map(
+      (entry) => ({ kind: "workout" as const, entry }),
+    ),
+  ].sort((a, b) => timeToMinutes(itemTime(a)) - timeToMinutes(itemTime(b)));
+
+  const isItemDone = (item: DayItem) =>
+    item.kind === "habit"
+      ? isHabitDone(item.habit.id, selectedDate, habitCompletions)
+      : item.kind === "meal"
+        ? isHabitDone(item.entry.id, selectedDate, mealCompletions)
+        : isScheduledWorkoutDone(
+            item.entry,
+            selectedDate,
+            workoutScheduleCompletions,
+            sessionDays,
+          );
+
+  const habitsComplete = itemsForDay.filter(isItemDone).length;
+  const total = itemsForDay.length;
   const progress = total > 0 ? habitsComplete / total : 0;
   const selectedDateObject = parseISO(selectedDate);
   const selectedLabel = isToday(selectedDateObject)
@@ -52,11 +133,17 @@ export default function HabitsScreen() {
     <ScreenView
       contentContainerStyle={styles.content}
       overlay={
-        <AddHabitModal
-          visible={modalVisible}
-          onDismiss={() => setModalVisible(false)}
-          onSave={addHabit}
-        />
+        // Mounted only while open so it picks up the selected day each time.
+        modalVisible ? (
+          <AddHabitModal
+            visible
+            onDismiss={() => setModalVisible(false)}
+            onSave={addHabit}
+            onSaveMeal={addMealPlanEntry}
+            onSaveWorkout={scheduleWorkout}
+            defaultDate={selectedDate}
+          />
+        ) : null
       }
       header={
         <View style={styles.header}>
@@ -82,7 +169,7 @@ export default function HabitsScreen() {
                 variant="bodyMedium"
                 style={{ color: colors.textSecondary }}
               >
-                Small routines, kept consistent.
+                Routines and meals, scheduled through your day.
               </Text>
             </View>
           </View>
@@ -109,7 +196,7 @@ export default function HabitsScreen() {
                   style={[styles.progressValue, { color: colors.text }]}
                 >
                   {total === 0
-                    ? "No habits"
+                    ? "Nothing planned"
                     : `${habitsComplete}/${total} complete`}
                 </Text>
               </View>
@@ -156,25 +243,73 @@ export default function HabitsScreen() {
           <Text variant="bodySmall" style={{ color: colors.textSecondary }}>
             {total === 0
               ? "Nothing scheduled for this day yet."
-              : `${total} ${total === 1 ? "habit" : "habits"} scheduled`}
+              : `${total} ${total === 1 ? "item" : "items"} scheduled`}
           </Text>
         </View>
       </View>
 
       <View style={styles.list}>
-        {habitsForDay.map((habit) => (
-          <HabitCard
-            key={habit.id}
-            title={habit.title}
-            time={habit.time}
-            weekdays={habit.weekdays}
-            isDone={isHabitDone(habit.id, selectedDate, habitCompletions)}
-            onToggle={() =>
-              toggleHabit({ habitId: habit.id, habitDate: selectedDate })
-            }
-            onDelete={() => removeHabit(habit.id)}
-          />
-        ))}
+        {itemsForDay.map((item) =>
+          item.kind === "habit" ? (
+            <HabitCard
+              key={`habit-${item.habit.id}`}
+              title={item.habit.title}
+              time={item.habit.time}
+              scheduleLabel={getScheduleLabel(item.habit.weekdays)}
+              isDone={isItemDone(item)}
+              onToggle={() =>
+                toggleHabit({ habitId: item.habit.id, habitDate: selectedDate })
+              }
+              onDelete={() => removeHabit(item.habit.id)}
+            />
+          ) : item.kind === "meal" ? (
+            <HabitCard
+              key={`meal-${item.entry.id}`}
+              title={
+                recipeNameByKey.get(
+                  recipeKey({
+                    id: item.entry.recipeId,
+                    isCustom: item.entry.isCustom,
+                  }),
+                ) ?? "Unknown recipe"
+              }
+              time={item.entry.time}
+              scheduleLabel={scheduleLabelFor(item.entry)}
+              tag={{
+                icon: "silverware-fork-knife",
+                label: MEAL_TYPE_LABELS[item.entry.mealType],
+              }}
+              deleteLabel="Remove from plan"
+              isDone={isItemDone(item)}
+              onToggle={() =>
+                toggleMeal({ entryId: item.entry.id, date: selectedDate })
+              }
+              onDelete={() => removeMealPlanEntry(item.entry.id)}
+            />
+          ) : (
+            <HabitCard
+              key={`workout-${item.entry.id}`}
+              title={planNameById.get(item.entry.workoutPlanId) ?? "Deleted plan"}
+              time={item.entry.time}
+              scheduleLabel={
+                // Logged with the timer: say so, since a tick can't undo it.
+                wasLoggedOn(item.entry, selectedDate, sessionDays)
+                  ? `${scheduleLabelFor(item.entry)} · Logged`
+                  : scheduleLabelFor(item.entry)
+              }
+              tag={{ icon: "dumbbell", label: "Workout" }}
+              deleteLabel="Remove from schedule"
+              isDone={isItemDone(item)}
+              onToggle={() =>
+                toggleScheduledWorkout({
+                  entryId: item.entry.id,
+                  date: selectedDate,
+                })
+              }
+              onDelete={() => unscheduleWorkout(item.entry.id)}
+            />
+          ),
+        )}
 
         {total === 0 ? (
           <View
@@ -205,7 +340,7 @@ export default function HabitsScreen() {
               variant="bodyMedium"
               style={[styles.emptyCopy, { color: colors.textSecondary }]}
             >
-              Add a habit and choose the days you want it to appear.
+              Add a habit, plan a meal, or schedule a workout.
             </Text>
           </View>
         ) : null}
@@ -220,7 +355,7 @@ export default function HabitsScreen() {
         contentStyle={styles.addButtonContent}
         style={styles.addButton}
       >
-        Add habit
+        Add Habit, Meal, or Workout
       </Button>
     </ScreenView>
   );

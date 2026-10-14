@@ -41,6 +41,21 @@ export const paperLightTheme = {
     inverseOnSurface: "#F4F7F6",
     inversePrimary: Brand.aqua,
 
+    // Paper paints menus, dialogs, and search bars with these. MD3's defaults
+    // are purple-tinted, so they're replaced with teal-leaning surfaces that
+    // sit just above the card color.
+    elevation: {
+      level0: "transparent",
+      level1: Colors.light.card,
+      level2: "#F7FBFA",
+      level3: "#F1F8F6",
+      level4: "#EDF6F4",
+      level5: "#E9F4F1",
+    },
+    surfaceDisabled: "rgba(18, 35, 33, 0.12)",
+    onSurfaceDisabled: "rgba(18, 35, 33, 0.38)",
+    backdrop: "rgba(18, 35, 33, 0.45)",
+
     // App-specific additions used by existing components.
     accentWorkouts: Colors.light.accentWorkouts,
     accentMeals: Colors.light.accentMeals,
@@ -87,6 +102,19 @@ export const paperDarkTheme = {
     inverseSurface: "#E2E8E6",
     inverseOnSurface: "#17302D",
     inversePrimary: Brand.tealStrong,
+
+    // See the light theme: replaces MD3's purple-tinted surfaces.
+    elevation: {
+      level0: "transparent",
+      level1: Colors.dark.card,
+      level2: "#102A27",
+      level3: "#13302C",
+      level4: "#153430",
+      level5: "#173834",
+    },
+    surfaceDisabled: "rgba(250, 247, 242, 0.12)",
+    onSurfaceDisabled: "rgba(250, 247, 242, 0.38)",
+    backdrop: "rgba(0, 0, 0, 0.6)",
 
     // App-specific additions used by existing components.
     accentWorkouts: Colors.dark.accentWorkouts,

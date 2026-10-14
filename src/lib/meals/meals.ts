@@ -44,6 +44,9 @@ export type Recipe = {
   prepTimeMin: number;
   ingredientIds: string[];
   isCustom: boolean;
+  // Public URL of the recipe photo in Supabase Storage. Null for recipes that
+  // have no photo yet, which fall back to the brand placeholder.
+  imageUrl: string | null;
 };
 
 // Everything the recipe page shows, from whichever table the recipe lives in.
@@ -55,6 +58,7 @@ export type RecipeDetail = {
   proteinG: number | null;
   instructions: string | null;
   isCustom: boolean;
+  imageUrl: string | null;
   ingredients: {
     ingredientId: string;
     quantity: number | null;
@@ -74,6 +78,15 @@ export function parseInstructionSteps(instructions: string | null): string[] {
     .split(/\r?\n/)
     .map((line) => line.trim().replace(/^(\d+[.)]|[-*•])\s*/, "").trim())
     .filter((line) => line !== "");
+}
+
+/**
+ * The reverse of parseInstructionSteps: one step per line, for saving into the
+ * `instructions` column. Blank steps are dropped; null when nothing is left.
+ */
+export function stepsToInstructions(steps: string[]): string | null {
+  const lines = steps.map((step) => step.trim()).filter((step) => step !== "");
+  return lines.length > 0 ? lines.join("\n") : null;
 }
 
 /** Catalog and custom recipes have independent id spaces — never mix them as one key. */

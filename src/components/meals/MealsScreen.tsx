@@ -1,40 +1,44 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { useRouter } from "expo-router";
 import {
   ActivityIndicator,
   Button,
-  Dialog,
   Icon,
-  Portal,
   Text,
 } from "react-native-paper";
 
 import { useThemeMode } from "@/components/context/ThemeContext";
+import { useScreenInteractive } from "@/components/context/startupContext";
 import { useMealsData } from "@/components/context/mealsDataContext";
 import { useNotifications } from "@/components/context/notificationsContext";
+import { AddHabitModal } from "@/components/habits/AddHabitModal";
 import { Center } from "@/components/ui/center";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { ScreenView } from "@/components/ui/ScreenView";
 import { Colors, Radius, Spacing } from "@/constants/theme";
 import { useSession } from "@/hooks/use-session";
 import {
-  Ingredient,
   Recipe,
   matchRecipes,
   recipeKey,
   sortFavoritesFirst,
 } from "@/lib/meals/meals";
+import { getUpcomingMeals } from "@/lib/meals/mealPlan";
 import {
+  addMealPlanToGroceryList,
   addRecipeToGroceryList,
   deleteCustomRecipe,
-  setMealPlanEntry,
+  setCustomRecipeImage,
 } from "@/lib/meals/queries";
+import { pickImage, uploadUserImage } from "@/lib/userImages";
 
-import { AddIngredientsModal } from "./AddIngredientsModal";
 import { AddRecipeModal } from "./AddRecipeModal";
-import { AddToMealPlanModal } from "./AddToMealPlanModal";
-import { FridgeModal } from "./FridgeModal";
 import { RecipeCard } from "./RecipeCard";
+
+/** How long the grocery-list result stays on screen. */
+const SHOP_STATUS_TIMEOUT_MS = 4000;
+const UPCOMING_DAYS = 7;
 
 export default function MealsScreen() {
   const router = useRouter();
@@ -46,27 +50,69 @@ export default function MealsScreen() {
     ingredients,
     recipes,
     catalogLoading,
+    fridgeLoading,
     catalogError,
     fridgeIds,
-    fridgeEntries,
     favoriteIds,
-    saveFridge,
     refreshCatalog,
     toggleFavorite,
     createNewRecipe,
-    toggleFridgeItem: toggleFridgeItemShared,
+    mealPlanEntries,
+    addMealPlanEntry,
   } = useMealsData();
+  useScreenInteractive(!sessionLoading && !catalogLoading && !fridgeLoading);
   const { resync } = useNotifications();
 
   const [mutationError, setMutationError] = useState("");
-  const [addIngredientsVisible, setAddIngredientsVisible] = useState(false);
   const [createModalVisible, setCreateModalVisible] = useState(false);
-  const [fridgeModalVisible, setFridgeModalVisible] = useState(false);
   const [planRecipe, setPlanRecipe] = useState<Recipe | null>(null);
   const [addingKey, setAddingKey] = useState<string | null>(null);
   // Recipe awaiting delete confirmation.
   const [deleteTarget, setDeleteTarget] = useState<Recipe | null>(null);
   const [deleting, setDeleting] = useState(false);
+  // Recipe id whose photo is uploading, so only that card's menu reads busy.
+  const [photoUploadingId, setPhotoUploadingId] = useState<string | null>(null);
+  const [shopping, setShopping] = useState(false);
+  const [shopStatus, setShopStatus] = useState("");
+
+  // Clear the grocery-list result after a few seconds, since this screen
+  // stays mounted while you move between tabs.
+  useEffect(() => {
+    if (shopStatus === "") return;
+    const timer = setTimeout(() => setShopStatus(""), SHOP_STATUS_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [shopStatus]);
+
+  // Planned meals for the next week, once per occurrence so a recipe planned
+  // on three nights buys three nights' worth.
+  const upcomingMeals = getUpcomingMeals(mealPlanEntries, UPCOMING_DAYS);
+
+  const shopMealPlan = async () => {
+    if (!user?.id) return;
+    setMutationError("");
+    setShopStatus("");
+    setShopping(true);
+    try {
+      const count = await addMealPlanToGroceryList(
+        user.id,
+        upcomingMeals.map((entry) => ({
+          id: entry.recipeId,
+          isCustom: entry.isCustom,
+        })),
+      );
+      setShopStatus(
+        count === 0
+          ? "Nothing to add. Your fridge already covers these meals."
+          : `Added ${count} ${count === 1 ? "ingredient" : "ingredients"} to your grocery list.`,
+      );
+    } catch (error) {
+      setMutationError(
+        error instanceof Error ? error.message : "Couldn't build your grocery list",
+      );
+    } finally {
+      setShopping(false);
+    }
+  };
 
   const openEditRecipe = (recipe: Recipe) => {
     router.navigate({
@@ -93,9 +139,37 @@ export default function MealsScreen() {
     }
   };
 
-  const openFridge = () => {
-    refreshCatalog();
-    setFridgeModalVisible(true);
+  const openFridge = () => router.navigate("/fridge");
+
+  const changePhoto = async (recipe: Recipe) => {
+    if (!user?.id) return;
+    setMutationError("");
+
+    try {
+      const uri = await pickImage();
+      // Backing out of the picker is not a failure, so it says nothing.
+      if (!uri) return;
+
+      setPhotoUploadingId(recipe.id);
+      const url = await uploadUserImage({
+        uri,
+        userId: user.id,
+        kind: "recipes",
+        itemId: recipe.id,
+      });
+      await setCustomRecipeImage(recipe.id, url);
+      refreshCatalog();
+    } catch (error) {
+      // Only a denied permission tells the user something they can act on;
+      // anything else is a storage or network fault they cannot fix from here.
+      setMutationError(
+        error instanceof Error && error.message.startsWith("Photo access")
+          ? error.message
+          : "Couldn't update that photo. Please try again.",
+      );
+    } finally {
+      setPhotoUploadingId(null);
+    }
   };
 
   const openRecipe = (recipe: Recipe) => {
@@ -127,18 +201,6 @@ export default function MealsScreen() {
   const ingredientName = (id: string) =>
     ingredients.find((ingredient) => ingredient.id === id)?.name ?? "Unknown";
 
-  const toggleFridgeItem = async (ingredient: Ingredient) => {
-    setMutationError("");
-
-    try {
-      await toggleFridgeItemShared(ingredient);
-    } catch (error) {
-      setMutationError(
-        error instanceof Error ? error.message : "Couldn't update your fridge",
-      );
-    }
-  };
-
   const sortedRecipes = useMemo(
     () => sortFavoritesFirst(recipes, favoriteIds),
     [recipes, favoriteIds],
@@ -168,14 +230,6 @@ export default function MealsScreen() {
       contentContainerStyle={styles.screenContent}
       overlay={
         <>
-          <AddIngredientsModal
-            visible={addIngredientsVisible}
-            onDismiss={() => setAddIngredientsVisible(false)}
-            ingredients={ingredients}
-            selectedIds={fridgeIds}
-            onToggle={toggleFridgeItem}
-          />
-
           <AddRecipeModal
             visible={createModalVisible}
             onDismiss={() => setCreateModalVisible(false)}
@@ -185,51 +239,25 @@ export default function MealsScreen() {
             }}
           />
 
-          <FridgeModal
-            visible={fridgeModalVisible}
-            onDismiss={() => setFridgeModalVisible(false)}
-            ingredients={ingredients}
-            entries={fridgeEntries}
-            onSave={saveFridge}
-          />
+          {planRecipe ? (
+            <AddHabitModal
+              key={recipeKey(planRecipe)}
+              visible
+              onDismiss={() => setPlanRecipe(null)}
+              initialRecipe={planRecipe}
+              onSaveMeal={addMealPlanEntry}
+            />
+          ) : null}
 
-          <AddToMealPlanModal
-            visible={planRecipe !== null}
-            onDismiss={() => setPlanRecipe(null)}
-            recipeName={planRecipe?.name ?? ""}
-            onConfirm={async (plannedDate, mealType) => {
-              await setMealPlanEntry(user!.id, planRecipe!, plannedDate, mealType);
-              resync();
-            }}
+          <ConfirmDialog
+            visible={deleteTarget !== null}
+            title="Delete recipe?"
+            message={`${deleteTarget?.name ?? "This recipe"} will be removed, along with anywhere it appears in your meal plan. This can't be undone.`}
+            confirmLabel="Delete"
+            onConfirm={confirmDelete}
+            onDismiss={() => setDeleteTarget(null)}
+            loading={deleting}
           />
-
-          <Portal>
-            <Dialog
-              visible={deleteTarget !== null}
-              onDismiss={() => setDeleteTarget(null)}
-            >
-              <Dialog.Title>Delete recipe?</Dialog.Title>
-              <Dialog.Content>
-                <Text>
-                  {deleteTarget?.name} will be removed, along with anywhere it
-                  appears in your meal plan. This can&apos;t be undone.
-                </Text>
-              </Dialog.Content>
-              <Dialog.Actions>
-                <Button onPress={() => setDeleteTarget(null)} disabled={deleting}>
-                  Cancel
-                </Button>
-                <Button
-                  onPress={confirmDelete}
-                  loading={deleting}
-                  disabled={deleting}
-                  textColor={colors.danger}
-                >
-                  Delete
-                </Button>
-              </Dialog.Actions>
-            </Dialog>
-          </Portal>
         </>
       }
     >
@@ -283,29 +311,35 @@ export default function MealsScreen() {
       >
         <View style={styles.quickRow}>
           <QuickAction
-            icon="calendar-month-outline"
-            label="Meal plan"
-            onPress={() => router.navigate("/mealplan")}
-          />
-          <QuickAction
             icon="cart-outline"
             label="Grocery list"
             onPress={() => router.navigate("/grocery")}
           />
-        </View>
-
-        <View style={styles.quickRow}>
           <QuickAction
             icon="fridge-outline"
             label="View fridge"
             onPress={openFridge}
           />
-          <QuickAction
-            icon="basket-plus-outline"
-            label="Add ingredients"
-            onPress={() => setAddIngredientsVisible(true)}
-          />
         </View>
+
+        <Button
+          mode="text"
+          icon="cart-plus"
+          onPress={shopMealPlan}
+          loading={shopping}
+          disabled={shopping || upcomingMeals.length === 0}
+          textColor={colors.brandStrong}
+        >
+          Shop planned meals for the next 7 days
+        </Button>
+        {shopStatus ? (
+          <Text
+            variant="bodySmall"
+            style={{ color: colors.brandStrong, textAlign: "center" }}
+          >
+            {shopStatus}
+          </Text>
+        ) : null}
       </View>
 
       {catalogLoading && hasCatalogData ? (
@@ -399,6 +433,8 @@ export default function MealsScreen() {
                   onOpen={() => openRecipe(recipe)}
                   {...(recipe.isCustom
                     ? {
+                        onChangePhoto: () => changePhoto(recipe),
+                        photoUploading: photoUploadingId === recipe.id,
                         onEdit: () => openEditRecipe(recipe),
                         onDelete: () => setDeleteTarget(recipe),
                       }
@@ -437,6 +473,8 @@ export default function MealsScreen() {
                   onOpen={() => openRecipe(recipe)}
                   {...(recipe.isCustom
                     ? {
+                        onChangePhoto: () => changePhoto(recipe),
+                        photoUploading: photoUploadingId === recipe.id,
                         onEdit: () => openEditRecipe(recipe),
                         onDelete: () => setDeleteTarget(recipe),
                       }

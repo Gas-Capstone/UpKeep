@@ -3,7 +3,7 @@ import { Button, Icon, IconButton, Text } from "react-native-paper";
 
 import { useThemeMode } from "@/components/context/ThemeContext";
 import type { Workout } from "@/components/context/workoutsDataContext";
-import { BrandImagePlaceholder } from "@/components/ui/BrandImagePlaceholder";
+import { BrandImage } from "@/components/ui/BrandImage";
 import { CardMenu } from "@/components/ui/CardMenu";
 import { Colors, Radius, Spacing } from "@/constants/theme";
 
@@ -12,10 +12,15 @@ type WorkoutCardProps = {
   onPress: () => void;
   isFavorited: boolean;
   onToggleFavorite: () => void;
-  // Omitted for seeded plans, which the user can't change — the card then
-  // renders no menu at all rather than disabled items.
+  // Puts this plan on the Habits page schedule. Offered on every plan.
+  onSchedule?: () => void;
+  // Omitted for seeded plans, which the user can't change, so their menu
+  // only offers scheduling.
   onEdit?: () => void;
   onDelete?: () => void;
+  onChangePhoto?: () => void;
+  // True while this plan's photo is uploading, so the menu item can say so.
+  photoUploading?: boolean;
 };
 
 export function WorkoutCard({
@@ -23,8 +28,11 @@ export function WorkoutCard({
   onPress,
   isFavorited,
   onToggleFavorite,
+  onSchedule,
   onEdit,
   onDelete,
+  onChangePhoto,
+  photoUploading = false,
 }: WorkoutCardProps) {
   const { resolvedTheme } = useThemeMode();
   const colors = Colors[resolvedTheme];
@@ -43,9 +51,11 @@ export function WorkoutCard({
         },
       ]}
     >
-      <BrandImagePlaceholder
+      <BrandImage
+        uri={workout.image_url}
         label="Workout photo"
         icon="dumbbell"
+        accessibilityLabel={`Photo of ${workout.name}`}
         style={styles.imageSlot}
       />
 
@@ -86,6 +96,31 @@ export function WorkoutCard({
           <CardMenu
             accessibilityLabel={`More options for ${workout.name}`}
             actions={[
+              ...(onSchedule
+                ? [
+                    {
+                      key: "schedule",
+                      label: "Schedule",
+                      icon: "calendar-plus",
+                      onPress: onSchedule,
+                    },
+                  ]
+                : []),
+              ...(onChangePhoto
+                ? [
+                    {
+                      key: "photo",
+                      label: photoUploading
+                        ? "Uploading photo…"
+                        : workout.image_url
+                          ? "Change photo"
+                          : "Add photo",
+                      icon: "image-plus",
+                      onPress: onChangePhoto,
+                      disabled: photoUploading,
+                    },
+                  ]
+                : []),
               ...(onEdit
                 ? [
                     {

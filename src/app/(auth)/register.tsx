@@ -1,17 +1,19 @@
 // app/(auth)/register.tsx
 import { router } from "expo-router";
+import { useScreenInteractive } from "@/components/context/startupContext";
 import { useState } from "react";
 import { Image, Pressable, StyleSheet, View } from "react-native";
 
+import { useThemeMode } from "@/components/context/ThemeContext";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useThemeMode } from "@/components/context/ThemeContext";
 import { Colors, MaxContentWidth, Radius, Spacing } from "@/constants/theme";
 import { supabase } from "@/lib/supabaseClient";
 
 export default function Register() {
+  useScreenInteractive();
   const { resolvedTheme } = useThemeMode();
   const colors = Colors[resolvedTheme];
 
@@ -23,6 +25,47 @@ export default function Register() {
 
   const passwordsMatch = password === confirm;
 
+  const hasMinLength = password.length >= 10;
+  const hasUppercase = /[A-Z]/.test(password);
+  const hasLowercase = /[a-z]/.test(password);
+  const hasNumber = /[0-9]/.test(password);
+  const hasSpecialCharacter = /[^A-Za-z0-9]/.test(password);
+
+  const passwordIsValid =
+    hasMinLength &&
+    hasUppercase &&
+    hasLowercase &&
+    hasNumber &&
+    hasSpecialCharacter;
+
+  const passwordRequirements = [
+    {
+      key: "length",
+      label: "At least 10 characters",
+      met: hasMinLength,
+    },
+    {
+      key: "uppercase",
+      label: "At least one uppercase letter",
+      met: hasUppercase,
+    },
+    {
+      key: "lowercase",
+      label: "At least one lowercase letter",
+      met: hasLowercase,
+    },
+    {
+      key: "number",
+      label: "At least one number",
+      met: hasNumber,
+    },
+    {
+      key: "special",
+      label: "At least one special character",
+      met: hasSpecialCharacter,
+    },
+  ];
+
   async function handleRegister() {
     setError("");
 
@@ -33,6 +76,13 @@ export default function Register() {
 
     if (!password) {
       setError("Please enter a password.");
+      return;
+    }
+
+    if (!passwordIsValid) {
+      setError(
+        "Password must be at least 10 characters and include an uppercase letter, lowercase letter, number, and special character.",
+      );
       return;
     }
 
@@ -90,9 +140,11 @@ export default function Register() {
             resizeMode="cover"
             accessibilityLabel="UpKeep logo"
           />
+
           <ThemedText type="subtitle" style={styles.brandName}>
             UpKeep
           </ThemedText>
+
           <ThemedText type="small" themeColor="textSecondary">
             Start building your wellness routine.
           </ThemedText>
@@ -128,6 +180,22 @@ export default function Register() {
             style={styles.input}
           />
 
+          <View style={styles.requirements}>
+            {passwordRequirements.map((requirement) => (
+              <ThemedText
+                key={requirement.key}
+                type="small"
+                style={{
+                  color: requirement.met
+                    ? colors.success
+                    : colors.textSecondary,
+                }}
+              >
+                {requirement.met ? "✓" : "○"} {requirement.label}
+              </ThemedText>
+            ))}
+          </View>
+
           <Input
             placeholder="Confirm Password"
             value={confirm}
@@ -154,7 +222,12 @@ export default function Register() {
             </ThemedText>
           )}
 
-          <Button onPress={handleRegister} isDisabled={loading}>
+          <Button
+            onPress={handleRegister}
+            isDisabled={
+              loading || !email.trim() || !passwordIsValid || !passwordsMatch
+            }
+          >
             {loading ? "Creating account..." : "Register"}
           </Button>
 
@@ -162,6 +235,7 @@ export default function Register() {
             <ThemedText type="small" themeColor="textSecondary">
               Already have an account?{" "}
             </ThemedText>
+
             <Pressable
               onPress={() => router.replace("/(auth)/login")}
               accessibilityRole="button"
@@ -194,26 +268,31 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
   },
+
   content: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 24,
   },
+
   brandBlock: {
     alignItems: "center",
     marginBottom: Spacing.four,
   },
+
   logo: {
     width: 76,
     height: 76,
     borderRadius: Radius.large,
     marginBottom: Spacing.two,
   },
+
   brandName: {
     fontWeight: "800",
     marginBottom: 2,
   },
+
   card: {
     width: "100%",
     maxWidth: MaxContentWidth,
@@ -223,17 +302,30 @@ const styles = StyleSheet.create({
     shadowColor: "#000",
     shadowOpacity: 0.15,
     shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
   },
+
   title: {
     marginBottom: Spacing.four,
   },
+
   input: {
     marginBottom: Spacing.four,
   },
+
+  requirements: {
+    gap: 4,
+    marginTop: -Spacing.two,
+    marginBottom: Spacing.four,
+  },
+
   message: {
     marginBottom: Spacing.two,
   },
+
   signInRow: {
     marginTop: Spacing.four,
     flexDirection: "row",
@@ -241,6 +333,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexWrap: "wrap",
   },
+
   signInLink: {
     textDecorationLine: "underline",
   },
