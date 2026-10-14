@@ -1,5 +1,6 @@
 // app/(auth)/register.tsx
 import { router } from "expo-router";
+import { useScreenInteractive } from "@/components/context/startupContext";
 import { useState } from "react";
 import { Image, Pressable, StyleSheet, View } from "react-native";
 
@@ -12,6 +13,7 @@ import { Colors, MaxContentWidth, Radius, Spacing } from "@/constants/theme";
 import { supabase } from "@/lib/supabaseClient";
 
 export default function Register() {
+  useScreenInteractive();
   const { resolvedTheme } = useThemeMode();
   const colors = Colors[resolvedTheme];
 

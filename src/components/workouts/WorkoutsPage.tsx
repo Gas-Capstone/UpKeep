@@ -4,6 +4,7 @@ import { Button, Icon, Text } from "react-native-paper";
 import { useFocusEffect, useRouter } from "expo-router";
 
 import { useThemeMode } from "@/components/context/ThemeContext";
+import { useScreenInteractive } from "@/components/context/startupContext";
 import { useUserContext } from "@/components/context/userContext";
 import { useWorkoutSessionContext } from "@/components/context/workoutSessionContext";
 import { AddHabitModal } from "@/components/habits/AddHabitModal";
@@ -42,6 +43,7 @@ export default function WorkoutsPage() {
     createPlan,
     scheduleWorkout,
   } = useWorkoutsData();
+  useScreenInteractive(!loading);
 
   const [workoutTags, setWorkoutTags] = useState<string[]>([]);
   const [selectedTag, setSelectedTag] = useState("all");

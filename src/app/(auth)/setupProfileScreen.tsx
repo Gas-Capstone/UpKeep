@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { useScreenInteractive } from "@/components/context/startupContext";
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
 import { format } from "date-fns";
@@ -53,6 +54,7 @@ function formatBirthday(date: Date | null) {
 }
 
 export default function SetupProfileScreen() {
+  useScreenInteractive();
   const { resolvedTheme } = useThemeMode();
   const { refreshProfile } = useProfileData();
   const colors = Colors[resolvedTheme];

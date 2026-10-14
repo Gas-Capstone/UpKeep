@@ -1,6 +1,6 @@
 {
   "cli": {
-    "version": ">= 20.5.1",
+    "version": ">= 22.0.0",
     "appVersionSource": "remote"
   },
   "build": {
@@ -17,6 +17,7 @@
       "channel": "preview"
     },
     "production": {
+      "uploadSourceMaps": true,
       "autoIncrement": true,
       "channel": "production"
     }
