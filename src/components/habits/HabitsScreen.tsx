@@ -5,6 +5,7 @@ import { useFocusEffect } from "expo-router";
 import { Button, Icon, ProgressBar, Text } from "react-native-paper";
 
 import { useHabitsContext } from "@/components/context/habitsContext";
+import { useScreenInteractive } from "@/components/context/startupContext";
 import { useMealsData } from "@/components/context/mealsDataContext";
 import { useThemeMode } from "@/components/context/ThemeContext";
 import { useWorkoutsData } from "@/components/context/workoutsDataContext";
@@ -50,6 +51,8 @@ function scheduleLabelFor(entry: { weekdays: Habit["weekdays"] | null }) {
 }
 
 export default function HabitsScreen() {
+  // This tab stays interactive while its providers refresh in the background.
+  useScreenInteractive();
   const { resolvedTheme } = useThemeMode();
   const colors = Colors[resolvedTheme];
   const {

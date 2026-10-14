@@ -9,6 +9,7 @@ import {
 } from "react-native-paper";
 
 import { useThemeMode } from "@/components/context/ThemeContext";
+import { useScreenInteractive } from "@/components/context/startupContext";
 import { useMealsData } from "@/components/context/mealsDataContext";
 import { useNotifications } from "@/components/context/notificationsContext";
 import { AddHabitModal } from "@/components/habits/AddHabitModal";
@@ -50,6 +51,7 @@ export default function MealsScreen() {
     ingredients,
     recipes,
     catalogLoading,
+    fridgeLoading,
     catalogError,
     fridgeIds,
     fridgeEntries,
@@ -62,6 +64,7 @@ export default function MealsScreen() {
     mealPlanEntries,
     addMealPlanEntry,
   } = useMealsData();
+  useScreenInteractive(!sessionLoading && !catalogLoading && !fridgeLoading);
   const { resync } = useNotifications();
 
   const [mutationError, setMutationError] = useState("");
