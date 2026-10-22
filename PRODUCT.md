@@ -44,7 +44,7 @@ This describes the product's mechanism and direction; no claim of market uniquen
 - Product name: UpKeep.
 - Low-friction everyday wellness is the confirmed product intent.
 - Existing logo asset: `assets/images/upkeep-logo.png`.
-- No additional voice or visual direction was established during initialization.
+- A teal/aqua theme is established: `src/constants/paper-theme.ts` and `src/constants/theme.ts`.
 
 ## Evidence on Hand
 

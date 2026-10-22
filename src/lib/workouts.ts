@@ -13,6 +13,9 @@ export type PlanExercise = {
 // How far through an exercise the user is. Kept separate from PlanExercise so
 // the plan definition and the user's progress against it stay distinct.
 export type ExerciseProgress = {
+  sets: number;
+  reps: number;
+  weightKg: number | null;
   setsRemaining: number;
   completed: boolean;
 };

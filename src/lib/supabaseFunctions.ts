@@ -86,17 +86,17 @@ export async function setWorkoutComplete(
   user: UserRef | null | undefined,
   workout: WorkoutRef,
   durationMin: number,
-) {
-  if (!user?.id) return;
+): Promise<void> {
+  if (!user?.id) throw new Error("Sign in to save a workout.");
 
   // The column is workout_plan_id, not workout_id — it was renamed alongside
   // workouts -> workout_plans, and this insert was missed at the time.
-  const { data, error } = await supabase.from("workout_sessions").insert({
+  const { error } = await supabase.from("workout_sessions").insert({
     user_id: user.id,
     workout_plan_id: workout.id,
     duration_min: durationMin,
   });
-  if (error) console.log("Error setting workout as complete: ", error);
+  if (error) throw error;
 }
 
 export async function getCompletedWorkouts(user: UserRef) {
@@ -219,7 +219,10 @@ export async function deleteWorkoutPlan(planId: string) {
     PLAN EXERCISES
 ------------- */
 // The exercises that make up a plan, in the order they were arranged.
-export async function getPlanExercises(workoutPlanId: string) {
+export async function getPlanExercises(
+  workoutPlanId: string,
+  options?: { throwOnError?: boolean },
+) {
   const { data, error } = await supabase
     .from("workout_plan_workouts")
     .select("workout_id, sets, reps, position, workouts ( name )")
@@ -227,6 +230,7 @@ export async function getPlanExercises(workoutPlanId: string) {
     .order("position", { ascending: true });
   if (error) {
     console.log("Error fetching plan exercises: ", error);
+    if (options?.throwOnError) throw error;
     return [];
   }
   return (data ?? []).map((row: any) => ({
