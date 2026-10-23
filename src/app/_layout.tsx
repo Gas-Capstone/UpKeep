@@ -21,6 +21,7 @@ import { BirthdayCelebration } from "@/components/profile/BirthdayCelebration";
 import { GluestackUIProvider } from "@/components/ui/gluestack-ui-provider";
 import { StartupErrorScreen } from "@/components/ui/StartupErrorScreen";
 import { paperDarkTheme, paperLightTheme } from "@/constants/paper-theme";
+import { startMetrics } from "@/lib/metrics";
 import "@/lib/notifications";
 import { supabase } from "@/lib/supabaseClient";
 import "@/global.css";
@@ -83,6 +84,7 @@ function RootContent() {
                               themeReady={themeReady}
                               onSplashHidden={setSplashHidden}
                             />
+                            <MetricsBootstrap />
                             <BirthdayCelebration />
                           </StartupContext.Provider>
                         </PaperProvider>
@@ -98,6 +100,12 @@ function RootContent() {
       </SafeAreaProvider>
     </KeyboardProvider>
   );
+}
+
+// Events are recorded from the first request; this only starts sending them.
+function MetricsBootstrap() {
+  useEffect(() => startMetrics(supabase), []);
+  return null;
 }
 
 function AuthBootstrap({

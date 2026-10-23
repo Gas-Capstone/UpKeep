@@ -33,6 +33,7 @@ import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Colors, MaxContentWidth, Radius, Spacing } from "@/constants/theme";
+import { checkIsDeveloper } from "@/lib/performance";
 import { supabase } from "@/lib/supabaseClient";
 
 const MFA_QR_DISPLAY_SIZE = 160;
@@ -179,6 +180,19 @@ export default function SettingsScreen() {
   summaryTime.setHours(summaryHour, summaryMinute, 0, 0);
 
   const [openSection, setOpenSection] = useState<SectionKey>(null);
+  // Hides the Developer section from everyone else. Cosmetic only: the
+  // summary function itself refuses non-developers.
+  const [isDeveloper, setIsDeveloper] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    checkIsDeveloper().then((value) => {
+      if (active) setIsDeveloper(value);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const [saving, setSaving] = useState(false);
@@ -1365,6 +1379,37 @@ export default function SettingsScreen() {
                   onPress={startTour}
                 />
               </Card>
+
+              {isDeveloper && (
+                <>
+                  <SectionLabel
+                    title="Developer"
+                    subtitle="Only visible to developer accounts"
+                  />
+                  <Card
+                    mode="contained"
+                    style={[
+                      styles.card,
+                      {
+                        backgroundColor: colors.backgroundElement,
+                        borderColor: colors.border,
+                      },
+                    ]}
+                  >
+                    <List.Item
+                      title="Performance"
+                      description="Request latency, errors and assistant outcomes"
+                      left={(props) => (
+                        <List.Icon {...props} icon="chart-timeline-variant" />
+                      )}
+                      right={(props) => (
+                        <List.Icon {...props} icon="chevron-right" />
+                      )}
+                      onPress={() => router.push("/developer")}
+                    />
+                  </Card>
+                </>
+              )}
 
               <SectionLabel
                 title="Account"
