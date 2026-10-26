@@ -35,6 +35,29 @@ export type AgentPhase = {
   p95_ms: number | null;
 };
 
+export type DataLoad = {
+  source: string;
+  loads: number;
+  p50_ms: number | null;
+  p95_ms: number | null;
+  error_pct: number | null;
+  avg_rows: number | null;
+};
+
+export type WorkoutOutcome = {
+  outcome: string;
+  sessions: number;
+  pct: number | null;
+  avg_minutes: number | null;
+  avg_planned_min: number | null;
+  set_completion_pct: number | null;
+};
+
+export type NotificationOpen = {
+  kind: string;
+  opens: number;
+};
+
 export type RecentError = {
   created_at: string;
   name: string;
@@ -63,6 +86,27 @@ export type PerformanceSummary = {
   agent_phases: AgentPhase[];
   image_errors: number;
   recent_errors: RecentError[];
+
+  // Added in a later version of the SQL. Optional so the screen still renders
+  // against a database where the script hasn't been re-run — those sections
+  // simply don't appear.
+  data_loads?: DataLoad[];
+  workouts?: {
+    sessions: number;
+    avg_minutes: number | null;
+    set_completion_pct: number | null;
+  };
+  workout_outcomes?: WorkoutOutcome[];
+  notifications?: {
+    syncs: number;
+    p50_ms: number | null;
+    p95_ms: number | null;
+    error_pct: number | null;
+    denied_pct: number | null;
+    avg_built: number | null;
+    avg_scheduled: number | null;
+  };
+  notification_opens?: NotificationOpen[];
 };
 
 /** The signed-in account is not in public.developers. */

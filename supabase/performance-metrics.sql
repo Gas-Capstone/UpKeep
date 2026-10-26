@@ -9,6 +9,13 @@
 --   agent_turn        every message to the assistant: outcome, tools, and the
 --                     server's own phase timings (auth / model / tools)
 --   image_error       a photo that failed to load: which bucket
+--   data_load         the meals catalog or the fridge arriving: the whole wait
+--                     the user sees, and how many rows came back
+--   workout_session   a workout ending: how (all sets done, time up, stopped
+--                     early), planned minutes, sets done of total
+--   notifications_sync  reminders being rebuilt: permission state, reminders
+--                     built vs actually scheduled
+--   notification_opened a reminder being tapped: which kind
 --
 -- Deliberately never recorded: message text, ingredient or habit names, meal
 -- contents, query parameters, storage object names. Ids, durations and
@@ -25,7 +32,8 @@ create table if not exists public.app_events (
   -- Deleting an account deletes its events with it.
   user_id     uuid not null default auth.uid() references auth.users (id) on delete cascade,
   name        text not null check (char_length(name) <= 64),
-  duration_ms integer check (duration_ms is null or duration_ms between 0 and 600000),
+  -- Up to 24 hours: workout sessions run far longer than any request does.
+  duration_ms integer check (duration_ms is null or duration_ms between 0 and 86400000),
   ok          boolean,
   platform    text check (char_length(platform) <= 16),
   app_version text check (char_length(app_version) <= 32),
@@ -54,6 +62,12 @@ delete from public.app_events where user_id is null;
 alter table public.app_events alter column user_id set default auth.uid();
 alter table public.app_events alter column user_id set not null;
 
+-- The first version of this script capped durations at 10 minutes, which a
+-- workout session exceeds — and one rejected row takes its whole batch with
+-- it. A check constraint can't be altered in place, so drop it here and let
+-- the loop below add the current one.
+alter table public.app_events drop constraint if exists app_events_duration_ms_check;
+
 -- Constraints written inline above only exist when the table is created fresh,
 -- so add any that are missing. NOT VALID: rows already present are not
 -- re-checked, while every new row is.
@@ -64,7 +78,7 @@ begin
   for c in
     select * from (values
       ('app_events_name_check',        'check (char_length(name) <= 64)'),
-      ('app_events_duration_ms_check', 'check (duration_ms is null or duration_ms between 0 and 600000)'),
+      ('app_events_duration_ms_check', 'check (duration_ms is null or duration_ms between 0 and 86400000)'),
       ('app_events_platform_check',    'check (char_length(platform) <= 16)'),
       ('app_events_app_version_check', 'check (char_length(app_version) <= 32)'),
       ('app_events_update_id_check',   'check (char_length(update_id) <= 64)'),
@@ -291,6 +305,108 @@ as $$
   group by 1;
 $$;
 
+create or replace function public.perf_data_loads_since(p_since timestamptz)
+returns table (
+  source    text,
+  loads     bigint,
+  p50_ms    integer,
+  p95_ms    integer,
+  error_pct numeric,
+  avg_rows  integer
+)
+language sql
+stable
+set search_path = public
+as $$
+  select
+    props->>'source',
+    count(*),
+    round(percentile_cont(0.5)  within group (order by duration_ms))::integer,
+    round(percentile_cont(0.95) within group (order by duration_ms))::integer,
+    round(100.0 * avg(case when ok then 0 else 1 end), 1),
+    round(avg((props->>'rows')::numeric))::integer
+  from public.app_events
+  where name = 'data_load'
+    and created_at >= p_since
+  group by 1;
+$$;
+
+-- Duration here is active time with pauses excluded, in minutes rather than
+-- ms because that is the scale a workout is thought about in.
+create or replace function public.perf_workout_sessions_since(p_since timestamptz)
+returns table (
+  outcome            text,
+  sessions           bigint,
+  pct                numeric,
+  avg_minutes        numeric,
+  avg_planned_min    numeric,
+  set_completion_pct numeric
+)
+language sql
+stable
+set search_path = public
+as $$
+  select
+    coalesce(props->>'outcome', 'unknown'),
+    count(*),
+    round(100.0 * count(*) / sum(count(*)) over (), 1),
+    round(avg(duration_ms) / 60000.0, 1),
+    round(avg((props->>'planned_min')::numeric), 1),
+    round(100.0 * sum((props->>'sets_done')::numeric)
+          / nullif(sum((props->>'sets_total')::numeric), 0), 1)
+  from public.app_events
+  where name = 'workout_session'
+    and created_at >= p_since
+  group by 1;
+$$;
+
+-- Split by permission, because that is what explains a gap between reminders
+-- built and reminders scheduled: with notifications blocked the sync still
+-- succeeds and nothing is scheduled.
+create or replace function public.perf_notification_syncs_since(p_since timestamptz)
+returns table (
+  permission    text,
+  syncs         bigint,
+  p50_ms        integer,
+  p95_ms        integer,
+  error_pct     numeric,
+  avg_built     numeric,
+  avg_scheduled numeric
+)
+language sql
+stable
+set search_path = public
+as $$
+  select
+    coalesce(props->>'permission', 'unknown'),
+    count(*),
+    round(percentile_cont(0.5)  within group (order by duration_ms))::integer,
+    round(percentile_cont(0.95) within group (order by duration_ms))::integer,
+    round(100.0 * avg(case when ok then 0 else 1 end), 1),
+    round(avg((props->>'built')::numeric), 1),
+    round(avg((props->>'scheduled')::numeric), 1)
+  from public.app_events
+  where name = 'notifications_sync'
+    and created_at >= p_since
+  group by 1;
+$$;
+
+create or replace function public.perf_notification_opens_since(p_since timestamptz)
+returns table (
+  kind  text,
+  opens bigint
+)
+language sql
+stable
+set search_path = public
+as $$
+  select coalesce(props->>'kind', 'other'), count(*)
+  from public.app_events
+  where name = 'notification_opened'
+    and created_at >= p_since
+  group by 1;
+$$;
+
 -- Callable only from the dashboard and from the summary function below,
 -- never directly through the API.
 revoke execute on function public.perf_endpoint_latency_since(timestamptz) from public, anon, authenticated;
@@ -298,6 +414,10 @@ revoke execute on function public.perf_agent_outcomes_since(timestamptz)   from 
 revoke execute on function public.perf_agent_phases_since(timestamptz)     from public, anon, authenticated;
 revoke execute on function public.perf_daily_since(timestamptz)            from public, anon, authenticated;
 revoke execute on function public.perf_by_update_since(timestamptz)        from public, anon, authenticated;
+revoke execute on function public.perf_data_loads_since(timestamptz)       from public, anon, authenticated;
+revoke execute on function public.perf_workout_sessions_since(timestamptz) from public, anon, authenticated;
+revoke execute on function public.perf_notification_syncs_since(timestamptz) from public, anon, authenticated;
+revoke execute on function public.perf_notification_opens_since(timestamptz) from public, anon, authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 4. Dashboard views
@@ -329,11 +449,27 @@ create or replace view public.perf_by_update with (security_invoker = true) as
   select * from public.perf_by_update_since(now() - interval '30 days')
   order by first_seen desc;
 
+create or replace view public.perf_data_loads with (security_invoker = true) as
+  select * from public.perf_data_loads_since(now() - interval '7 days')
+  order by p95_ms desc nulls last;
+
+create or replace view public.perf_workout_sessions with (security_invoker = true) as
+  select * from public.perf_workout_sessions_since(now() - interval '30 days')
+  order by sessions desc;
+
+create or replace view public.perf_notification_syncs with (security_invoker = true) as
+  select * from public.perf_notification_syncs_since(now() - interval '7 days')
+  order by syncs desc;
+
+create or replace view public.perf_notification_opens with (security_invoker = true) as
+  select * from public.perf_notification_opens_since(now() - interval '30 days')
+  order by opens desc;
+
 create or replace view public.perf_recent_errors with (security_invoker = true) as
   select
     created_at,
     name,
-    coalesce(props->>'path', props->>'outcome', props->>'bucket') as detail,
+    coalesce(props->>'path', props->>'outcome', props->>'source', props->>'bucket') as detail,
     props->>'status' as status,
     duration_ms,
     update_id
@@ -344,7 +480,9 @@ create or replace view public.perf_recent_errors with (security_invoker = true) 
 
 revoke all on public.perf_endpoint_latency, public.perf_agent_outcomes,
               public.perf_agent_phases, public.perf_daily,
-              public.perf_by_update, public.perf_recent_errors
+              public.perf_by_update, public.perf_recent_errors,
+              public.perf_data_loads, public.perf_workout_sessions,
+              public.perf_notification_syncs, public.perf_notification_opens
   from anon, authenticated;
 
 -- ---------------------------------------------------------------------------
@@ -419,13 +557,54 @@ begin
       where name = 'image_error' and created_at >= v_since
     ),
 
+    'data_loads', coalesce((
+      select jsonb_agg(to_jsonb(d) order by d.p95_ms desc nulls last)
+      from public.perf_data_loads_since(v_since) d
+    ), '[]'::jsonb),
+
+    'workouts', (
+      select jsonb_build_object(
+        'sessions',           count(*),
+        'avg_minutes',        round(avg(duration_ms) / 60000.0, 1),
+        'set_completion_pct', round(100.0 * sum((props->>'sets_done')::numeric)
+                                    / nullif(sum((props->>'sets_total')::numeric), 0), 1)
+      )
+      from public.app_events
+      where name = 'workout_session' and created_at >= v_since
+    ),
+
+    'workout_outcomes', coalesce((
+      select jsonb_agg(to_jsonb(w) order by w.sessions desc)
+      from public.perf_workout_sessions_since(v_since) w
+    ), '[]'::jsonb),
+
+    'notifications', (
+      select jsonb_build_object(
+        'syncs',         count(*),
+        'p50_ms',        round(percentile_cont(0.5)  within group (order by duration_ms))::integer,
+        'p95_ms',        round(percentile_cont(0.95) within group (order by duration_ms))::integer,
+        'error_pct',     round(100.0 * avg(case when ok then 0 else 1 end), 1),
+        'denied_pct',    round(100.0 * avg(case when props->>'permission' = 'denied'
+                                                then 1 else 0 end), 1),
+        'avg_built',     round(avg((props->>'built')::numeric), 1),
+        'avg_scheduled', round(avg((props->>'scheduled')::numeric), 1)
+      )
+      from public.app_events
+      where name = 'notifications_sync' and created_at >= v_since
+    ),
+
+    'notification_opens', coalesce((
+      select jsonb_agg(to_jsonb(n) order by n.opens desc)
+      from public.perf_notification_opens_since(v_since) n
+    ), '[]'::jsonb),
+
     'recent_errors', coalesce((
       select jsonb_agg(to_jsonb(r) order by r.created_at desc)
       from (
         select
           created_at,
           name,
-          coalesce(props->>'path', props->>'outcome', props->>'bucket') as detail,
+          coalesce(props->>'path', props->>'outcome', props->>'source', props->>'bucket') as detail,
           props->>'status' as status
         from public.app_events
         where ok = false and created_at >= v_since

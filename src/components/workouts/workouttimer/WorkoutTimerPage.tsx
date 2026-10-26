@@ -15,8 +15,50 @@ import { VStack } from "@/components/ui/vstack";
 import { CircleTimer } from "@/components/ui/CircleTimer";
 
 import { getPlanExercises, setWorkoutComplete } from "@/lib/supabaseFunctions";
-import type { PlanExercise } from "@/lib/workouts";
+import { track } from "@/lib/metrics";
+import type { ExerciseProgress, PlanExercise } from "@/lib/workouts";
 import { Spacing } from "@/constants/theme";
+
+type SessionOutcome = "all_sets_done" | "time_up" | "stopped_early";
+
+/**
+ * One event per session, whichever of the three ways it ends. Duration is
+ * active time — pauses excluded — the same figure the session log uses.
+ *
+ * Outside the component on purpose: as a plain function it adds no new
+ * dependency to the effects that call it.
+ */
+function recordWorkoutSession(
+  outcome: SessionOutcome,
+  elapsedMs: number,
+  plannedMin: number,
+  exercises: PlanExercise[],
+  progress: ReadonlyMap<string, ExerciseProgress>,
+) {
+  let setsDone = 0;
+  let setsTotal = 0;
+  for (const exercise of exercises) {
+    const remaining =
+      progress.get(exercise.workoutId)?.setsRemaining ?? exercise.sets;
+    setsTotal += exercise.sets;
+    setsDone += Math.min(exercise.sets, Math.max(0, exercise.sets - remaining));
+  }
+
+  track("workout_session", {
+    durationMs: elapsedMs,
+    // Not an error signal: stopping early is a choice, not a failure, and
+    // marking it as one would fill "Recent errors" with ordinary workouts.
+    // How the session ended is in `outcome`.
+    ok: true,
+    props: {
+      outcome,
+      planned_min: plannedMin,
+      sets_done: setsDone,
+      sets_total: setsTotal,
+      exercises: exercises.length,
+    },
+  });
+}
 
 export default function WorkoutTimerPage() {
   const router = useRouter();
@@ -107,6 +149,13 @@ export default function WorkoutTimerPage() {
     if (workoutSession?.status !== "active") return;
     if (workoutSession.plannedDuration * 60 * 1000 - getElapsedTime() <= 0) {
       setWorkoutComplete(user, workoutSession.workout, workoutSession.plannedDuration);
+      recordWorkoutSession(
+        "time_up",
+        getElapsedTime(),
+        workoutSession.plannedDuration,
+        exercises,
+        progress,
+      );
       completeSession();
     }
   }, [workoutSession?.status, getElapsedTime, now]);
@@ -126,6 +175,13 @@ export default function WorkoutTimerPage() {
 
     const minutes = Math.max(1, Math.ceil(getElapsedTime() / 60000));
     setWorkoutComplete(user, workoutSession.workout, minutes);
+    recordWorkoutSession(
+      "all_sets_done",
+      getElapsedTime(),
+      workoutSession.plannedDuration,
+      exercises,
+      progress,
+    );
     // Flips status to complete synchronously, so this can't fire twice.
     completeSession();
   }, [exercises, progress, workoutSession?.status]);
@@ -172,6 +228,13 @@ export default function WorkoutTimerPage() {
     if (isCompleted) return
 
     await setWorkoutComplete(user, workoutSession.workout, elapsedMins)
+    recordWorkoutSession(
+      "stopped_early",
+      elapsedMS,
+      workoutSession.plannedDuration,
+      exercises,
+      progress,
+    )
     completeSession()
     setConfirmStopOpen(false)
   }

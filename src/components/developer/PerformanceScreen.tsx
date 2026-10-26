@@ -68,6 +68,10 @@ function formatCount(n: number): string {
   return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
 }
 
+function formatMinutes(minutes: number | null): string {
+  return minutes == null ? "—" : `${minutes} min`;
+}
+
 function plural(n: number, word: string): string {
   return `${formatCount(n)} ${word}${n === 1 ? "" : "s"}`;
 }
@@ -133,6 +137,30 @@ const PHASE_LABELS: Record<string, string> = {
   model: "Model",
   tools: "Tools",
   "network + tunnel": "Network + tunnel",
+};
+
+const SOURCE_LABELS: Record<string, string> = {
+  meals_catalog: "Meals catalog",
+  fridge: "Fridge",
+};
+
+// How a workout ended. Only finishing every set is shown as "good"; running
+// out of time and stopping early are neutral rather than bad — ending a
+// workout is the user's call, not a fault, so neither wears the danger color.
+const WORKOUT_OUTCOMES: Record<
+  string,
+  { label: string; icon: string; status: OutcomeStatus }
+> = {
+  all_sets_done: { label: "Finished every set", icon: "check-circle-outline", status: "good" },
+  time_up: { label: "Ran out of time", icon: "timer-outline", status: "neutral" },
+  stopped_early: { label: "Stopped early", icon: "stop-circle-outline", status: "neutral" },
+};
+
+const REMINDER_KIND_LABELS: Record<string, string> = {
+  "daily-summary": "Daily summary",
+  habit: "Habit reminders",
+  meal: "Meal reminders",
+  other: "Other, e.g. a test",
 };
 
 // ---------------------------------------------------------------------------
@@ -271,8 +299,18 @@ function Summary({
   colors: ThemeColors;
 }) {
   const { requests, agent } = summary;
+  const workoutSessions = summary.workouts?.sessions ?? 0;
+  const syncs = summary.notifications?.syncs ?? 0;
+  const opens = summary.notification_opens ?? [];
 
-  if (requests.count === 0 && agent.turns === 0) {
+  if (
+    requests.count === 0 &&
+    agent.turns === 0 &&
+    (summary.data_loads ?? []).length === 0 &&
+    workoutSessions === 0 &&
+    syncs === 0 &&
+    opens.length === 0
+  ) {
     return (
       <Notice
         icon="chart-timeline-variant"
@@ -285,6 +323,10 @@ function Summary({
 
   const slowest = Math.max(1, ...summary.endpoints.map((e) => e.p95_ms ?? 0));
   const longestPhase = Math.max(1, ...summary.agent_phases.map((p) => p.avg_ms ?? 0));
+  const dataLoads = summary.data_loads ?? [];
+  const slowestLoad = Math.max(1, ...dataLoads.map((d) => d.p95_ms ?? 0));
+  const mostOpens = Math.max(1, ...opens.map((o) => o.opens));
+  const notifications = summary.notifications;
 
   return (
     <>
@@ -336,6 +378,29 @@ function Summary({
         </Section>
       )}
 
+      {dataLoads.length > 0 && (
+        <Section
+          title="Data loading"
+          subtitle={`How long each screen's data takes to arrive, 95th percentile, ${windowPhrase}`}
+          colors={colors}
+          footnote="The whole wait you see. Its requests run in parallel, so this is roughly the slowest of them — the endpoints above show each one on its own."
+        >
+          {dataLoads.map((load, index) => (
+            <BarRow
+              key={load.source}
+              first={index === 0}
+              title={SOURCE_LABELS[load.source] ?? load.source}
+              value={formatMs(load.p95_ms)}
+              fraction={(load.p95_ms ?? 0) / slowestLoad}
+              detail={`${plural(load.loads, "load")} · p50 ${formatMs(load.p50_ms)}${
+                load.avg_rows != null ? ` · ~${formatCount(load.avg_rows)} rows` : ""
+              } · ${formatPct(load.error_pct)} failed`}
+              colors={colors}
+            />
+          ))}
+        </Section>
+      )}
+
       {summary.agent_outcomes.length > 0 && (
         <Section
           title="Assistant outcomes"
@@ -378,6 +443,90 @@ function Summary({
               value={formatMs(phase.avg_ms)}
               fraction={(phase.avg_ms ?? 0) / longestPhase}
               detail={`p95 ${formatMs(phase.p95_ms)} · ${plural(phase.turns, "turn")}`}
+              colors={colors}
+            />
+          ))}
+        </Section>
+      )}
+
+      {workoutSessions > 0 && (
+        <Section
+          title="Workout sessions"
+          subtitle={`${plural(workoutSessions, "session")} · ${formatPct(
+            summary.workouts?.set_completion_pct ?? null,
+          )} of sets completed · avg ${formatMinutes(summary.workouts?.avg_minutes ?? null)}`}
+          colors={colors}
+          footnote="Minutes are active time — pauses aren't counted."
+        >
+          {(summary.workout_outcomes ?? []).map((row, index) => {
+            const known = WORKOUT_OUTCOMES[row.outcome];
+            return (
+              <BarRow
+                key={row.outcome}
+                first={index === 0}
+                leadingIcon={known?.icon ?? STATUS_ICON.neutral}
+                leadingColor={statusColor(known?.status ?? "neutral", colors)}
+                title={known?.label ?? row.outcome}
+                value={formatPct(row.pct)}
+                // Shares of all sessions, so measured against 100%.
+                fraction={(row.pct ?? 0) / 100}
+                detail={`${plural(row.sessions, "session")} · ${formatMinutes(row.avg_minutes)} of ${formatMinutes(row.avg_planned_min)} planned · ${formatPct(row.set_completion_pct)} of sets`}
+                colors={colors}
+              />
+            );
+          })}
+        </Section>
+      )}
+
+      {(syncs > 0 || opens.length > 0) && (
+        <Section
+          title="Notifications"
+          subtitle={`Reminder scheduling and taps, ${windowPhrase}`}
+          colors={colors}
+        >
+          {notifications && syncs > 0 && (
+            <BarRow
+              first
+              leadingIcon="bell-outline"
+              leadingColor={colors.textSecondary}
+              title="Reminder sync, p95"
+              value={formatMs(notifications.p95_ms)}
+              fraction={0}
+              detail={`${plural(syncs, "sync")} · on average ${notifications.avg_scheduled ?? "—"} scheduled of ${notifications.avg_built ?? "—"} built · ${formatPct(notifications.error_pct)} failed`}
+              colors={colors}
+            />
+          )}
+
+          {/* The silent failure: toggles on, permission off, every sync
+              "succeeds" and schedules nothing. Only shown when it happened. */}
+          {notifications && (notifications.denied_pct ?? 0) > 0 && (
+            <BarRow
+              first={false}
+              leadingIcon={STATUS_ICON.bad}
+              leadingColor={colors.danger}
+              title="Notifications blocked"
+              value={formatPct(notifications.denied_pct)}
+              fraction={0}
+              detail="Share of syncs that built reminders but couldn't schedule any, because notifications are off for UpKeep on the device."
+              colors={colors}
+            />
+          )}
+
+          {opens.length > 0 && (
+            <Text
+              variant="labelLarge"
+              style={[styles.subheading, { color: colors.textSecondary }]}
+            >
+              Reminders opened
+            </Text>
+          )}
+          {opens.map((row, index) => (
+            <BarRow
+              key={row.kind}
+              first={index === 0}
+              title={REMINDER_KIND_LABELS[row.kind] ?? row.kind}
+              value={formatCount(row.opens)}
+              fraction={row.opens / mostOpens}
               colors={colors}
             />
           ))}
@@ -537,7 +686,7 @@ function BarRow({
   title: string;
   value: string;
   fraction: number;
-  detail: string;
+  detail?: string;
   first: boolean;
   mono?: boolean;
   leadingIcon?: string;
@@ -593,9 +742,11 @@ function BarRow({
         ) : null}
       </View>
 
-      <Text variant="bodySmall" style={{ color: colors.textSecondary }}>
-        {detail}
-      </Text>
+      {detail ? (
+        <Text variant="bodySmall" style={{ color: colors.textSecondary }}>
+          {detail}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -695,6 +846,9 @@ const styles = StyleSheet.create({
     // Rounded at the data end only, square at the baseline.
     borderTopRightRadius: 4,
     borderBottomRightRadius: 4,
+  },
+  subheading: {
+    marginTop: Spacing.two,
   },
   errorRow: {
     paddingVertical: Spacing.two,

@@ -43,6 +43,10 @@ const FLUSH_INTERVAL_MS = 30_000;
 const MAX_BUFFER = 200;
 const MAX_BATCH = 100;
 const EVENTS_PATH = "/rest/v1/app_events";
+// Matches the duration check on app_events. A batch goes in as one insert, so
+// a single out-of-range value would get every event alongside it rejected;
+// clamping here means a bad reading costs one figure, not a whole batch.
+const MAX_DURATION_MS = 86_400_000;
 
 const APP_VERSION = Constants.expoConfig?.version ?? null;
 // 'dev' under Metro, so development traffic can be told apart from real use;
@@ -59,7 +63,9 @@ export function track(name: string, fields: MetricFields = {}) {
     created_at: new Date().toISOString(),
     name,
     duration_ms:
-      fields.durationMs == null ? null : Math.max(0, Math.round(fields.durationMs)),
+      fields.durationMs == null
+        ? null
+        : Math.min(MAX_DURATION_MS, Math.max(0, Math.round(fields.durationMs))),
     ok: fields.ok ?? null,
     platform: Platform.OS,
     app_version: APP_VERSION,
@@ -70,6 +76,24 @@ export function track(name: string, fields: MetricFields = {}) {
   if (buffer.length > MAX_BUFFER) {
     buffer = buffer.slice(buffer.length - MAX_BUFFER);
   }
+}
+
+/**
+ * How long a screen's data took to arrive: the whole wait the user sees,
+ * usually several requests in parallel. The requests inside it are timed
+ * individually as supabase_request; this is the part they can't show.
+ */
+export function trackDataLoad(
+  source: string,
+  startedAt: number,
+  ok: boolean,
+  rows?: number,
+) {
+  track("data_load", {
+    durationMs: Date.now() - startedAt,
+    ok,
+    props: rows == null ? { source } : { source, rows },
+  });
 }
 
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
