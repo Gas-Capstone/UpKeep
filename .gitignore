@@ -57,6 +57,6 @@ recipe-images-upload/
 workout-images-upload/
 
 # agent folders
-.claude
-.codex
-.impeccable
+.claude/
+.codex/
+.impeccable/
