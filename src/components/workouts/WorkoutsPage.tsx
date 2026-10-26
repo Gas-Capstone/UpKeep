@@ -17,13 +17,32 @@ import { ScreenView } from "@/components/ui/ScreenView";
 import { Colors, Radius, Spacing } from "@/constants/theme";
 import { deleteWorkoutPlan, setWorkoutPlanImage } from "@/lib/supabaseFunctions";
 import { pickImage, uploadUserImage } from "@/lib/userImages";
-import { getWorkoutsWithTag, sortFavoritesFirst } from "@/lib/workouts";
+import {
+  NO_FILTERS,
+  filterOptions,
+  filterWorkouts,
+  formatEquipment,
+  formatLastDone,
+  hasActiveFilters,
+  lastDoneByPlan,
+  sentenceCase,
+  type PlanSource,
+  type WorkoutFilters,
+} from "@/lib/workoutList";
+import { sortFavoritesFirst } from "@/lib/workouts";
 
 import { CompletedWorkoutsModal } from "./CompletedWorkoutsModal";
 import { CreateWorkoutPlanModal } from "./CreateWorkoutPlanModal";
+import { FilterMenuChip } from "./FilterMenuChip";
 import { StartWorkoutModal } from "./StartWorkoutModal";
 import { WorkoutCard } from "./WorkoutCard";
 import { WorkoutFilterChip } from "./WorkoutFilterChip";
+
+const SOURCES: { value: PlanSource; label: string }[] = [
+  { value: "all", label: "All plans" },
+  { value: "mine", label: "Mine" },
+  { value: "built-in", label: "Built-in" },
+];
 
 export default function WorkoutsPage() {
   const router = useRouter();
@@ -37,6 +56,7 @@ export default function WorkoutsPage() {
     completedWorkouts,
     favoriteIds,
     availableWorkouts,
+    planEquipment,
     loading,
     refreshWorkouts,
     refreshCompletedWorkouts,
@@ -47,7 +67,7 @@ export default function WorkoutsPage() {
   useScreenInteractive(!loading);
 
   const [workoutTags, setWorkoutTags] = useState<string[]>([]);
-  const [selectedTag, setSelectedTag] = useState("all");
+  const [filters, setFilters] = useState<WorkoutFilters>(NO_FILTERS);
   const [completedModalVisible, setCompletedModalVisible] = useState(false);
   const [startModalVisible, setStartModalVisible] = useState(false);
   const [createModalVisible, setCreateModalVisible] = useState(false);
@@ -66,6 +86,21 @@ export default function WorkoutsPage() {
   // author gets edit and delete.
   const ownsPlan = (workout: Workout) =>
     Boolean(user?.id) && workout.created_by === user?.id;
+
+  // Each extra filter only appears when it's a real choice — or when it's
+  // set, so an active filter can always be seen and cleared even if the
+  // plans that offered it have since gone.
+  const showSource = workoutList.some(ownsPlan) || filters.source !== "all";
+  const difficultyOptions = filterOptions(workoutList, "difficulty");
+  const targetOptions = filterOptions(workoutList, "target");
+  const showDifficulty = difficultyOptions.length > 1 || filters.difficulty !== null;
+  const showTarget = targetOptions.length > 1 || filters.target !== null;
+
+  const lastDone = lastDoneByPlan(completedWorkouts);
+  const lastDoneLabel = (workout: Workout) => {
+    const at = lastDone.get(String(workout.id));
+    return at === undefined ? null : formatLastDone(at);
+  };
 
   const changePhoto = async (workout: Workout) => {
     if (!user?.id) return;
@@ -136,10 +171,10 @@ export default function WorkoutsPage() {
   const filteredWorkouts = useMemo(
     () =>
       sortFavoritesFirst(
-        getWorkoutsWithTag(workoutList, selectedTag),
+        filterWorkouts(workoutList, filters, user?.id),
         favoriteIds,
       ),
-    [workoutList, selectedTag, favoriteIds],
+    [workoutList, filters, user?.id, favoriteIds],
   );
 
   const handleStart = (workout: Workout) => {
@@ -259,18 +294,67 @@ export default function WorkoutsPage() {
       >
         <WorkoutFilterChip
           tag="all"
-          isSelected={selectedTag === "all"}
-          onSelect={setSelectedTag}
+          isSelected={filters.tag === "all"}
+          onSelect={(tag) => setFilters((current) => ({ ...current, tag }))}
         />
         {workoutTags.map((tag) => (
           <WorkoutFilterChip
             key={tag}
             tag={tag}
-            isSelected={selectedTag === tag}
-            onSelect={setSelectedTag}
+            isSelected={filters.tag === tag}
+            onSelect={(next) => setFilters((current) => ({ ...current, tag: next }))}
           />
         ))}
       </ScrollView>
+
+      {showSource || showDifficulty || showTarget ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={{ marginHorizontal: -Spacing.four }}
+          contentContainerStyle={styles.filterRow}
+        >
+          {showSource
+            ? SOURCES.map((source) => (
+                <WorkoutFilterChip
+                  key={source.value}
+                  tag={source.value}
+                  label={source.label}
+                  isSelected={filters.source === source.value}
+                  onSelect={() =>
+                    setFilters((current) => ({ ...current, source: source.value }))
+                  }
+                />
+              ))
+            : null}
+
+          {showSource && (showDifficulty || showTarget) ? (
+            <View style={[styles.filterDivider, { backgroundColor: colors.border }]} />
+          ) : null}
+
+          {showDifficulty ? (
+            <FilterMenuChip
+              label="Difficulty"
+              options={difficultyOptions}
+              value={filters.difficulty}
+              onChange={(difficulty) =>
+                setFilters((current) => ({ ...current, difficulty }))
+              }
+              formatOption={sentenceCase}
+            />
+          ) : null}
+
+          {showTarget ? (
+            <FilterMenuChip
+              label="Target"
+              options={targetOptions}
+              value={filters.target}
+              onChange={(target) => setFilters((current) => ({ ...current, target }))}
+              formatOption={sentenceCase}
+            />
+          ) : null}
+        </ScrollView>
+      ) : null}
 
       <View
         style={[
@@ -324,9 +408,7 @@ export default function WorkoutsPage() {
             variant="titleLarge"
             style={{ color: colors.text, fontWeight: "700" }}
           >
-            {selectedTag === "all"
-              ? "Your workouts"
-              : `${selectedTag.charAt(0).toUpperCase()}${selectedTag.slice(1)}`}
+            {filters.tag === "all" ? "Your workouts" : sentenceCase(filters.tag)}
           </Text>
           <Text variant="bodySmall" style={{ color: colors.textSecondary }}>
             {loading
@@ -366,6 +448,16 @@ export default function WorkoutsPage() {
             >
               Try another filter or create a workout plan of your own.
             </Text>
+            {hasActiveFilters(filters) ? (
+              <Button
+                mode="contained-tonal"
+                icon="filter-remove-outline"
+                onPress={() => setFilters(NO_FILTERS)}
+                style={{ marginTop: Spacing.one }}
+              >
+                Clear filters
+              </Button>
+            ) : null}
           </View>
         ) : (
           filteredWorkouts.map((workout) => (
@@ -376,6 +468,8 @@ export default function WorkoutsPage() {
               isFavorited={favoriteIds.has(String(workout.id))}
               onToggleFavorite={() => toggleFavorite(String(workout.id))}
               onSchedule={() => setScheduleTarget(workout)}
+              lastDone={lastDoneLabel(workout)}
+              equipment={formatEquipment(planEquipment.get(String(workout.id)))}
               {...(ownsPlan(workout)
                 ? {
                     onChangePhoto: () => changePhoto(workout),
@@ -417,6 +511,12 @@ const styles = StyleSheet.create({
   filterRow: {
     paddingHorizontal: Spacing.four,
     gap: Spacing.two,
+  },
+  // Splits "who made it" from "what it is" in the second filter row.
+  filterDivider: {
+    width: StyleSheet.hairlineWidth,
+    alignSelf: "stretch",
+    marginVertical: Spacing.one,
   },
   createCard: {
     borderWidth: StyleSheet.hairlineWidth,

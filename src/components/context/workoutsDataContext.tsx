@@ -12,6 +12,7 @@ import {
   getAvailableWorkouts,
   getCompletedWorkouts,
   getFavoriteWorkouts,
+  getPlanEquipment,
   getWorkouts,
   removeFavoriteWorkout,
 } from "@/lib/supabaseFunctions";
@@ -82,6 +83,9 @@ export type WorkoutsDataContextType = {
   favoriteIds: Set<string>;
   // The individual exercises available to pick from when building a plan.
   availableWorkouts: PlanWorkout[];
+  // Equipment each plan's exercises call for, keyed by plan id. Raw database
+  // values; formatEquipment() in lib/workoutList turns them into a card line.
+  planEquipment: ReadonlyMap<string, string[]>;
   loading: boolean;
   refreshWorkouts: () => void;
   refreshCompletedWorkouts: () => void;
@@ -130,6 +134,9 @@ export const WorkoutsDataProvider = ({
   >([]);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [availableWorkouts, setAvailableWorkouts] = useState<PlanWorkout[]>([]);
+  const [planEquipment, setPlanEquipment] = useState<
+    ReadonlyMap<string, string[]>
+  >(new Map());
   const [loading, setLoading] = useState(true);
   const [scheduledWorkouts, setScheduledWorkouts] = useState<ScheduledWorkout[]>([]);
   const [workoutScheduleCompletions, setWorkoutScheduleCompletions] =
@@ -198,7 +205,16 @@ export const WorkoutsDataProvider = ({
   const refreshWorkouts = useCallback(() => {
     if (!user?.id) return;
     getWorkouts(user)
-      .then((data) => setWorkoutList(data ?? []))
+      .then((data) => {
+        const plans: Workout[] = data ?? [];
+        setWorkoutList(plans);
+        // A second query, since it needs the plans' ids. getPlanEquipment
+        // never rejects — equipment is an optional line on each card and
+        // shouldn't be able to empty the list.
+        return getPlanEquipment(plans.map((plan) => String(plan.id))).then(
+          setPlanEquipment,
+        );
+      })
       .catch((error) => {
         console.log("Error fetching workouts: ", error);
         setWorkoutList([]);
@@ -315,6 +331,7 @@ export const WorkoutsDataProvider = ({
     completedWorkouts,
     favoriteIds,
     availableWorkouts,
+    planEquipment,
     loading,
     refreshWorkouts,
     refreshCompletedWorkouts,

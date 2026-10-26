@@ -517,3 +517,61 @@ export async function uncompleteScheduledWorkout(
     .eq("completed_on", date);
   if (error) throw error;
 }
+
+/* --------------
+    WORKOUT LIST: EQUIPMENT
+------------- */
+// Appended at the end of the file on purpose: getPlanExercises above is being
+// reworked on tb-update-workout-timer-page, and keeping clear of it lets the
+// two branches merge without a conflict here.
+
+type PlanEquipmentRow = {
+  workout_plan_id: string;
+  // A many-to-one embed comes back as one object, but PostgREST returns an
+  // array when it can't tell the relationship's direction — handle both.
+  workouts: { equipment: string | null } | { equipment: string | null }[] | null;
+};
+
+/**
+ * The equipment each plan's exercises call for, keyed by plan id. One query
+ * for every plan on the list rather than one per card.
+ *
+ * Exercises with no equipment recorded are left out, so an empty list means
+ * "unknown", not "none needed". Failure returns an empty map: this feeds an
+ * optional line on each card and should never take the list down with it.
+ */
+export async function getPlanEquipment(
+  planIds: string[],
+): Promise<Map<string, string[]>> {
+  const equipment = new Map<string, string[]>();
+  if (planIds.length === 0) return equipment;
+
+  const { data, error } = await supabase
+    .from("workout_plan_workouts")
+    .select("workout_plan_id, workouts ( equipment )")
+    .in("workout_plan_id", planIds)
+    .returns<PlanEquipmentRow[]>();
+
+  if (error) {
+    console.log("Error fetching plan equipment: ", error);
+    return equipment;
+  }
+
+  for (const row of data ?? []) {
+    const joined = Array.isArray(row.workouts)
+      ? row.workouts
+      : row.workouts
+        ? [row.workouts]
+        : [];
+    const planId = String(row.workout_plan_id);
+
+    for (const { equipment: item } of joined) {
+      if (!item) continue;
+      const list = equipment.get(planId) ?? [];
+      list.push(item);
+      equipment.set(planId, list);
+    }
+  }
+
+  return equipment;
+}
