@@ -38,6 +38,53 @@ create table if not exists public.app_events (
   props       jsonb not null default '{}'::jsonb check (pg_column_size(props) <= 4096)
 );
 
+-- If app_events already existed — for example the shorter version of this
+-- table sketched while metrics were being planned — `create table if not
+-- exists` above leaves it as it was, and the first function below that reads
+-- a newer column fails with "column update_id does not exist". So bring an
+-- existing table up to the definition above. On a fresh one this is a no-op.
+alter table public.app_events add column if not exists platform    text;
+alter table public.app_events add column if not exists app_version text;
+alter table public.app_events add column if not exists update_id   text;
+
+-- The sketch allowed a null user_id and had no foreign key. A row with no user
+-- could never have passed the insert policy, so the only rows this can remove
+-- are test rows inserted by hand from the SQL editor.
+delete from public.app_events where user_id is null;
+alter table public.app_events alter column user_id set default auth.uid();
+alter table public.app_events alter column user_id set not null;
+
+-- Constraints written inline above only exist when the table is created fresh,
+-- so add any that are missing. NOT VALID: rows already present are not
+-- re-checked, while every new row is.
+do $$
+declare
+  c record;
+begin
+  for c in
+    select * from (values
+      ('app_events_name_check',        'check (char_length(name) <= 64)'),
+      ('app_events_duration_ms_check', 'check (duration_ms is null or duration_ms between 0 and 600000)'),
+      ('app_events_platform_check',    'check (char_length(platform) <= 16)'),
+      ('app_events_app_version_check', 'check (char_length(app_version) <= 32)'),
+      ('app_events_update_id_check',   'check (char_length(update_id) <= 64)'),
+      ('app_events_props_check',       'check (pg_column_size(props) <= 4096)'),
+      ('app_events_user_id_fkey',      'foreign key (user_id) references auth.users (id) on delete cascade')
+    ) as t(conname, definition)
+  loop
+    if not exists (
+      select 1 from pg_constraint
+      where conrelid = 'public.app_events'::regclass and conname = c.conname
+    ) then
+      execute format(
+        'alter table public.app_events add constraint %I %s not valid',
+        c.conname, c.definition
+      );
+    end if;
+  end loop;
+end
+$$;
+
 create index if not exists app_events_created_at_idx
   on public.app_events (created_at desc);
 create index if not exists app_events_name_created_at_idx
@@ -47,6 +94,9 @@ alter table public.app_events enable row level security;
 
 -- Users write their own events and read nothing back, including their own.
 -- There is no select, update or delete policy on purpose.
+-- The first drop removes the sketch's identically-behaving policy, so the
+-- table does not end up with two.
+drop policy if exists "insert own events" on public.app_events;
 drop policy if exists "users insert their own events" on public.app_events;
 create policy "users insert their own events"
   on public.app_events for insert to authenticated
@@ -54,6 +104,9 @@ create policy "users insert their own events"
 
 revoke select, update, delete on public.app_events from anon, authenticated;
 revoke all on public.app_events from anon;
+-- Stated rather than left to Supabase's default privileges, so the one thing
+-- users can do here does not depend on a project setting.
+grant insert on public.app_events to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 2. Who counts as a developer

@@ -164,6 +164,9 @@ export async function flushMetrics(): Promise<void> {
     if (!data.session) return;
 
     const batch = buffer.slice(0, MAX_BATCH);
+    // Never chain .select() here. Users hold INSERT but not SELECT on
+    // app_events, and .select() turns this into INSERT ... RETURNING, which
+    // needs SELECT: every batch would be refused and then dropped below.
     const { error } = await client.from("app_events").insert(batch);
 
     // Dropped whether or not it succeeded: a batch the database rejected will
