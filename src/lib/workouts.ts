@@ -5,6 +5,9 @@ import type { Workout } from "@/components/context/workoutsDataContext";
 export type PlanExercise = {
   workoutId: string;
   name: string;
+  instructions: string | null;
+  muscleGroup: string | null;
+  equipment: string | null;
   sets: number;
   reps: number;
   position: number;
@@ -13,6 +16,9 @@ export type PlanExercise = {
 // How far through an exercise the user is. Kept separate from PlanExercise so
 // the plan definition and the user's progress against it stay distinct.
 export type ExerciseProgress = {
+  sets: number;
+  reps: number;
+  weightKg: number | null;
   setsRemaining: number;
   completed: boolean;
 };

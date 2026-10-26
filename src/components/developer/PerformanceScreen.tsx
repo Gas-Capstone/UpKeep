@@ -152,7 +152,7 @@ const WORKOUT_OUTCOMES: Record<
   { label: string; icon: string; status: OutcomeStatus }
 > = {
   all_sets_done: { label: "Finished every set", icon: "check-circle-outline", status: "good" },
-  time_up: { label: "Ran out of time", icon: "timer-outline", status: "neutral" },
+  time_up: { label: "Reached planned time", icon: "timer-outline", status: "neutral" },
   stopped_early: { label: "Stopped early", icon: "stop-circle-outline", status: "neutral" },
 };
 
