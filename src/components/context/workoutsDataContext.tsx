@@ -61,11 +61,13 @@ export type PlanWorkout = {
   equipment?: string;
 };
 
-// One line of a plan being built: which exercise, and how many sets/reps.
+// One line of a plan being built: which exercise, how many sets, and either
+// reps per set or, for timed exercises, how long each set lasts.
 export type PlanWorkoutSelection = {
   workout_id: string;
   sets: number;
-  reps: number;
+  reps: number | null;
+  duration_seconds: number | null;
 };
 
 export type NewWorkoutPlan = {

@@ -150,6 +150,7 @@ const WorkoutSessionProvider = ({
         next.set(exercise.workoutId, {
           sets: exercise.sets,
           reps: exercise.reps,
+          durationSec: exercise.durationSec,
           weightKg: null,
           setsRemaining: exercise.sets,
           completed: false,

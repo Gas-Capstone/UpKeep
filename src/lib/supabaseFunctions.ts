@@ -1,6 +1,7 @@
 import { supabase } from "./supabaseClient";
 import type { Weekday } from "./habits/habits";
 import type { ScheduledWorkout, WorkoutSchedule } from "./workoutSchedule";
+import type { PlanWorkoutSelection } from "@/components/context/workoutsDataContext";
 import type { PlanExercise } from "./workouts";
 
 type UserRef = { id: string };
@@ -40,7 +41,7 @@ export async function createWorkoutPlan(
     target: string;
     duration_min: number;
   },
-  selections: { workout_id: string; sets: number; reps: number }[],
+  selections: PlanWorkoutSelection[],
 ) {
   const { data, error } = await supabase
     .from("workout_plans")
@@ -66,6 +67,7 @@ export async function createWorkoutPlan(
       workout_id: selection.workout_id,
       sets: selection.sets,
       reps: selection.reps,
+      duration_seconds: selection.duration_seconds,
       position: index,
     }));
     const { error: linkError } = await supabase
@@ -172,7 +174,7 @@ export async function updateWorkoutPlan(
  */
 export async function replacePlanExercises(
     planId: string,
-    selections: { workout_id: string; sets: number; reps: number }[],
+    selections: PlanWorkoutSelection[],
 ) {
     const { error: deleteError } = await supabase
         .from("workout_plan_workouts")
@@ -190,6 +192,7 @@ export async function replacePlanExercises(
         workout_id: selection.workout_id,
         sets: selection.sets,
         reps: selection.reps,
+        duration_seconds: selection.duration_seconds,
         position: index,
     }))
     const { error: insertError } = await supabase
@@ -223,7 +226,9 @@ export async function deleteWorkoutPlan(planId: string) {
 type PlanExerciseRow = {
   workout_id: string;
   sets: number | null;
-  reps: number | null;
+  // A text column: whole numbers as written by the app.
+  reps: string | null;
+  duration_seconds: number | null;
   position: number | null;
   workouts: {
     name: string | null;
@@ -239,7 +244,7 @@ export async function getPlanExercises(
 ): Promise<PlanExercise[]> {
   const { data, error } = await supabase
     .from("workout_plan_workouts")
-    .select("workout_id, sets, reps, position, workouts ( name, instructions, muscle_group, equipment )")
+    .select("workout_id, sets, reps, duration_seconds, position, workouts ( name, instructions, muscle_group, equipment )")
     .eq("workout_plan_id", workoutPlanId)
     .order("position", { ascending: true })
     .returns<PlanExerciseRow[]>();
@@ -248,16 +253,22 @@ export async function getPlanExercises(
     if (options?.throwOnError) throw error;
     return [];
   }
-  return (data ?? []).map((row) => ({
-    workoutId: String(row.workout_id),
-    name: row.workouts?.name ?? "Unknown exercise",
-    instructions: row.workouts?.instructions ?? null,
-    muscleGroup: row.workouts?.muscle_group ?? null,
-    equipment: row.workouts?.equipment ?? null,
-    sets: row.sets ?? 0,
-    reps: row.reps ?? 0,
-    position: row.position ?? 0,
-  }));
+  return (data ?? []).map((row) => {
+    // Anything that isn't a whole number (or is missing, as on timed rows)
+    // reads as 0 rather than reaching the screen as text.
+    const reps = Number(row.reps);
+    return {
+      workoutId: String(row.workout_id),
+      name: row.workouts?.name ?? "Unknown exercise",
+      instructions: row.workouts?.instructions ?? null,
+      muscleGroup: row.workouts?.muscle_group ?? null,
+      equipment: row.workouts?.equipment ?? null,
+      sets: row.sets ?? 0,
+      reps: Number.isInteger(reps) && reps > 0 ? reps : 0,
+      durationSec: row.duration_seconds,
+      position: row.position ?? 0,
+    };
+  });
 }
 
 /* --------------

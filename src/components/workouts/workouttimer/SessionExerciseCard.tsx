@@ -13,7 +13,11 @@ import {
 } from "react-native-paper";
 
 import { Radius, Spacing } from "@/constants/theme";
-import type { ExerciseProgress, PlanExercise } from "@/lib/workouts";
+import {
+  formatExerciseTarget,
+  type ExerciseProgress,
+  type PlanExercise,
+} from "@/lib/workouts";
 
 type Props = {
   exercise: PlanExercise;
@@ -33,18 +37,28 @@ export function SessionExerciseCard({
   onChange,
 }: Props) {
   const theme = useTheme();
+  // Timed exercises (cardio, holds) are edited in the unit the plan uses:
+  // minutes when it's a whole number of them, otherwise seconds.
+  const timed = progress.durationSec !== null;
+  const unitSec = exercise.durationSec !== null && exercise.durationSec % 60 === 0 ? 60 : 1;
+  const unitLabel = unitSec === 60 ? "Minutes" : "Seconds";
   const [editing, setEditing] = useState(false);
   const [sets, setSets] = useState(String(progress.sets));
   const [reps, setReps] = useState(String(progress.reps));
+  const [duration, setDuration] = useState(
+    progress.durationSec === null ? "" : String(Math.round(progress.durationSec / unitSec)),
+  );
   const [weight, setWeight] = useState(progress.weightKg?.toString() ?? "");
   const [edited, setEdited] = useState(false);
   const setsValue = Number(sets);
   const repsValue = Number(reps);
+  const durationValue = Number(duration);
   const weightValue = weight.trim() === "" ? null : Number(weight.replace(",", "."));
   const setsValid = /^\d+$/.test(sets) && setsValue >= 1 && setsValue <= 999;
   const repsValid = /^\d+$/.test(reps) && repsValue >= 1 && repsValue <= 999;
+  const durationValid = /^\d+$/.test(duration) && durationValue >= 1 && durationValue <= 999;
   const weightValid = weightValue === null || (Number.isFinite(weightValue) && weightValue >= 0 && weightValue <= 9999);
-  const valid = setsValid && repsValid && weightValid;
+  const valid = setsValid && (timed ? durationValid : repsValid && weightValid);
   const done = progress.sets - progress.setsRemaining;
 
   const apply = () => {
@@ -53,8 +67,9 @@ export function SessionExerciseCard({
     onChange({
       ...progress,
       sets: setsValue,
-      reps: repsValue,
-      weightKg: weightValue,
+      ...(timed
+        ? { durationSec: durationValue * unitSec }
+        : { reps: repsValue, weightKg: weightValue }),
       setsRemaining: remaining,
       completed: remaining === 0,
     });
@@ -73,15 +88,15 @@ export function SessionExerciseCard({
       <List.Item
         title={exercise.name}
         titleNumberOfLines={3}
-        description={`${progress.sets} sets × ${progress.reps} reps${progress.weightKg !== null ? ` · ${progress.weightKg} kg` : ""}`}
+        description={formatExerciseTarget(progress)}
         descriptionNumberOfLines={2}
         onPress={onViewDetails}
-        accessibilityLabel={`View details for ${exercise.name}, ${progress.sets} sets of ${progress.reps} reps${progress.weightKg !== null ? ` at ${progress.weightKg} kilograms` : ""}`}
+        accessibilityLabel={`View details for ${exercise.name}, ${formatExerciseTarget(progress, { spoken: true })}`}
         left={(props) => (
           <List.Icon
             {...props}
             color={progress.completed ? theme.colors.primary : theme.colors.onSurfaceVariant}
-            icon={progress.completed ? "check-circle-outline" : "dumbbell"}
+            icon={progress.completed ? "check-circle-outline" : timed ? "timer-outline" : "dumbbell"}
           />
         )}
         right={(props) => <List.Icon {...props} icon="information-outline" />}
@@ -134,7 +149,11 @@ export function SessionExerciseCard({
             mode="text"
             compact
             onPress={() => setEditing(!editing)}
-            accessibilityLabel={`Edit sets, reps and weight for ${exercise.name}`}
+            accessibilityLabel={
+              timed
+                ? `Edit sets and ${unitLabel.toLowerCase()} for ${exercise.name}`
+                : `Edit sets, reps and weight for ${exercise.name}`
+            }
             accessibilityState={{ expanded: editing }}
             textColor={theme.colors.onSurfaceVariant}
             style={styles.editButton}
@@ -161,31 +180,48 @@ export function SessionExerciseCard({
                 style={styles.field}
               />
 
-              <TextInput
-                mode="outlined"
-                label="Reps per set"
-                accessibilityLabel="Reps per set"
-                value={reps}
-                onChangeText={(value) => { setReps(value); setEdited(true); }}
-                keyboardType="number-pad"
-                error={!repsValid}
-                style={styles.field}
-              />
+              {timed ? (
+                <TextInput
+                  mode="outlined"
+                  label={`${unitLabel} per set`}
+                  accessibilityLabel={`${unitLabel} per set`}
+                  value={duration}
+                  onChangeText={(value) => { setDuration(value); setEdited(true); }}
+                  keyboardType="number-pad"
+                  error={!durationValid}
+                  style={styles.field}
+                />
+              ) : (
+                <TextInput
+                  mode="outlined"
+                  label="Reps per set"
+                  accessibilityLabel="Reps per set"
+                  value={reps}
+                  onChangeText={(value) => { setReps(value); setEdited(true); }}
+                  keyboardType="number-pad"
+                  error={!repsValid}
+                  style={styles.field}
+                />
+              )}
             </View>
 
-            <TextInput
-              mode="outlined"
-              label="Weight (kg, optional)"
-              accessibilityLabel="Weight (kg, optional)"
-              value={weight}
-              onChangeText={(value) => { setWeight(value); setEdited(true); }}
-              keyboardType="decimal-pad"
-              error={!weightValid}
-            />
+            {!timed && (
+              <TextInput
+                mode="outlined"
+                label="Weight (kg, optional)"
+                accessibilityLabel="Weight (kg, optional)"
+                value={weight}
+                onChangeText={(value) => { setWeight(value); setEdited(true); }}
+                keyboardType="decimal-pad"
+                error={!weightValid}
+              />
+            )}
 
             {!valid && (
               <HelperText type="error">
-                Sets and reps must be whole numbers from 1–999. Weight must be 0–9999 kg or blank.
+                {timed
+                  ? `Sets and ${unitLabel.toLowerCase()} must be whole numbers from 1–999.`
+                  : "Sets and reps must be whole numbers from 1–999. Weight must be 0–9999 kg or blank."}
               </HelperText>
             )}
 
