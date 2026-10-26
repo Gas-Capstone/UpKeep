@@ -1,6 +1,7 @@
 import { supabase } from "./supabaseClient";
 import type { Weekday } from "./habits/habits";
 import type { ScheduledWorkout, WorkoutSchedule } from "./workoutSchedule";
+import type { PlanExercise } from "./workouts";
 
 type UserRef = { id: string };
 type WorkoutRef = { id: string };
@@ -219,23 +220,40 @@ export async function deleteWorkoutPlan(planId: string) {
     PLAN EXERCISES
 ------------- */
 // The exercises that make up a plan, in the order they were arranged.
+type PlanExerciseRow = {
+  workout_id: string;
+  sets: number | null;
+  reps: number | null;
+  position: number | null;
+  workouts: {
+    name: string | null;
+    instructions: string | null;
+    muscle_group: string | null;
+    equipment: string | null;
+  } | null;
+};
+
 export async function getPlanExercises(
   workoutPlanId: string,
   options?: { throwOnError?: boolean },
-) {
+): Promise<PlanExercise[]> {
   const { data, error } = await supabase
     .from("workout_plan_workouts")
-    .select("workout_id, sets, reps, position, workouts ( name )")
+    .select("workout_id, sets, reps, position, workouts ( name, instructions, muscle_group, equipment )")
     .eq("workout_plan_id", workoutPlanId)
-    .order("position", { ascending: true });
+    .order("position", { ascending: true })
+    .returns<PlanExerciseRow[]>();
   if (error) {
     console.log("Error fetching plan exercises: ", error);
     if (options?.throwOnError) throw error;
     return [];
   }
-  return (data ?? []).map((row: any) => ({
+  return (data ?? []).map((row) => ({
     workoutId: String(row.workout_id),
     name: row.workouts?.name ?? "Unknown exercise",
+    instructions: row.workouts?.instructions ?? null,
+    muscleGroup: row.workouts?.muscle_group ?? null,
+    equipment: row.workouts?.equipment ?? null,
     sets: row.sets ?? 0,
     reps: row.reps ?? 0,
     position: row.position ?? 0,

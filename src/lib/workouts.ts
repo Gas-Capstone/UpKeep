@@ -5,6 +5,9 @@ import type { Workout } from "@/components/context/workoutsDataContext";
 export type PlanExercise = {
   workoutId: string;
   name: string;
+  instructions: string | null;
+  muscleGroup: string | null;
+  equipment: string | null;
   sets: number;
   reps: number;
   position: number;

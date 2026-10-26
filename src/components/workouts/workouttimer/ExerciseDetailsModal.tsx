@@ -11,6 +11,14 @@ type Props = {
 
 export function ExerciseDetailsModal({ exercise, onDismiss }: Props) {
   const theme = useTheme();
+  const muscleGroup = exercise?.muscleGroup?.trim();
+  const muscleGroupLabel = muscleGroup
+    ? muscleGroup.charAt(0).toUpperCase() + muscleGroup.slice(1)
+    : "No muscle information recorded for this exercise.";
+  const equipment = exercise?.equipment?.trim();
+  const equipmentLabel = equipment
+    ? equipment.charAt(0).toUpperCase() + equipment.slice(1)
+    : "No equipment information recorded for this exercise.";
 
   return (
     <Portal>
@@ -23,23 +31,27 @@ export function ExerciseDetailsModal({ exercise, onDismiss }: Props) {
 
         <Dialog.ScrollArea>
           <ScrollView contentContainerStyle={styles.content}>
-            <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
-              Exercise information is coming soon.
-            </Text>
+            <View style={styles.section}>
+              <Text variant="titleMedium">Muscle group</Text>
+
+              <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
+                {muscleGroupLabel}
+              </Text>
+            </View>
+
+            <View style={styles.section}>
+              <Text variant="titleMedium">Equipment</Text>
+
+              <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
+                {equipmentLabel}
+              </Text>
+            </View>
 
             <View style={styles.section}>
               <Text variant="titleMedium">How to perform</Text>
 
               <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
-                Instructions are not available yet.
-              </Text>
-            </View>
-
-            <View style={styles.section}>
-              <Text variant="titleMedium">Muscles worked</Text>
-
-              <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
-                Muscle information is not available yet.
+                {exercise?.instructions?.trim() || "No instructions recorded for this exercise."}
               </Text>
             </View>
           </ScrollView>
