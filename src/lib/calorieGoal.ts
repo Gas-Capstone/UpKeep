@@ -1,3 +1,5 @@
+import { splitHeight } from "./height";
+
 // Estimates a daily calorie goal (TDEE) from basic biometrics using the
 // Mifflin-St Jeor equation.
 // "Lightly active" (light exercise 1-3 days/week) — a reasonable
@@ -12,10 +14,8 @@ export type CalorieGoalInput = {
 };
 
 function heightFeetInchesToCm(heightFeet: number): number {
-  const feet = Math.floor(heightFeet);
-  const inches = Math.round((heightFeet - feet) * 100);
-  const totalInches = feet * 12 + inches;
-  return totalInches * 2.54;
+  const { feet, inches } = splitHeight(heightFeet);
+  return (feet * 12 + inches) * 2.54;
 }
 
 function lbsToKg(lbs: number): number {

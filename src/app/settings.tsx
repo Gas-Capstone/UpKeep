@@ -34,6 +34,7 @@ import { ThemedView } from "@/components/themed-view";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Colors, MaxContentWidth, Radius, Spacing } from "@/constants/theme";
 import { checkIsDeveloper } from "@/lib/performance";
+import { buildHeightValue, splitHeight } from "@/lib/height";
 import { supabase } from "@/lib/supabaseClient";
 
 const MFA_QR_DISPLAY_SIZE = 160;
@@ -119,25 +120,15 @@ const GOALS = [
   { key: "mobility", label: "Improve mobility", icon: "body-outline" },
 ] as const;
 
-function buildHeightValue(feetStr: string, inchesStr: string): number | null {
-  const feet = Number(feetStr);
-  if (!feetStr || Number.isNaN(feet)) return null;
-
-  const rawInches = Number(inchesStr);
-  const inches = Number.isNaN(rawInches)
-    ? 0
-    : Math.min(Math.max(Math.round(rawInches), 0), 11);
-
-  return Number(`${feet}.${String(inches).padStart(2, "0")}`);
-}
-
+// Into the form's feet and inches fields. See lib/height for why this is
+// arithmetic and not a split on the decimal point.
 function splitStoredHeight(height: number | null | undefined) {
   if (!height) return { feet: "", inches: "" };
 
-  const [feet = "", inches = "0"] = String(height).split(".");
+  const { feet, inches } = splitHeight(height);
   return {
-    feet,
-    inches: String(Number(inches)),
+    feet: String(feet),
+    inches: String(inches),
   };
 }
 
