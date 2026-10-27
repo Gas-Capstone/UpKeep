@@ -66,6 +66,7 @@ export function SessionExerciseCard({
     progress.weightKg === null ? "" : String(displayWeight(progress.weightKg, weightUnit));
   const [weight, setWeight] = useState(weightField);
   const [edited, setEdited] = useState(false);
+  const [weightEdited, setWeightEdited] = useState(false);
   const setsValue = Number(sets);
   const repsValue = Number(reps);
   const durationValue = Number(duration);
@@ -105,7 +106,11 @@ export function SessionExerciseCard({
       sets: setsValue,
       ...(timed
         ? { durationSec: durationValue * unitSec }
-        : { reps: repsValue, weightKg: weightValue === null ? null : toKg(weightValue, weightUnit) }),
+        : { reps: repsValue, weightKg: weightEdited
+          ? (weightValue === null ? null : toKg(weightValue, weightUnit))
+          : progress.weightKg 
+
+        }),
       setsRemaining: remaining,
       completed: remaining === 0,
     });
@@ -124,6 +129,7 @@ export function SessionExerciseCard({
       );
       setWeight(weightField());
       setEdited(false);
+      setWeightEdited(false);
     }
     setEditing(!editing);
   };
@@ -280,7 +286,7 @@ export function SessionExerciseCard({
                 label={`Weight (${weightUnit}, optional)`}
                 accessibilityLabel={`Weight in ${weightUnit === "kg" ? "kilograms" : "pounds"}, optional`}
                 value={weight}
-                onChangeText={(value) => { setWeight(value); setEdited(true); }}
+                onChangeText={(value) => { setWeight(value); setEdited(true); setWeightEdited(true);}}
                 keyboardType="decimal-pad"
                 error={!weightValid}
               />
