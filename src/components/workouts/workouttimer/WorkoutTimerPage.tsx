@@ -99,6 +99,7 @@ export default function WorkoutTimerPage() {
             completed={isCompleted}
             saving={saving}
             error={confirmStopOpen ? "" : saveError}
+            exercisesLoading={exercisesLoading}
             onToggle={isActive ? pauseSession : resumeSession}
             onFinish={() => {
               Keyboard.dismiss();
