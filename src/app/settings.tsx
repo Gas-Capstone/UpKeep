@@ -27,14 +27,15 @@ import {
 } from "@/components/context/notificationsContext";
 import { useProfileData } from "@/components/context/profileDataContext";
 import { useThemeMode } from "@/components/context/ThemeContext";
+import { useWeightUnit } from "@/components/context/UnitsContext";
 import { useTour } from "@/components/context/tourContext";
 import { useUserContext } from "@/components/context/userContext";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Colors, MaxContentWidth, Radius, Spacing } from "@/constants/theme";
-import { checkIsDeveloper } from "@/lib/performance";
 import { buildHeightValue, splitHeight } from "@/lib/height";
+import { checkIsDeveloper } from "@/lib/performance";
 import { supabase } from "@/lib/supabaseClient";
 
 const MFA_QR_DISPLAY_SIZE = 160;
@@ -145,6 +146,7 @@ function formatBirthday(value: string | null | undefined) {
 
 export default function SettingsScreen() {
   const { theme, setTheme, resolvedTheme } = useThemeMode();
+  const { weightUnit, setWeightUnit } = useWeightUnit();
   const colors = Colors[resolvedTheme];
   const { user } = useUserContext();
   const {
@@ -824,6 +826,62 @@ export default function SettingsScreen() {
                           }
                         >
                           {option.charAt(0).toUpperCase() + option.slice(1)}
+                        </ThemedText>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+
+              <SectionLabel
+                title="Units"
+                subtitle="How weights are shown and entered in workouts"
+              />
+              <View
+                style={[
+                  styles.card,
+                  {
+                    backgroundColor: colors.backgroundElement,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <View style={styles.themeRow} accessibilityRole="radiogroup">
+                  {([
+                    { unit: "kg", label: "Kilograms", short: "kg" },
+                    { unit: "lb", label: "Pounds", short: "lb" },
+                  ] as const).map((option) => {
+                    const selected = weightUnit === option.unit;
+                    return (
+                      <Pressable
+                        key={option.unit}
+                        onPress={() => setWeightUnit(option.unit)}
+                        accessibilityRole="radio"
+                        accessibilityState={{ checked: selected }}
+                        accessibilityLabel={option.label}
+                        style={({ pressed }) => [
+                          styles.themeChoice,
+                          {
+                            backgroundColor: selected
+                              ? colors.brandSoft
+                              : colors.background,
+                            borderColor: selected
+                              ? colors.brand
+                              : colors.border,
+                          },
+                          pressed && styles.pressed,
+                        ]}
+                      >
+                        <ThemedText
+                          type="smallBold"
+                          style={
+                            selected ? { color: colors.brandStrong } : undefined
+                          }
+                        >
+                          {option.label}
+                        </ThemedText>
+                        <ThemedText type="small" themeColor="textSecondary">
+                          {option.short}
                         </ThemedText>
                       </Pressable>
                     );

@@ -104,6 +104,14 @@ describe("formatExerciseTarget", () => {
     );
   });
 
+  it("shows the weight in pounds when asked", () => {
+    const weighted = { ...reps, weightKg: 20 };
+    expect(formatExerciseTarget(weighted, { unit: "lb" })).toBe("3 sets × 10 reps · 44.1 lb");
+    expect(formatExerciseTarget(weighted, { unit: "lb", spoken: true })).toBe(
+      "3 sets of 10 reps at 44.1 pounds",
+    );
+  });
+
   it("uses the singular for one", () => {
     expect(formatExerciseTarget({ ...reps, sets: 1, reps: 1 })).toBe("1 set × 1 rep");
   });

@@ -7,7 +7,13 @@
  * on tb-update-workout-timer-page, and a new file can't conflict with it.
  */
 
-import { differenceInCalendarDays, differenceInCalendarMonths } from "date-fns";
+import {
+  differenceInCalendarDays,
+  differenceInCalendarMonths,
+  differenceInCalendarWeeks,
+  startOfWeek,
+  subWeeks,
+} from "date-fns";
 
 import type {
   CompletedWorkout,
@@ -293,4 +299,36 @@ export function formatDuration(minutes: number): string {
   const hours = Math.floor(minutes / 60);
   const rest = minutes % 60;
   return rest === 0 ? `${hours} h` : `${hours} h ${rest} min`;
+}
+
+// ---------------------------------------------------------------------------
+// Progression
+// ---------------------------------------------------------------------------
+
+export type WeekCount = { weekStart: Date; count: number };
+
+/**
+ * Finished sessions per week for the last `weeks` weeks, oldest first, the
+ * last being this week. Weeks start on Sunday, like "this week" everywhere
+ * else in the app.
+ */
+export function workoutsPerWeek(
+  completedWorkouts: readonly CompletedWorkout[],
+  weeks = 8,
+  now: Date = new Date(),
+): WeekCount[] {
+  const thisWeek = startOfWeek(now);
+  const counts: WeekCount[] = Array.from({ length: weeks }, (_, index) => ({
+    weekStart: subWeeks(thisWeek, weeks - 1 - index),
+    count: 0,
+  }));
+
+  for (const workout of completedWorkouts) {
+    const at = new Date(workout.completed_at);
+    if (Number.isNaN(at.getTime())) continue;
+    const weeksAgo = differenceInCalendarWeeks(now, at);
+    if (weeksAgo >= 0 && weeksAgo < weeks) counts[weeks - 1 - weeksAgo].count += 1;
+  }
+
+  return counts;
 }

@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useState, useEffect } from "react";
 import { CompletionsByDate, rowsToCompletionsByDate } from "@/lib/habits/habits";
+import { buildHistorySummary, type SessionSummary } from "@/lib/sessionSummary";
 import {
   addFavoriteWorkout,
   completeScheduledWorkout,
@@ -9,8 +10,11 @@ import {
   getScheduledWorkouts,
   getWorkoutScheduleCompletions,
   uncompleteScheduledWorkout,
+  deleteWorkoutSession,
   getAvailableWorkouts,
   getCompletedWorkouts,
+  getExerciseResults,
+  getSessionDetails,
   getFavoriteWorkouts,
   getPlanEquipment,
   getWorkouts,
@@ -91,6 +95,12 @@ export type WorkoutsDataContextType = {
   loading: boolean;
   refreshWorkouts: () => void;
   refreshCompletedWorkouts: () => void;
+  // A finished session's summary, as History reopens it. Throws when it
+  // can't be loaded.
+  loadSessionSummary: (session: CompletedWorkout) => Promise<SessionSummary>;
+  // Removes a session, with its exercise results, from history and every
+  // stat built on it. Throws on failure so the dialog can say so.
+  deleteSession: (sessionId: string) => Promise<void>;
   refreshFavorites: () => void;
   toggleFavorite: (workoutId: string) => void;
   createPlan: (
@@ -328,6 +338,31 @@ export const WorkoutsDataProvider = ({
     });
   }
 
+  const loadSessionSummary = async (session: CompletedWorkout) => {
+    if (!user?.id) throw new Error("Sign in to see your history.");
+    const { totals, results } = await getSessionDetails(session.id);
+    // Every result for the same exercises, to work out which of this
+    // session's were records at the time.
+    const allResults = await getExerciseResults(
+      user,
+      results.map((result) => result.workoutId),
+    );
+    return buildHistorySummary({
+      planName: session.name,
+      minutes: session.duration_min,
+      totals,
+      sessionId: session.id,
+      sessionResults: results,
+      allResults,
+    });
+  };
+
+  const deleteSession = async (sessionId: string) => {
+    await deleteWorkoutSession(sessionId);
+    // History, streaks, last-done and the progression chart all read this.
+    refreshCompletedWorkouts();
+  };
+
   const contextValue: WorkoutsDataContextType = {
     workoutList,
     completedWorkouts,
@@ -337,6 +372,8 @@ export const WorkoutsDataProvider = ({
     loading,
     refreshWorkouts,
     refreshCompletedWorkouts,
+    loadSessionSummary,
+    deleteSession,
     refreshFavorites,
     toggleFavorite,
     createPlan,

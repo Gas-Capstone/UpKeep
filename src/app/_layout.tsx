@@ -13,6 +13,7 @@ import { NotificationsProvider } from "@/components/context/notificationsContext
 import { ProfileDataProvider } from "@/components/context/profileDataContext";
 import { ThemeProvider, useThemeMode } from "@/components/context/ThemeContext";
 import { TourProvider } from "@/components/context/tourContext";
+import { UnitsProvider } from "@/components/context/UnitsContext";
 import { UserProvider } from "@/components/context/userContext";
 import { StartupContext } from "@/components/context/startupContext";
 import { WorkoutSessionProvider } from "@/components/context/workoutSessionContext";
@@ -63,6 +64,7 @@ function RootContent() {
               <HabitsProvider>
                 <NotificationsProvider>
                   <WorkoutSessionProvider>
+                    <UnitsProvider>
                     <TourProvider>
                       <GluestackUIProvider mode={theme}>
                         <PaperProvider theme={curTheme}>
@@ -90,6 +92,7 @@ function RootContent() {
                         </PaperProvider>
                       </GluestackUIProvider>
                     </TourProvider>
+                    </UnitsProvider>
                   </WorkoutSessionProvider>
                 </NotificationsProvider>
               </HabitsProvider>

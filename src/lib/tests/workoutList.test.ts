@@ -15,6 +15,7 @@ import {
   getWorkoutsThisWeek,
   hasActiveFilters,
   lastDoneByPlan,
+  workoutsPerWeek,
 } from "@/lib/workoutList";
 
 // Local-time dates throughout, so these pass in any time zone — CI runs in
@@ -242,5 +243,38 @@ describe("history summary", () => {
       session("3", "a", at(17, 23)), // Saturday: last week
     ];
     expect(getWorkoutsThisWeek(done)).toBe(2);
+  });
+});
+
+describe("workoutsPerWeek", () => {
+  // Oct 21 2026 is a Wednesday: this week began Sunday the 18th.
+  const now = at(21, 18);
+
+  it("counts the last 8 weeks, oldest first, ending with this week", () => {
+    const weeks = workoutsPerWeek(
+      [
+        session("1", "a", at(21, 7)), // this week
+        session("2", "a", at(18, 0)), // this week (Sunday, first minute)
+        session("3", "a", at(17, 23)), // last week (Saturday)
+        session("4", "a", at(5)), // two weeks ago (the week of Oct 4)
+      ],
+      8,
+      now,
+    );
+    expect(weeks).toHaveLength(8);
+    expect(weeks[7]).toEqual({ weekStart: new Date(2026, 9, 18), count: 2 });
+    expect(weeks[6].count).toBe(1);
+    expect(weeks[5]).toEqual({ weekStart: new Date(2026, 9, 4), count: 1 });
+    expect(weeks[4].count).toBe(0);
+    expect(weeks[0].weekStart).toEqual(new Date(2026, 7, 30));
+  });
+
+  it("leaves out sessions older than the window", () => {
+    const weeks = workoutsPerWeek([session("1", "a", new Date(2026, 5, 1))], 8, now);
+    expect(weeks.every((week) => week.count === 0)).toBe(true);
+  });
+
+  it("is all zeros with no history", () => {
+    expect(workoutsPerWeek([], 8, now).map((week) => week.count)).toEqual([0, 0, 0, 0, 0, 0, 0, 0]);
   });
 });

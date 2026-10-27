@@ -3,6 +3,7 @@ import type {
   PlanWorkoutSelection,
   Workout,
 } from "@/components/context/workoutsDataContext";
+import { formatWeight, type WeightUnit } from "./units";
 
 // One exercise inside a plan, joined from workout_plan_workouts + workouts.
 export type PlanExercise = {
@@ -127,11 +128,11 @@ export function formatExerciseDuration(
 /**
  * What an exercise asks for: "3 sets × 10 reps · 20 kg", "3 sets × 45 sec",
  * or just "30 min" for a single timed set. `spoken` gives the screen-reader
- * version: "3 sets of 10 reps at 20 kilograms".
+ * version: "3 sets of 10 reps at 20 kilograms". Weights show in `unit`.
  */
 export function formatExerciseTarget(
   target: Pick<ExerciseProgress, "sets" | "reps" | "durationSec" | "weightKg">,
-  { spoken = false }: { spoken?: boolean } = {},
+  { spoken = false, unit = "kg" }: { spoken?: boolean; unit?: WeightUnit } = {},
 ): string {
   const { sets, reps, durationSec, weightKg } = target;
 
@@ -145,7 +146,8 @@ export function formatExerciseTarget(
     ? `${plural(sets, "set")} of ${plural(reps, "rep")}`
     : `${plural(sets, "set")} × ${plural(reps, "rep")}`;
   if (weightKg === null) return base;
-  return spoken ? `${base} at ${weightKg} kilograms` : `${base} · ${weightKg} kg`;
+  const weight = formatWeight(weightKg, unit, { spoken });
+  return spoken ? `${base} at ${weight}` : `${base} · ${weight}`;
 }
 
 // `workouts: []` was an empty-tuple type (typo for `Workout[]`), which broke every real call site.

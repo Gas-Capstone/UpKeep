@@ -2,6 +2,9 @@ import { supabase } from "./supabaseClient";
 import type { Weekday } from "./habits/habits";
 import type { ScheduledWorkout, WorkoutSchedule } from "./workoutSchedule";
 import type { PlanWorkoutSelection } from "@/components/context/workoutsDataContext";
+import type { ExerciseResult, SavedExerciseResult } from "./personalRecords";
+import type { PlanOverride } from "./planOverrides";
+import type { SessionTotals } from "./sessionSummary";
 import type { PlanExercise } from "./workouts";
 
 type UserRef = { id: string };
@@ -85,21 +88,46 @@ export async function createWorkoutPlan(
   return data;
 }
 
+// Returns the new session's id, so its exercise results can be saved with it.
 export async function setWorkoutComplete(
   user: UserRef | null | undefined,
   workout: WorkoutRef,
   durationMin: number,
-): Promise<void> {
+  totals?: SessionTotals,
+): Promise<string> {
   if (!user?.id) throw new Error("Sign in to save a workout.");
 
   // The column is workout_plan_id, not workout_id — it was renamed alongside
   // workouts -> workout_plans, and this insert was missed at the time.
-  const { error } = await supabase.from("workout_sessions").insert({
+  const session = {
     user_id: user.id,
     workout_plan_id: workout.id,
     duration_min: durationMin,
-  });
+  };
+  const insert = (row: object) =>
+    supabase.from("workout_sessions").insert(row).select("id").single();
+
+  let { data, error } = await insert(
+    totals
+      ? {
+          ...session,
+          planned_min: totals.plannedMin,
+          sets_done: totals.setsDone,
+          sets_total: totals.setsTotal,
+          exercises_done: totals.exercisesDone,
+          exercises_total: totals.exercisesTotal,
+        }
+      : session,
+  );
+  // PGRST204: a column the database doesn't have yet. Until the history
+  // migration runs, save the workout without its totals rather than not at
+  // all.
+  if (error?.code === "PGRST204" && totals) {
+    ({ data, error } = await insert(session));
+  }
   if (error) throw error;
+  if (!data) throw new Error("The workout was saved but its id didn't come back.");
+  return String(data.id);
 }
 
 export async function getCompletedWorkouts(user: UserRef) {
@@ -607,4 +635,204 @@ export async function getPlanEquipment(
   }
 
   return equipment;
+}
+
+/* --------------
+    EXERCISE RESULTS (personal records)
+------------- */
+type ExerciseResultRow = {
+  workout_id: string;
+  sets_done: number;
+  reps: number | null;
+  // numeric(6, 2): can arrive as a string, so it's converted below.
+  weight_kg: number | string | null;
+  duration_seconds: number | null;
+  created_at: string;
+  session_id: string;
+};
+
+/**
+ * The user's saved results for these exercises, from every session they've
+ * finished. Capped by the API's row limit (1000 by default), which is far
+ * more than a plan's exercises collect in a semester.
+ */
+export async function getExerciseResults(
+  user: UserRef,
+  workoutIds: string[],
+): Promise<SavedExerciseResult[]> {
+  if (workoutIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from("workout_exercise_results")
+    .select("workout_id, sets_done, reps, weight_kg, duration_seconds, created_at, session_id")
+    .eq("user_id", user.id)
+    .in("workout_id", workoutIds)
+    .returns<ExerciseResultRow[]>();
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    workoutId: String(row.workout_id),
+    setsDone: row.sets_done,
+    reps: row.reps,
+    weightKg: row.weight_kg === null ? null : Number(row.weight_kg),
+    durationSec: row.duration_seconds,
+    savedAt: Date.parse(row.created_at),
+    sessionId: String(row.session_id),
+  }));
+}
+
+/** Saves what was done on each exercise in a finished session. */
+export async function saveExerciseResults(
+  sessionId: string,
+  results: ExerciseResult[],
+): Promise<void> {
+  if (results.length === 0) return;
+  const { error } = await supabase.from("workout_exercise_results").insert(
+    results.map((result) => ({
+      session_id: sessionId,
+      workout_id: result.workoutId,
+      sets_done: result.setsDone,
+      reps: result.reps,
+      weight_kg: result.weightKg,
+      duration_seconds: result.durationSec,
+    })),
+  );
+  if (error) throw error;
+}
+
+/* --------------
+    SESSION HISTORY
+------------- */
+type SessionTotalsRow = {
+  planned_min: number | null;
+  sets_done: number | null;
+  sets_total: number | null;
+  exercises_done: number | null;
+  exercises_total: number | null;
+};
+
+type SessionResultRow = ExerciseResultRow & { workouts: { name: string | null } | null };
+
+/**
+ * A finished session's saved totals (null if it was saved before those were
+ * recorded) and its exercise results, each with the exercise's name.
+ */
+export async function getSessionDetails(sessionId: string): Promise<{
+  totals: SessionTotals | null;
+  results: (SavedExerciseResult & { name: string })[];
+}> {
+  const [session, results] = await Promise.all([
+    supabase
+      .from("workout_sessions")
+      .select("planned_min, sets_done, sets_total, exercises_done, exercises_total")
+      .eq("id", sessionId)
+      .single<SessionTotalsRow>(),
+    supabase
+      .from("workout_exercise_results")
+      .select("workout_id, sets_done, reps, weight_kg, duration_seconds, created_at, session_id, workouts ( name )")
+      .eq("session_id", sessionId)
+      .returns<SessionResultRow[]>(),
+  ]);
+  if (session.error) throw session.error;
+  if (results.error) throw results.error;
+
+  const row = session.data;
+  const totals =
+    row.planned_min !== null &&
+    row.sets_done !== null &&
+    row.sets_total !== null &&
+    row.exercises_done !== null &&
+    row.exercises_total !== null
+      ? {
+          plannedMin: row.planned_min,
+          setsDone: row.sets_done,
+          setsTotal: row.sets_total,
+          exercisesDone: row.exercises_done,
+          exercisesTotal: row.exercises_total,
+        }
+      : null;
+
+  return {
+    totals,
+    results: (results.data ?? []).map((result) => ({
+      workoutId: String(result.workout_id),
+      name: result.workouts?.name ?? "Unknown exercise",
+      setsDone: result.sets_done,
+      reps: result.reps,
+      weightKg: result.weight_kg === null ? null : Number(result.weight_kg),
+      durationSec: result.duration_seconds,
+      savedAt: Date.parse(result.created_at),
+      sessionId: String(result.session_id),
+    })),
+  };
+}
+
+// Its exercise results go with it (on delete cascade).
+export async function deleteWorkoutSession(sessionId: string): Promise<void> {
+  const { error } = await supabase.from("workout_sessions").delete().eq("id", sessionId);
+  if (error) throw error;
+}
+
+/* --------------
+    REMEMBERED SETS AND REPS (built-in plans)
+------------- */
+type PlanOverrideRow = {
+  workout_id: string;
+  sets: number;
+  reps: number | null;
+  duration_seconds: number | null;
+};
+
+/** The user's remembered sets and reps on a built-in plan, by workout id. */
+export async function getPlanOverrides(
+  user: UserRef,
+  planId: string,
+): Promise<Map<string, PlanOverride>> {
+  const { data, error } = await supabase
+    .from("workout_plan_overrides")
+    .select("workout_id, sets, reps, duration_seconds")
+    .eq("user_id", user.id)
+    .eq("workout_plan_id", planId)
+    .returns<PlanOverrideRow[]>();
+  if (error) throw error;
+  return new Map(
+    (data ?? []).map((row) => [
+      String(row.workout_id),
+      { sets: row.sets, reps: row.reps, durationSec: row.duration_seconds },
+    ]),
+  );
+}
+
+/**
+ * Remembers changed exercises and forgets ones back at the plan's values.
+ * Only for built-in plans: the database refuses overrides on a user's own.
+ */
+export async function savePlanOverrides(
+  user: UserRef,
+  planId: string,
+  changes: { save: ReadonlyMap<string, PlanOverride>; clear: readonly string[] },
+): Promise<void> {
+  if (changes.save.size > 0) {
+    const { error } = await supabase.from("workout_plan_overrides").upsert(
+      [...changes.save].map(([workoutId, override]) => ({
+        user_id: user.id,
+        workout_plan_id: planId,
+        workout_id: workoutId,
+        sets: override.sets,
+        reps: override.reps,
+        duration_seconds: override.durationSec,
+        updated_at: new Date().toISOString(),
+      })),
+      { onConflict: "user_id,workout_plan_id,workout_id" },
+    );
+    if (error) throw error;
+  }
+
+  if (changes.clear.length > 0) {
+    const { error } = await supabase
+      .from("workout_plan_overrides")
+      .delete()
+      .eq("user_id", user.id)
+      .eq("workout_plan_id", planId)
+      .in("workout_id", [...changes.clear]);
+    if (error) throw error;
+  }
 }

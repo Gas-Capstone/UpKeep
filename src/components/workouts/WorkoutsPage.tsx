@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { Button, Icon, Snackbar, Text } from "react-native-paper";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -35,6 +35,7 @@ import { CompletedWorkoutsModal } from "./CompletedWorkoutsModal";
 import { CreateWorkoutPlanModal } from "./CreateWorkoutPlanModal";
 import { FilterMenuChip } from "./FilterMenuChip";
 import { StartWorkoutModal } from "./StartWorkoutModal";
+import { WeeklyProgress } from "./WeeklyProgress";
 import { WorkoutCard } from "./WorkoutCard";
 import { WorkoutFilterChip } from "./WorkoutFilterChip";
 
@@ -66,7 +67,6 @@ export default function WorkoutsPage() {
   } = useWorkoutsData();
   useScreenInteractive(!loading);
 
-  const [workoutTags, setWorkoutTags] = useState<string[]>([]);
   const [filters, setFilters] = useState<WorkoutFilters>(NO_FILTERS);
   const [completedModalVisible, setCompletedModalVisible] = useState(false);
   const [startModalVisible, setStartModalVisible] = useState(false);
@@ -91,6 +91,12 @@ export default function WorkoutsPage() {
   // set, so an active filter can always be seen and cleared even if the
   // plans that offered it have since gone.
   const showSource = workoutList.some(ownsPlan) || filters.source !== "all";
+  // Every goal tag on any plan. A plan can have several or none, so even a
+  // single tag narrows the list.
+  const goalOptions = [
+    ...new Set(workoutList.flatMap((workout) => workout.goal_tags ?? [])),
+  ].sort();
+  const showGoal = goalOptions.length > 0 || filters.tag !== "all";
   const difficultyOptions = filterOptions(workoutList, "difficulty");
   const targetOptions = filterOptions(workoutList, "target");
   const showDifficulty = difficultyOptions.length > 1 || filters.difficulty !== null;
@@ -153,13 +159,6 @@ export default function WorkoutsPage() {
     setDeleteTarget(null);
     refreshWorkouts();
   };
-
-  useEffect(() => {
-    const tags = [
-      ...new Set(workoutList.flatMap((workout) => workout.goal_tags ?? [])),
-    ].sort();
-    setWorkoutTags(tags);
-  }, [workoutList]);
 
   useFocusEffect(
     useCallback(() => {
@@ -286,28 +285,9 @@ export default function WorkoutsPage() {
         </Button>
       </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={{ marginHorizontal: -Spacing.four }}
-        contentContainerStyle={styles.filterRow}
-      >
-        <WorkoutFilterChip
-          tag="all"
-          isSelected={filters.tag === "all"}
-          onSelect={(tag) => setFilters((current) => ({ ...current, tag }))}
-        />
-        {workoutTags.map((tag) => (
-          <WorkoutFilterChip
-            key={tag}
-            tag={tag}
-            isSelected={filters.tag === tag}
-            onSelect={(next) => setFilters((current) => ({ ...current, tag: next }))}
-          />
-        ))}
-      </ScrollView>
+      <WeeklyProgress completedWorkouts={completedWorkouts} />
 
-      {showSource || showDifficulty || showTarget ? (
+      {showSource || showGoal || showDifficulty || showTarget ? (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -328,8 +308,19 @@ export default function WorkoutsPage() {
               ))
             : null}
 
-          {showSource && (showDifficulty || showTarget) ? (
+          {showSource && (showGoal || showDifficulty || showTarget) ? (
             <View style={[styles.filterDivider, { backgroundColor: colors.border }]} />
+          ) : null}
+
+          {showGoal ? (
+            <FilterMenuChip
+              label="Goal"
+              options={goalOptions}
+              // "all" is how the filters spell no goal; the menu uses null.
+              value={filters.tag === "all" ? null : filters.tag}
+              onChange={(tag) => setFilters((current) => ({ ...current, tag: tag ?? "all" }))}
+              formatOption={sentenceCase}
+            />
           ) : null}
 
           {showDifficulty ? (
@@ -512,7 +503,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.four,
     gap: Spacing.two,
   },
-  // Splits "who made it" from "what it is" in the second filter row.
+  // Splits "who made it" from "what it is" in the filter row.
   filterDivider: {
     width: StyleSheet.hairlineWidth,
     alignSelf: "stretch",
