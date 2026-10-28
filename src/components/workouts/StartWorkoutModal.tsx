@@ -50,15 +50,17 @@ export function StartWorkoutModal({
           <Card.Content style={styles.stepContainer}>
             <VStack space="md" style={{ alignSelf: "stretch" }}>
               <TextInput
-                label="Set minutes"
+                label="Planned minutes"
                 mode="outlined"
                 value={mins?.toString()}
                 onChangeText={(text) => setMins(Number(text))}
               />
             </VStack>
           </Card.Content>
+
           <Card.Actions>
             <Button onPress={onDismiss}>Cancel</Button>
+
             <Button
               mode="contained"
               onPress={onStart ? () => onStart(workout, mins) : () => null}

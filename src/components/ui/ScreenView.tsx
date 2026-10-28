@@ -1,5 +1,6 @@
 import React from "react";
 import { ScrollView, ScrollViewProps, StyleSheet, View } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import {
   SafeAreaView,
   useSafeAreaInsets,
@@ -15,6 +16,8 @@ type ScreenViewProps = {
   overlay?: React.ReactNode;
   contentContainerStyle?: ScrollViewProps["contentContainerStyle"];
   onScroll?: ScrollViewProps["onScroll"];
+  keyboardShouldPersistTaps?: ScrollViewProps["keyboardShouldPersistTaps"];
+  keyboardBottomOffset?: number;
 };
 
 export function ScreenView({
@@ -23,14 +26,22 @@ export function ScreenView({
   overlay,
   contentContainerStyle,
   onScroll,
+  keyboardShouldPersistTaps,
+  keyboardBottomOffset,
 }: ScreenViewProps) {
   const insets = useSafeAreaInsets();
+  const ScrollContainer = keyboardBottomOffset === undefined ? ScrollView : KeyboardAwareScrollView;
+  const keyboardProps = keyboardBottomOffset === undefined
+    ? {}
+    : { bottomOffset: keyboardBottomOffset, mode: "layout" as const };
 
   return (
     <ThemedView style={styles.screen}>
       <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
         {header}
-        <ScrollView
+
+        <ScrollContainer
+          {...keyboardProps}
           style={{ flex: 1, width: "100%" }}
           contentContainerStyle={[
             styles.scrollContent,
@@ -41,11 +52,12 @@ export function ScreenView({
             contentContainerStyle,
           ]}
           onScroll={onScroll}
+          keyboardShouldPersistTaps={keyboardShouldPersistTaps}
           scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
         >
           {children}
-        </ScrollView>
+        </ScrollContainer>
       </SafeAreaView>
 
       <View style={StyleSheet.absoluteFill} pointerEvents="box-none">

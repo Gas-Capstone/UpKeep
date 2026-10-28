@@ -1,5 +1,6 @@
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
+import { track } from "@/lib/metrics";
 import type { Reminder } from "@/lib/reminders";
 
 const NOTIFICATION_CHANNEL_ID = "silent";
@@ -26,6 +27,42 @@ if (Platform.OS !== "web") {
   });
 }
 
+// Which reminder kind a tap came from. Scheduled reminders carry their kind in
+// data; the test notification sent from Settings carries none.
+function openedKind(response: Notifications.NotificationResponse): string {
+  const kind: unknown = response.notification.request.content.data?.kind;
+  return typeof kind === "string" ? kind : "other";
+}
+
+const countedOpens = new Set<string>();
+
+function recordOpen(response: Notifications.NotificationResponse) {
+  // The same tap can arrive through both paths below.
+  const key = `${response.notification.request.identifier}:${response.notification.date}`;
+  if (countedOpens.has(key)) return;
+  countedOpens.add(key);
+  track("notification_opened", {
+    ok: true,
+    props: { kind: openedKind(response) },
+  });
+}
+
+if (Platform.OS !== "web") {
+  // A tap while the app is running or in the background.
+  Notifications.addNotificationResponseReceivedListener(recordOpen);
+
+  // A tap that launched the app from closed — the usual way a reminder gets
+  // opened. Cleared once counted: the OS keeps returning the last tap, so
+  // without this every later launch would count it again.
+  Notifications.getLastNotificationResponseAsync()
+    .then((response) => {
+      if (!response) return;
+      recordOpen(response);
+      return Notifications.clearLastNotificationResponseAsync();
+    })
+    .catch(() => {});
+}
+
 function hasNotificationPermission(
   settings: Awaited<ReturnType<typeof Notifications.getPermissionsAsync>>,
 ) {
@@ -33,6 +70,12 @@ function hasNotificationPermission(
     settings.granted ||
     settings.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL
   );
+}
+
+/** Whether reminders can actually be shown — without asking for permission. */
+export async function notificationPermissionGranted() {
+  if (Platform.OS === "web") return false;
+  return hasNotificationPermission(await Notifications.getPermissionsAsync());
 }
 
 async function ensureNotificationChannel() {
@@ -89,9 +132,16 @@ export async function sendNotificationNow(title: string, body: string) {
  * Replaces every scheduled notification of one kind with `reminders`. An empty
  * list just clears that kind, which is how a switched-off setting is applied.
  * Reminders already in the past are skipped.
+ *
+ * Returns how many were actually scheduled. That can be fewer than were
+ * passed in — past ones are skipped, and without notification permission
+ * none are, silently. The count is how that gets noticed.
  */
-export async function replaceScheduled(kind: ReminderKind, reminders: Reminder[]) {
-  if (Platform.OS === "web") return;
+export async function replaceScheduled(
+  kind: ReminderKind,
+  reminders: Reminder[],
+): Promise<number> {
+  if (Platform.OS === "web") return 0;
 
   const prefix = `${kind}:`;
   const scheduled = await Notifications.getAllScheduledNotificationsAsync();
@@ -103,14 +153,15 @@ export async function replaceScheduled(kind: ReminderKind, reminders: Reminder[]
       ),
   );
 
-  if (reminders.length === 0) return;
+  if (reminders.length === 0) return 0;
 
   const permissions = await Notifications.getPermissionsAsync();
-  if (!hasNotificationPermission(permissions)) return;
+  if (!hasNotificationPermission(permissions)) return 0;
 
   await ensureNotificationChannel();
 
   const now = new Date();
+  let scheduledCount = 0;
 
   for (const reminder of reminders) {
     if (reminder.date <= now) continue;
@@ -129,5 +180,8 @@ export async function replaceScheduled(kind: ReminderKind, reminders: Reminder[]
           kind === "daily-summary" ? NOTIFICATION_CHANNEL_ID : REMINDER_CHANNEL_ID,
       },
     });
+    scheduledCount += 1;
   }
+
+  return scheduledCount;
 }

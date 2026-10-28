@@ -7,6 +7,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { track, type MetricProps } from './metrics';
 import { supabase } from './supabaseClient';   // your existing client
 
 // Set EXPO_PUBLIC_AGENT_URL in .env to override this — pointing at a LAN
@@ -40,6 +41,32 @@ type Resume = { tool: string; args: Record<string, unknown>; field: string };
 type UseAgentOptions = {
   onActionsCompleted?: () => void;
 };
+
+/** Tool names from a response's `completed` list, for the metrics. */
+function toolNames(completed: unknown): string[] {
+  if (!Array.isArray(completed)) return [];
+  return completed
+    .map((entry) =>
+      entry && typeof entry === 'object' && 'tool' in entry
+        ? String(entry.tool)
+        : '',
+    )
+    .filter(Boolean);
+}
+
+/**
+ * The server's own phase timings. The phone can only see the total, so this
+ * is what separates "the model was slow" from "the tunnel was slow".
+ */
+function serverTiming(timing: unknown): MetricProps {
+  if (!timing || typeof timing !== 'object') return {};
+  const fields = timing as Record<string, unknown>;
+  const out: MetricProps = {};
+  for (const key of ['auth_ms', 'model_ms', 'tool_ms', 'server_ms']) {
+    if (typeof fields[key] === 'number') out[key] = fields[key];
+  }
+  return out;
+}
 
 export function useAgent({ onActionsCompleted }: UseAgentOptions = {}) {
   const [turns, setTurns] = useState<AgentTurn[]>([]);
@@ -76,11 +103,22 @@ export function useAgent({ onActionsCompleted }: UseAgentOptions = {}) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
+    // Settled by whichever branch ends the turn, and recorded once in
+    // `finally`. The defaults describe a request that never got an answer.
+    const started = Date.now();
+    let outcome = 'network_error';
+    let ok = false;
+    let httpStatus = 0;
+    let resumed = false;
+    let tools: string[] = [];
+    let timing: MetricProps = {};
+
     try {
       const { data } = await supabase.auth.getSession();
       const jwt = data.session?.access_token;
 
       if (!jwt) {
+        outcome = 'signed_out';
         setTurns(t => [...t, { role: 'agent', text: 'Please sign in again.' }]);
         return;
       }
@@ -88,6 +126,7 @@ export function useAgent({ onActionsCompleted }: UseAgentOptions = {}) {
       // Consume the pending question, if any — one answer per question.
       const resume = pending.current;
       pending.current = null;
+      resumed = resume !== null;
 
       const res = await fetch(`${AGENT_URL}/agent`, {
         method: 'POST',
@@ -108,9 +147,16 @@ export function useAgent({ onActionsCompleted }: UseAgentOptions = {}) {
         signal: controller.signal,
       });
 
+      // Recorded before parsing: when the tunnel or server is down,
+      // Cloudflare answers with an HTML error page that fails to parse, and
+      // this status (530 vs 502) is the only clue to which half is down.
+      httpStatus = res.status;
+
       const json = await res.json();
+      timing = serverTiming(json.timing);
 
       if (!json.ok) {
+        outcome = typeof json.error === 'string' ? json.error : 'error';
         // no_tool_call, bad_arguments, execution_failed — all land here.
         // Keep the user-facing copy generic; the detail is for your logs.
         console.warn('agent error', json);
@@ -120,6 +166,10 @@ export function useAgent({ onActionsCompleted }: UseAgentOptions = {}) {
         }]);
         return;
       }
+
+      ok = true;
+      outcome = json.needs_clarification ? 'needs_clarification' : 'ok';
+      tools = toolNames(json.completed);
 
       // Another question may follow ("what kind of milk?" -> "how much?").
       if (json.needs_clarification) {
@@ -138,8 +188,13 @@ export function useAgent({ onActionsCompleted }: UseAgentOptions = {}) {
         options: json.needs_clarification ? json.options : undefined,
       }]);
 
-    } catch (e) {
+    } catch {
       // Timeout, machine asleep, wrong IP, firewall.
+      outcome = controller.signal.aborted
+        ? 'timeout'
+        : httpStatus
+          ? `http_${httpStatus}`
+          : 'network_error';
       pending.current = null;
       setOffline(true);
       setTurns(t => [...t, {
@@ -149,6 +204,12 @@ export function useAgent({ onActionsCompleted }: UseAgentOptions = {}) {
     } finally {
       clearTimeout(timer);
       setBusy(false);
+      // Never the message itself — only what happened and how long it took.
+      track('agent_turn', {
+        durationMs: Date.now() - started,
+        ok,
+        props: { outcome, resumed, tools, http_status: httpStatus, ...timing },
+      });
     }
   }, []);
 

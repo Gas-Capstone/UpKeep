@@ -12,6 +12,7 @@ import { useUserContext } from "@/components/context/userContext";
 import { ThemedText } from "@/components/themed-text";
 import { ScreenView } from "@/components/ui/ScreenView";
 import { Colors, Radius, Spacing } from "@/constants/theme";
+import { formatHeight as formatStoredHeight } from "@/lib/height";
 
 const GOAL_LABELS: Record<string, string> = {
   muscle: "Build muscle",
@@ -21,10 +22,7 @@ const GOAL_LABELS: Record<string, string> = {
 };
 
 function formatHeight(height: number | null) {
-  if (!height) return "Not set";
-
-  const [feet = "", inches = "0"] = String(height).split(".");
-  return `${feet}' ${Number(inches)}\"`;
+  return height ? formatStoredHeight(height) : "Not set";
 }
 
 function formatAge(age: number | null) {
