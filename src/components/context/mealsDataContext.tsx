@@ -25,6 +25,7 @@ import {
   removeMealPlanEntry,
   uncompleteMeal,
 } from "@/lib/meals/queries";
+import { trackDataLoad } from "@/lib/metrics";
 import { userContext } from "./userContext";
 
 // Lifted out of MealsScreen's local useState so index.tsx can read the same data.
@@ -162,6 +163,9 @@ export const MealsDataProvider = ({ children }: MealsDataProviderProps) => {
       ? fetchCustomRecipes(user)
       : Promise.resolve<Recipe[]>([])
 
+    // Three requests in parallel: the wait is the slowest of them, which the
+    // per-request timings can't show on their own.
+    const started = Date.now();
     Promise.all([
       fetchIngredients(), 
       fetchRecipes(),
@@ -170,8 +174,17 @@ export const MealsDataProvider = ({ children }: MealsDataProviderProps) => {
       .then(([ingredientRows, recipeRows, customRecipeRows]) => {
         setIngredients(ingredientRows);
         setRecipes([...recipeRows, ...customRecipeRows]);
+        trackDataLoad(
+          "meals_catalog",
+          started,
+          true,
+          ingredientRows.length + recipeRows.length + customRecipeRows.length,
+        );
       })
-      .catch((error: Error) => setCatalogError(error.message))
+      .catch((error: Error) => {
+        setCatalogError(error.message);
+        trackDataLoad("meals_catalog", started, false);
+      })
       .finally(() => setCatalogLoading(false));
   }, [user?.id]);
 
@@ -182,14 +195,17 @@ export const MealsDataProvider = ({ children }: MealsDataProviderProps) => {
       return;
     }
     setFridgeLoading(true);
+    const started = Date.now();
     fetchFridgeItems(user.id)
       .then((entries) => {
         setFridgeEntries(entries);
         setFridgeIds(new Set(entries.keys()));
+        trackDataLoad("fridge", started, true, entries.size);
       })
       .catch(() => {
         // MealsScreen surfaces this via its own error state today; keep
         // this context focused on data, not UI error messaging.
+        trackDataLoad("fridge", started, false);
       })
       .finally(() => setFridgeLoading(false));
   }, [user?.id]);

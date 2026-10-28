@@ -13,6 +13,7 @@ import { NotificationsProvider } from "@/components/context/notificationsContext
 import { ProfileDataProvider } from "@/components/context/profileDataContext";
 import { ThemeProvider, useThemeMode } from "@/components/context/ThemeContext";
 import { TourProvider } from "@/components/context/tourContext";
+import { UnitsProvider } from "@/components/context/UnitsContext";
 import { UserProvider } from "@/components/context/userContext";
 import { StartupContext } from "@/components/context/startupContext";
 import { WorkoutSessionProvider } from "@/components/context/workoutSessionContext";
@@ -21,6 +22,7 @@ import { BirthdayCelebration } from "@/components/profile/BirthdayCelebration";
 import { GluestackUIProvider } from "@/components/ui/gluestack-ui-provider";
 import { StartupErrorScreen } from "@/components/ui/StartupErrorScreen";
 import { paperDarkTheme, paperLightTheme } from "@/constants/paper-theme";
+import { startMetrics } from "@/lib/metrics";
 import "@/lib/notifications";
 import { supabase } from "@/lib/supabaseClient";
 import "@/global.css";
@@ -62,6 +64,7 @@ function RootContent() {
               <HabitsProvider>
                 <NotificationsProvider>
                   <WorkoutSessionProvider>
+                    <UnitsProvider>
                     <TourProvider>
                       <GluestackUIProvider mode={theme}>
                         <PaperProvider theme={curTheme}>
@@ -83,11 +86,13 @@ function RootContent() {
                               themeReady={themeReady}
                               onSplashHidden={setSplashHidden}
                             />
+                            <MetricsBootstrap />
                             <BirthdayCelebration />
                           </StartupContext.Provider>
                         </PaperProvider>
                       </GluestackUIProvider>
                     </TourProvider>
+                    </UnitsProvider>
                   </WorkoutSessionProvider>
                 </NotificationsProvider>
               </HabitsProvider>
@@ -98,6 +103,12 @@ function RootContent() {
       </SafeAreaProvider>
     </KeyboardProvider>
   );
+}
+
+// Events are recorded from the first request; this only starts sending them.
+function MetricsBootstrap() {
+  useEffect(() => startMetrics(supabase), []);
+  return null;
 }
 
 function AuthBootstrap({

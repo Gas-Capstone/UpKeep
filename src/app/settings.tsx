@@ -27,12 +27,15 @@ import {
 } from "@/components/context/notificationsContext";
 import { useProfileData } from "@/components/context/profileDataContext";
 import { useThemeMode } from "@/components/context/ThemeContext";
+import { useWeightUnit } from "@/components/context/UnitsContext";
 import { useTour } from "@/components/context/tourContext";
 import { useUserContext } from "@/components/context/userContext";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Colors, MaxContentWidth, Radius, Spacing } from "@/constants/theme";
+import { buildHeightValue, splitHeight } from "@/lib/height";
+import { checkIsDeveloper } from "@/lib/performance";
 import { supabase } from "@/lib/supabaseClient";
 
 const MFA_QR_DISPLAY_SIZE = 160;
@@ -118,25 +121,15 @@ const GOALS = [
   { key: "mobility", label: "Improve mobility", icon: "body-outline" },
 ] as const;
 
-function buildHeightValue(feetStr: string, inchesStr: string): number | null {
-  const feet = Number(feetStr);
-  if (!feetStr || Number.isNaN(feet)) return null;
-
-  const rawInches = Number(inchesStr);
-  const inches = Number.isNaN(rawInches)
-    ? 0
-    : Math.min(Math.max(Math.round(rawInches), 0), 11);
-
-  return Number(`${feet}.${String(inches).padStart(2, "0")}`);
-}
-
+// Into the form's feet and inches fields. See lib/height for why this is
+// arithmetic and not a split on the decimal point.
 function splitStoredHeight(height: number | null | undefined) {
   if (!height) return { feet: "", inches: "" };
 
-  const [feet = "", inches = "0"] = String(height).split(".");
+  const { feet, inches } = splitHeight(height);
   return {
-    feet,
-    inches: String(Number(inches)),
+    feet: String(feet),
+    inches: String(inches),
   };
 }
 
@@ -153,6 +146,7 @@ function formatBirthday(value: string | null | undefined) {
 
 export default function SettingsScreen() {
   const { theme, setTheme, resolvedTheme } = useThemeMode();
+  const { weightUnit, setWeightUnit } = useWeightUnit();
   const colors = Colors[resolvedTheme];
   const { user } = useUserContext();
   const {
@@ -179,6 +173,19 @@ export default function SettingsScreen() {
   summaryTime.setHours(summaryHour, summaryMinute, 0, 0);
 
   const [openSection, setOpenSection] = useState<SectionKey>(null);
+  // Hides the Developer section from everyone else. Cosmetic only: the
+  // summary function itself refuses non-developers.
+  const [isDeveloper, setIsDeveloper] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    checkIsDeveloper().then((value) => {
+      if (active) setIsDeveloper(value);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const [saving, setSaving] = useState(false);
@@ -827,6 +834,62 @@ export default function SettingsScreen() {
               </View>
 
               <SectionLabel
+                title="Units"
+                subtitle="How weights are shown and entered in workouts"
+              />
+              <View
+                style={[
+                  styles.card,
+                  {
+                    backgroundColor: colors.backgroundElement,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
+                <View style={styles.themeRow} accessibilityRole="radiogroup">
+                  {([
+                    { unit: "kg", label: "Kilograms", short: "kg" },
+                    { unit: "lb", label: "Pounds", short: "lb" },
+                  ] as const).map((option) => {
+                    const selected = weightUnit === option.unit;
+                    return (
+                      <Pressable
+                        key={option.unit}
+                        onPress={() => setWeightUnit(option.unit)}
+                        accessibilityRole="radio"
+                        accessibilityState={{ checked: selected }}
+                        accessibilityLabel={option.label}
+                        style={({ pressed }) => [
+                          styles.themeChoice,
+                          {
+                            backgroundColor: selected
+                              ? colors.brandSoft
+                              : colors.background,
+                            borderColor: selected
+                              ? colors.brand
+                              : colors.border,
+                          },
+                          pressed && styles.pressed,
+                        ]}
+                      >
+                        <ThemedText
+                          type="smallBold"
+                          style={
+                            selected ? { color: colors.brandStrong } : undefined
+                          }
+                        >
+                          {option.label}
+                        </ThemedText>
+                        <ThemedText type="small" themeColor="textSecondary">
+                          {option.short}
+                        </ThemedText>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+
+              <SectionLabel
                 title="Profile"
                 subtitle="Your public profile and personal details"
               />
@@ -1365,6 +1428,37 @@ export default function SettingsScreen() {
                   onPress={startTour}
                 />
               </Card>
+
+              {isDeveloper && (
+                <>
+                  <SectionLabel
+                    title="Developer"
+                    subtitle="Only visible to developer accounts"
+                  />
+                  <Card
+                    mode="contained"
+                    style={[
+                      styles.card,
+                      {
+                        backgroundColor: colors.backgroundElement,
+                        borderColor: colors.border,
+                      },
+                    ]}
+                  >
+                    <List.Item
+                      title="Performance"
+                      description="Request latency, errors and assistant outcomes"
+                      left={(props) => (
+                        <List.Icon {...props} icon="chart-timeline-variant" />
+                      )}
+                      right={(props) => (
+                        <List.Icon {...props} icon="chevron-right" />
+                      )}
+                      onPress={() => router.push("/developer")}
+                    />
+                  </Card>
+                </>
+              )}
 
               <SectionLabel
                 title="Account"
