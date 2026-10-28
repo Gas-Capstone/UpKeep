@@ -1,6 +1,11 @@
 import React, { createContext, useCallback, useContext, useState, useEffect } from "react";
 import { CompletionsByDate, rowsToCompletionsByDate } from "@/lib/habits/habits";
-import { buildHistorySummary, type SessionSummary } from "@/lib/sessionSummary";
+import {
+  buildHistorySummary,
+  buildSessionExercises,
+  type SessionExercise,
+  type SessionSummary,
+} from "@/lib/sessionSummary";
 import {
   addFavoriteWorkout,
   completeScheduledWorkout,
@@ -16,6 +21,7 @@ import {
   getExerciseResults,
   getSessionDetails,
   getFavoriteWorkouts,
+  getPlanExercises,
   getPlanEquipment,
   getWorkouts,
   removeFavoriteWorkout,
@@ -54,6 +60,12 @@ export type CompletedWorkout = {
   completed_at: string;
   // null when the plan was deleted after the session was logged.
   workout_plan_id: string | null;
+  // The plan's target, e.g. "Chest, back, arms". null once the plan is deleted.
+  workout_type: string | null;
+  // Sets finished out of the plan's total. null on sessions saved before
+  // these were recorded.
+  sets_done: number | null;
+  sets_total: number | null;
 };
 
 // An individual exercise from the `workouts` table — the building blocks a
@@ -98,6 +110,9 @@ export type WorkoutsDataContextType = {
   // A finished session's summary, as History reopens it. Throws when it
   // can't be loaded.
   loadSessionSummary: (session: CompletedWorkout) => Promise<SessionSummary>;
+  // Each exercise in a session's plan with the sets done for it, for the
+  // session's row in History. Throws when it can't be loaded.
+  loadSessionExercises: (session: CompletedWorkout) => Promise<SessionExercise[]>;
   // Removes a session, with its exercise results, from history and every
   // stat built on it. Throws on failure so the dialog can say so.
   deleteSession: (sessionId: string) => Promise<void>;
@@ -357,6 +372,17 @@ export const WorkoutsDataProvider = ({
     });
   };
 
+  const loadSessionExercises = async (session: CompletedWorkout) => {
+    // A deleted plan leaves only what the session itself saved.
+    const [{ results }, plan] = await Promise.all([
+      getSessionDetails(session.id),
+      session.workout_plan_id
+        ? getPlanExercises(session.workout_plan_id, { throwOnError: true })
+        : Promise.resolve([]),
+    ]);
+    return buildSessionExercises(plan, results);
+  };
+
   const deleteSession = async (sessionId: string) => {
     await deleteWorkoutSession(sessionId);
     // History, streaks, last-done and the progression chart all read this.
@@ -373,6 +399,7 @@ export const WorkoutsDataProvider = ({
     refreshWorkouts,
     refreshCompletedWorkouts,
     loadSessionSummary,
+    loadSessionExercises,
     deleteSession,
     refreshFavorites,
     toggleFavorite,

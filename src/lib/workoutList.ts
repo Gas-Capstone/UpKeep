@@ -301,6 +301,22 @@ export function formatDuration(minutes: number): string {
   return rest === 0 ? `${hours} h` : `${hours} h ${rest} min`;
 }
 
+/** "12/15 sets", or null for sessions saved before sets were recorded. */
+export function formatSetsDone(workout: CompletedWorkout): string | null {
+  if (workout.sets_done === null || workout.sets_total === null) return null;
+  return `${workout.sets_done}/${workout.sets_total} ${workout.sets_total === 1 ? "set" : "sets"}`;
+}
+
+/**
+ * One history line: "Chest, back, arms · 12/15 sets · 45 min". The type and
+ * sets drop out when unknown (deleted plan, or an older session).
+ */
+export function describeSession(workout: CompletedWorkout): string {
+  return [workout.workout_type, formatSetsDone(workout), formatDuration(workout.duration_min)]
+    .filter((part): part is string => part !== null)
+    .join(" · ");
+}
+
 // ---------------------------------------------------------------------------
 // Progression
 // ---------------------------------------------------------------------------

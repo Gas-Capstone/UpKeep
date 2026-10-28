@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ScrollView, useWindowDimensions, View } from "react-native";
+import { ScrollView, StyleSheet, View } from "react-native";
 import {
   ActivityIndicator,
   Button,
@@ -11,12 +11,19 @@ import {
   useTheme,
 } from "react-native-paper";
 import { format, isThisYear, isToday, isYesterday, parse } from "date-fns";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { styles as shared } from "@/constants/styles";
-import { Spacing } from "@/constants/theme";
-import type { SessionSummary } from "@/lib/sessionSummary";
+import { BottomTabInset, Spacing } from "@/constants/theme";
+import { useWeightUnit } from "@/components/context/UnitsContext";
 import {
+  describeSessionExercise,
+  type SessionExercise,
+  type SessionSummary,
+} from "@/lib/sessionSummary";
+import {
+  describeSession,
   formatDuration,
   getMostDonePlan,
   getTotalMinutes,
@@ -63,8 +70,112 @@ export function CompletedWorkoutsModal({
   workouts,
 }: CompletedWorkoutsModalProps) {
   const theme = useTheme();
-  const { height } = useWindowDimensions();
-  const { loadSessionSummary, deleteSession } = useWorkoutsData();
+  const insets = useSafeAreaInsets();
+  const { loadSessionSummary, loadSessionExercises, deleteSession } = useWorkoutsData();
+  const { weightUnit } = useWeightUnit();
+
+  // The session row open in the list, and each opened session's exercises,
+  // kept so reopening one doesn't load it again.
+  const [expandedSession, setExpandedSession] = useState<string | null>(null);
+  const [exercisesBySession, setExercisesBySession] = useState<
+    Record<string, SessionExercise[] | "loading" | "error">
+  >({});
+
+  const loadExercises = (session: CompletedWorkout) => {
+    setExercisesBySession((prev) => ({ ...prev, [session.id]: "loading" }));
+    loadSessionExercises(session)
+      .then((list) => setExercisesBySession((prev) => ({ ...prev, [session.id]: list })))
+      .catch(() => setExercisesBySession((prev) => ({ ...prev, [session.id]: "error" })));
+  };
+
+  const toggleSession = (session: CompletedWorkout) => {
+    if (expandedSession === session.id) {
+      setExpandedSession(null);
+      return;
+    }
+    setExpandedSession(session.id);
+    const loaded = exercisesBySession[session.id];
+    if (loaded === undefined || loaded === "error") loadExercises(session);
+  };
+
+  // Deeper than the session row it opens under.
+  const exerciseIndent = { paddingLeft: Spacing.five + Spacing.four };
+
+  const renderExercises = (session: CompletedWorkout) => {
+    const state = exercisesBySession[session.id];
+    const summaryRow = (
+      <List.Item
+        title="View full summary"
+        onPress={() => showSession(session)}
+        accessibilityHint="Opens this workout's summary"
+        left={(props) => <List.Icon {...props} icon="chart-box-outline" />}
+        right={(props) => <List.Icon {...props} icon="chevron-right" />}
+        style={exerciseIndent}
+      />
+    );
+
+    if (state === undefined || state === "loading") {
+      return (
+        <List.Item
+          title="Loading exercises…"
+          left={() => <ActivityIndicator size="small" style={{ marginLeft: Spacing.two }} />}
+          style={exerciseIndent}
+        />
+      );
+    }
+    if (state === "error") {
+      return (
+        <List.Item
+          title="Couldn't load the exercises"
+          description="Tap to try again"
+          titleStyle={{ color: theme.colors.error }}
+          onPress={() => loadExercises(session)}
+          left={(props) => <List.Icon {...props} icon="refresh" color={theme.colors.error} />}
+          style={exerciseIndent}
+        />
+      );
+    }
+
+    return (
+      <>
+        {state.length === 0 ? (
+          <List.Item title="No exercises recorded" style={exerciseIndent} />
+        ) : (
+          state.map((exercise) => {
+            const finished =
+              exercise.setsTotal !== null && exercise.setsDone >= exercise.setsTotal;
+            return (
+              <List.Item
+                key={exercise.workoutId}
+                title={exercise.name}
+                titleNumberOfLines={2}
+                description={describeSessionExercise(exercise, weightUnit)}
+                left={(props) => (
+                  <List.Icon
+                    {...props}
+                    icon={
+                      finished
+                        ? "check-circle"
+                        : exercise.setsDone > 0
+                          ? "progress-check"
+                          : "circle-outline"
+                    }
+                    color={
+                      exercise.setsDone > 0
+                        ? theme.colors.primary
+                        : theme.colors.onSurfaceVariant
+                    }
+                  />
+                )}
+                style={exerciseIndent}
+              />
+            );
+          })
+        )}
+        {summaryRow}
+      </>
+    );
+  };
 
   // The session opened from the list, and its summary once it has loaded.
   // Keyed by id, so a slow load for one can't show up under another.
@@ -121,16 +232,29 @@ export function CompletedWorkoutsModal({
   const mostDone = getMostDonePlan(workouts);
 
   return (
-    <Modal visible={visible} onDismiss={close} contentContainerStyle={shared.modalContent}>
+    <Modal
+      visible={visible}
+      onDismiss={close}
+      // Kept between the status bar and the floating tab bar, so the panel
+      // never runs behind either. Long content scrolls inside it instead.
+      style={{
+        marginTop: insets.top + Spacing.three,
+        marginBottom: BottomTabInset + insets.bottom + Spacing.four,
+      }}
+      contentContainerStyle={[shared.modalContent, fit.fill]}
+    >
       {openSession ? (
-        <Card mode="contained" style={shared.modalCard}>
+        <Card mode="contained" style={[shared.modalCard, fit.fill]}>
           <Card.Title
             title={
               <Text variant="titleLarge" accessibilityRole="header">
                 {openSession.name}
               </Text>
             }
-            subtitle={formatSessionTime(openSession.completed_at)}
+            subtitle={[openSession.workout_type, formatSessionTime(openSession.completed_at)]
+              .filter((part): part is string => part !== null)
+              .join(" · ")}
+            subtitleNumberOfLines={2}
             left={() => (
               <IconButton
                 icon="arrow-left"
@@ -141,8 +265,8 @@ export function CompletedWorkoutsModal({
             )}
           />
 
-          <Card.Content>
-            <ScrollView style={{ maxHeight: height * 0.55 }}>
+          <Card.Content style={fit.shrink}>
+            <ScrollView style={fit.shrink}>
               {summary ? (
                 <SessionSummaryView summary={summary} context="history" />
               ) : loadError ? (
@@ -191,10 +315,10 @@ export function CompletedWorkoutsModal({
           />
         </Card>
       ) : (
-        <Card mode="contained" style={shared.modalCard}>
+        <Card mode="contained" style={[shared.modalCard, fit.fill]}>
           <Card.Title title={<Text variant="titleLarge">Completed Workouts</Text>} />
 
-          <Card.Content style={{ gap: Spacing.three }}>
+          <Card.Content style={[fit.shrink, { gap: Spacing.two }]}>
             {workouts.length === 0 ? (
               <Text
                 variant="bodyMedium"
@@ -205,10 +329,11 @@ export function CompletedWorkoutsModal({
             ) : (
               <>
                 <StatGrid>
-                  <StatTile label="Day streak" value={String(streak)} />
-                  <StatTile label="This week" value={String(thisWeek)} />
-                  <StatTile label="Total time" value={formatDuration(totalMinutes)} />
+                  <StatTile compact label="Day streak" value={String(streak)} />
+                  <StatTile compact label="This week" value={String(thisWeek)} />
+                  <StatTile compact label="Total time" value={formatDuration(totalMinutes)} />
                   <StatTile
+                    compact
                     label="Most done"
                     value={mostDone?.name ?? "—"}
                     detail={
@@ -222,7 +347,7 @@ export function CompletedWorkoutsModal({
                 {/* Capped and scrollable: the card has no height limit of its
                     own, so a long history would otherwise run off the screen
                     with no way to reach the bottom. */}
-                <ScrollView style={{ maxHeight: height * 0.45 }}>
+                <ScrollView style={fit.shrink}>
                   <List.AccordionGroup>
                     {dates.map((date) => {
                       const sessions = workoutsByDate[date];
@@ -236,19 +361,30 @@ export function CompletedWorkoutsModal({
                           }`}
                           style={{ backgroundColor: theme.colors.surfaceVariant }}
                         >
-                          {sessions.map((workout) => (
-                            <List.Item
-                              key={workout.id}
-                              title={workout.name}
-                              description={`${workout.duration_min} min`}
-                              onPress={() => showSession(workout)}
-                              accessibilityHint="Opens this workout's summary"
-                              right={(props) => <List.Icon {...props} icon="chevron-right" />}
-                              // Indented under its day, so sessions read as
-                              // inside the heading rather than beside it.
-                              style={{ paddingLeft: Spacing.five }}
-                            />
-                          ))}
+                          {/* A group of its own, so one session opens at a time
+                              and opening one loads its exercises. */}
+                          <List.AccordionGroup
+                            expandedId={expandedSession ?? undefined}
+                            onAccordionPress={(id) => {
+                              const workout = sessions.find((s) => s.id === id);
+                              if (workout) toggleSession(workout);
+                            }}
+                          >
+                            {sessions.map((workout) => (
+                              <List.Accordion
+                                key={workout.id}
+                                id={workout.id}
+                                title={workout.name}
+                                description={describeSession(workout)}
+                                descriptionNumberOfLines={2}
+                                // Indented under its day, so sessions read as
+                                // inside the heading rather than beside it.
+                                style={{ paddingLeft: Spacing.five }}
+                              >
+                                {renderExercises(workout)}
+                              </List.Accordion>
+                            ))}
+                          </List.AccordionGroup>
                         </List.Accordion>
                       );
                     })}
@@ -262,3 +398,10 @@ export function CompletedWorkoutsModal({
     </Modal>
   );
 }
+
+// Lets the panel fit the space it has: the card is never taller than the
+// modal area, and the scrolling list gives up height first.
+const fit = StyleSheet.create({
+  fill: { maxHeight: "100%" },
+  shrink: { flexShrink: 1 },
+});

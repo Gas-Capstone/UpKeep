@@ -4,6 +4,7 @@ import type {
 } from "@/components/context/workoutsDataContext";
 import {
   NO_FILTERS,
+  describeSession,
   filterOptions,
   filterWorkouts,
   formatDuration,
@@ -49,6 +50,9 @@ function session(
     duration_min: minutes,
     completed_at: when.toISOString(),
     workout_plan_id: planId,
+    workout_type: null,
+    sets_done: null,
+    sets_total: null,
   };
 }
 
@@ -276,5 +280,24 @@ describe("workoutsPerWeek", () => {
 
   it("is all zeros with no history", () => {
     expect(workoutsPerWeek([], 8, now).map((week) => week.count)).toEqual([0, 0, 0, 0, 0, 0, 0, 0]);
+  });
+});
+
+describe("describeSession", () => {
+  const base = session("s1", "p1", at(20), 45);
+
+  it("shows the workout type, sets done, and time", () => {
+    expect(
+      describeSession({ ...base, workout_type: "Chest, back, arms", sets_done: 12, sets_total: 15 }),
+    ).toBe("Chest, back, arms · 12/15 sets · 45 min");
+  });
+
+  it("uses the singular for a one-set plan", () => {
+    expect(describeSession({ ...base, sets_done: 1, sets_total: 1 })).toBe("1/1 set · 45 min");
+  });
+
+  it("leaves out what an older session or deleted plan doesn't have", () => {
+    expect(describeSession(base)).toBe("45 min");
+    expect(describeSession({ ...base, workout_type: "Cardio" })).toBe("Cardio · 45 min");
   });
 });
