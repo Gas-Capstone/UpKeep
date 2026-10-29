@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import { format } from "date-fns";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
 import { useEffect, useRef, useState } from "react";
@@ -114,6 +114,9 @@ type SectionKey =
   | "twoFactor"
   | null;
 
+// Cards other screens may open directly via /settings?section=<key>.
+const LINKABLE_SECTIONS = ["profile", "goal", "wellness"] as const;
+
 const GOALS = [
   { key: "muscle", label: "Build muscle", icon: "barbell-outline" },
   { key: "weight", label: "Manage weight", icon: "scale-outline" },
@@ -172,7 +175,12 @@ export default function SettingsScreen() {
   const summaryTime = new Date();
   summaryTime.setHours(summaryHour, summaryMinute, 0, 0);
 
-  const [openSection, setOpenSection] = useState<SectionKey>(null);
+  // Other screens can link straight to one card, e.g. the Profile tab's
+  // primary goal opens /settings?section=goal with that card expanded.
+  const { section } = useLocalSearchParams<{ section?: string }>();
+  const [openSection, setOpenSection] = useState<SectionKey>(() =>
+    LINKABLE_SECTIONS.find((key) => key === section) ?? null,
+  );
   // Hides the Developer section from everyone else. Cosmetic only: the
   // summary function itself refuses non-developers.
   const [isDeveloper, setIsDeveloper] = useState(false);
