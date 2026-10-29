@@ -20,22 +20,13 @@ import { VStack } from "@/components/ui/vstack";
 import { Spacing, TopBadgeInset } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 import { clearCookingProgress } from "@/lib/meals/cooking";
-import { parseInstructionSteps, stepsToInstructions } from "@/lib/meals/meals";
+import { parseInstructionSteps, sanitizeDecimal, stepsToInstructions } from "@/lib/meals/meals";
 import {
   fetchRecipeDetail,
   replaceCustomRecipeIngredients,
   updateCustomRecipe,
 } from "@/lib/meals/queries";
 import { StepsEditor } from "./StepsEditor";
-
-// Quantities are fractional (0.5 lb), capped at two decimal places — the same
-// rule the fridge card uses.
-function sanitizeDecimal(text: string): string {
-  const cleaned = text.replace(/[^0-9.]/g, "");
-  const [whole, ...rest] = cleaned.split(".");
-  if (rest.length === 0) return whole;
-  return `${whole}.${rest.join("").slice(0, 2)}`;
-}
 
 // One ingredient line being edited. Amount and unit are text so a half-typed
 // field doesn't become NaN.
