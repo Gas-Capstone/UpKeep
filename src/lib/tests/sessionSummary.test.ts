@@ -2,8 +2,10 @@ import type { CompletedWorkout } from "@/components/context/workoutsDataContext"
 import type { ExerciseRecords, SavedExerciseResult } from "@/lib/personalRecords";
 import {
   buildHistorySummary,
+  buildSessionExercises,
   buildSessionSummary,
   describeNewRecord,
+  describeSessionExercise,
   sessionTotals,
 } from "@/lib/sessionSummary";
 import type { ExerciseProgress, PlanExercise } from "@/lib/workouts";
@@ -39,6 +41,9 @@ const past = (id: string, day: number): CompletedWorkout => ({
   duration_min: 30,
   completed_at: new Date(2026, 9, day, 9).toISOString(),
   workout_plan_id: "p",
+  workout_type: null,
+  sets_done: null,
+  sets_total: null,
 });
 
 const EXERCISES = [exercise("a"), exercise("b"), exercise("c")];
@@ -263,5 +268,69 @@ describe("buildHistorySummary", () => {
       newRecords: [],
       firstRecords: 0,
     });
+  });
+});
+
+describe("buildSessionExercises", () => {
+  const result = (workoutId: string, setsDone: number, extra: Partial<SavedExerciseResult> = {}) => ({
+    workoutId,
+    name: `Exercise ${workoutId}`,
+    setsDone,
+    reps: 6,
+    weightKg: 40,
+    durationSec: null,
+    ...extra,
+  });
+
+  it("lists every plan exercise in order, with 0 sets for skipped ones", () => {
+    const list = buildSessionExercises(
+      [exercise("a", 4), exercise("b", 3)],
+      [result("b", 2)],
+    );
+    expect(list.map((e) => [e.workoutId, e.setsDone, e.setsTotal])).toEqual([
+      ["a", 0, 4],
+      ["b", 2, 3],
+    ]);
+    expect(list[0].result).toBeNull();
+    expect(list[1].result).toEqual({ reps: 6, weightKg: 40, durationSec: null });
+  });
+
+  it("keeps exercises done but since removed from the plan, without a total", () => {
+    const list = buildSessionExercises([exercise("a")], [result("gone", 3)]);
+    expect(list.map((e) => [e.workoutId, e.setsTotal])).toEqual([
+      ["a", 3],
+      ["gone", null],
+    ]);
+  });
+
+  it("falls back to just the saved results when the plan was deleted", () => {
+    expect(buildSessionExercises([], [result("x", 2)]).map((e) => e.name)).toEqual(["Exercise x"]);
+  });
+});
+
+describe("describeSessionExercise", () => {
+  const base = {
+    workoutId: "a",
+    name: "Bench",
+    setsDone: 2,
+    setsTotal: 4,
+    result: { reps: 6, weightKg: 40, durationSec: null },
+  };
+
+  it("shows sets done of the plan's total, then each set", () => {
+    expect(describeSessionExercise(base, "kg")).toBe("2 of 4 sets · 40 kg × 6 reps");
+  });
+
+  it("shows timed sets and drops the total for a removed exercise", () => {
+    expect(
+      describeSessionExercise(
+        { ...base, setsTotal: null, setsDone: 3, result: { reps: 0, weightKg: null, durationSec: 45 } },
+        "kg",
+      ),
+    ).toBe("3 sets · 45 sec");
+  });
+
+  it("says Skipped when no set was logged", () => {
+    expect(describeSessionExercise({ ...base, setsDone: 0, result: null }, "kg")).toBe("Skipped");
   });
 });
