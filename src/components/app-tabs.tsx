@@ -176,15 +176,15 @@ function TabItem({
       rippleColor={theme.colors.primaryContainer}
       style={styles.tabItem}
     >
-      <View style={styles.tabItemInner}>
-        <View
-          style={[
-            styles.iconPill,
-            isFocused && {
-              backgroundColor: theme.colors.primaryContainer,
-            },
-          ]}
-        >
+      <View
+        style={[
+          styles.tabItemInner,
+          isFocused && {
+            backgroundColor: theme.colors.primaryContainer,
+          },
+        ]}
+      >
+        <View style={styles.iconPill}>
           <Icon
             source={isFocused ? focusedIcon(tab.icon) : tab.icon}
             size={21}
@@ -246,19 +246,26 @@ const styles = StyleSheet.create({
   },
   tabItem: {
     flex: 1,
-    borderRadius: Radius.medium,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: Radius.large,
   },
   tabItemInner: {
-    minHeight: 50,
+    maxWidth: "100%",
+    minWidth: 48,
+    minHeight: 48,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.one,
     alignItems: "center",
     justifyContent: "center",
     gap: 2,
+    borderRadius: Radius.large,
+    overflow: "hidden",
   },
   iconPill: {
     minWidth: 36,
     height: 28,
     paddingHorizontal: 8,
-    borderRadius: Radius.pill,
     alignItems: "center",
     justifyContent: "center",
   },

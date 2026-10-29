@@ -8,6 +8,7 @@ import {
   List,
   Modal,
   Text,
+  Portal,
   useTheme,
 } from "react-native-paper";
 import { format, isThisYear, isToday, isYesterday, parse } from "date-fns";
@@ -232,170 +233,174 @@ export function CompletedWorkoutsModal({
   const mostDone = getMostDonePlan(workouts);
 
   return (
-    <Modal
-      visible={visible}
-      onDismiss={close}
-      // Kept between the status bar and the floating tab bar, so the panel
-      // never runs behind either. Long content scrolls inside it instead.
-      style={{
-        marginTop: insets.top + Spacing.three,
-        marginBottom: BottomTabInset + insets.bottom + Spacing.four,
-      }}
-      contentContainerStyle={[shared.modalContent, fit.fill]}
-    >
-      {openSession ? (
-        <Card mode="contained" style={[shared.modalCard, fit.fill]}>
-          <Card.Title
-            title={
-              <Text variant="titleLarge" accessibilityRole="header">
-                {openSession.name}
-              </Text>
-            }
-            subtitle={[openSession.workout_type, formatSessionTime(openSession.completed_at)]
-              .filter((part): part is string => part !== null)
-              .join(" · ")}
-            subtitleNumberOfLines={2}
-            left={() => (
-              <IconButton
-                icon="arrow-left"
-                onPress={() => setOpenSession(null)}
-                accessibilityLabel="Back to history"
-                style={{ margin: 0 }}
-              />
-            )}
-          />
-
-          <Card.Content style={fit.shrink}>
-            <ScrollView style={fit.shrink}>
-              {summary ? (
-                <SessionSummaryView summary={summary} context="history" />
-              ) : loadError ? (
-                <View style={{ gap: Spacing.two, alignItems: "flex-start" }}>
-                  <Text variant="bodyMedium" style={{ color: theme.colors.error }}>
-                    {loadError}
-                  </Text>
-                  <Button mode="outlined" onPress={() => showSession(openSession)}>
-                    Try again
-                  </Button>
-                </View>
-              ) : (
-                <ActivityIndicator
-                  style={{ paddingVertical: Spacing.four }}
-                  accessibilityLabel="Loading workout details"
+    <Portal>
+      <Modal
+        visible={visible}
+        onDismiss={close}
+        // Kept between the status bar and the floating tab bar, so the panel
+        // never runs behind either. Long content scrolls inside it instead.
+        style={{
+          marginTop: insets.top + Spacing.three,
+          marginBottom: BottomTabInset + insets.bottom + Spacing.four,
+        }}
+        contentContainerStyle={[shared.modalContent, fit.fill]}
+      >
+        {openSession ? (
+          <Card mode="contained" style={[shared.modalCard, fit.fill]}>
+            <Card.Title
+              title={
+                <Text variant="titleLarge" accessibilityRole="header">
+                  {openSession.name}
+                </Text>
+              }
+              subtitle={[openSession.workout_type, formatSessionTime(openSession.completed_at)]
+                .filter((part): part is string => part !== null)
+                .join(" · ")}
+              subtitleNumberOfLines={2}
+              left={() => (
+                <IconButton
+                  icon="arrow-left"
+                  onPress={() => setOpenSession(null)}
+                  accessibilityLabel="Back to history"
+                  style={{ margin: 0 }}
                 />
               )}
-            </ScrollView>
-          </Card.Content>
-
-          <Card.Actions>
-            <Button
-              icon="delete-outline"
-              textColor={theme.colors.error}
-              onPress={() => {
-                setDeleteError("");
-                setConfirmingDelete(true);
-              }}
-            >
-              Delete
-            </Button>
-            <Button mode="contained" onPress={() => setOpenSession(null)}>
-              Back
-            </Button>
-          </Card.Actions>
-
-          <ConfirmDialog
-            visible={confirmingDelete}
-            title="Delete this workout?"
-            message={`${openSession.name} on ${formatSessionTime(openSession.completed_at)} will be removed from your history, streaks and progress, along with its sets and records. This can't be undone.`}
-            confirmLabel="Delete"
-            loading={deleting}
-            error={deleteError}
-            onDismiss={() => setConfirmingDelete(false)}
-            onConfirm={confirmDelete}
-          />
-        </Card>
-      ) : (
-        <Card mode="contained" style={[shared.modalCard, fit.fill]}>
-          <Card.Title title={<Text variant="titleLarge">Completed Workouts</Text>} />
-
-          <Card.Content style={[fit.shrink, { gap: Spacing.two }]}>
-            {workouts.length === 0 ? (
-              <Text
-                variant="bodyMedium"
-                style={{ color: theme.colors.onSurfaceVariant }}
-              >
-                Nothing here yet. Finish a workout and it will show up here.
-              </Text>
-            ) : (
-              <>
-                <StatGrid>
-                  <StatTile compact label="Day streak" value={String(streak)} />
-                  <StatTile compact label="This week" value={String(thisWeek)} />
-                  <StatTile compact label="Total time" value={formatDuration(totalMinutes)} />
-                  <StatTile
-                    compact
-                    label="Most done"
-                    value={mostDone?.name ?? "—"}
-                    detail={
-                      mostDone
-                        ? `${mostDone.count} time${mostDone.count === 1 ? "" : "s"}`
-                        : undefined
-                    }
+            />
+  
+            <Card.Content style={fit.shrink}>
+              <ScrollView style={fit.shrink}>
+                {summary ? (
+                  <SessionSummaryView summary={summary} context="history" />
+                ) : loadError ? (
+                  <View style={{ gap: Spacing.two, alignItems: "flex-start" }}>
+                    <Text variant="bodyMedium" style={{ color: theme.colors.error }}>
+                      {loadError}
+                    </Text>
+                    <Button mode="outlined" onPress={() => showSession(openSession)}>
+                      Try again
+                    </Button>
+                  </View>
+                ) : (
+                  <ActivityIndicator
+                    style={{ paddingVertical: Spacing.four }}
+                    accessibilityLabel="Loading workout details"
                   />
-                </StatGrid>
-
-                {/* Capped and scrollable: the card has no height limit of its
-                    own, so a long history would otherwise run off the screen
-                    with no way to reach the bottom. */}
-                <ScrollView style={fit.shrink}>
-                  <List.AccordionGroup>
-                    {dates.map((date) => {
-                      const sessions = workoutsByDate[date];
-                      return (
-                        <List.Accordion
-                          key={date}
-                          id={date}
-                          title={formatDay(date)}
-                          description={`${sessions.length} workout${
-                            sessions.length === 1 ? "" : "s"
-                          }`}
-                          style={{ backgroundColor: theme.colors.surfaceVariant }}
-                        >
-                          {/* A group of its own, so one session opens at a time
-                              and opening one loads its exercises. */}
-                          <List.AccordionGroup
-                            expandedId={expandedSession ?? undefined}
-                            onAccordionPress={(id) => {
-                              const workout = sessions.find((s) => s.id === id);
-                              if (workout) toggleSession(workout);
-                            }}
+                )}
+              </ScrollView>
+            </Card.Content>
+              
+            <Card.Actions>
+              <Button
+                icon="delete-outline"
+                textColor={theme.colors.error}
+                onPress={() => {
+                  setDeleteError("");
+                  setConfirmingDelete(true);
+                }}
+              >
+                Delete
+              </Button>
+              <Button mode="contained" onPress={() => setOpenSession(null)}>
+                Back
+              </Button>
+            </Card.Actions>
+              
+            <ConfirmDialog
+              visible={confirmingDelete}
+              title="Delete this workout?"
+              message={`${openSession.name} on ${formatSessionTime(openSession.completed_at)} will be removed from your history, streaks and progress, along with its sets and records. This can't be undone.`}
+              confirmLabel="Delete"
+              loading={deleting}
+              error={deleteError}
+              onDismiss={() => setConfirmingDelete(false)}
+              onConfirm={confirmDelete}
+            />
+          </Card>
+        ) : (
+          <Card mode="contained" style={[shared.modalCard, fit.fill]}>
+            <Card.Title title={<Text variant="titleLarge">Completed Workouts</Text>} />
+        
+            <Card.Content style={[fit.shrink, { gap: Spacing.two }]}>
+              {workouts.length === 0 ? (
+                <Text
+                  variant="bodyMedium"
+                  style={{ color: theme.colors.onSurfaceVariant }}
+                >
+                  Nothing here yet. Finish a workout and it will show up here.
+                </Text>
+              ) : (
+                <>
+                  <StatGrid>
+                    <StatTile compact label="Day streak" value={String(streak)} />
+                    <StatTile compact label="This week" value={String(thisWeek)} />
+                    <StatTile compact label="Total time" value={formatDuration(totalMinutes)} />
+                    <StatTile
+                      compact
+                      label="Most done"
+                      value={mostDone?.name ?? "—"}
+                      detail={
+                        mostDone
+                          ? `${mostDone.count} time${mostDone.count === 1 ? "" : "s"}`
+                          : undefined
+                      }
+                    />
+                  </StatGrid>
+                    
+                  {/* Capped and scrollable: the card has no height limit of its
+                      own, so a long history would otherwise run off the screen
+                      with no way to reach the bottom. */}
+                  <ScrollView style={fit.shrink}>
+                    <List.AccordionGroup>
+                      {dates.map((date) => {
+                        const sessions = workoutsByDate[date];
+                        return (
+                          <List.Accordion
+                            key={date}
+                            id={date}
+                            title={formatDay(date)}
+                            description={`${sessions.length} workout${
+                              sessions.length === 1 ? "" : "s"
+                            }`}
+                            style={{ backgroundColor: theme.colors.surfaceVariant }}
                           >
-                            {sessions.map((workout) => (
-                              <List.Accordion
-                                key={workout.id}
-                                id={workout.id}
-                                title={workout.name}
-                                description={describeSession(workout)}
-                                descriptionNumberOfLines={2}
-                                // Indented under its day, so sessions read as
-                                // inside the heading rather than beside it.
-                                style={{ paddingLeft: Spacing.five }}
-                              >
-                                {renderExercises(workout)}
-                              </List.Accordion>
-                            ))}
-                          </List.AccordionGroup>
-                        </List.Accordion>
-                      );
-                    })}
-                  </List.AccordionGroup>
-                </ScrollView>
-              </>
-            )}
-          </Card.Content>
-        </Card>
-      )}
-    </Modal>
+                            {/* A group of its own, so one session opens at a time
+                                and opening one loads its exercises. */}
+                            <List.AccordionGroup
+                              expandedId={expandedSession ?? undefined}
+                              onAccordionPress={(id) => {
+                                const workout = sessions.find((s) => s.id === id);
+                                if (workout) toggleSession(workout);
+                              }}
+                            >
+                              {sessions.map((workout) => (
+                                <List.Accordion
+                                  key={workout.id}
+                                  id={workout.id}
+                                  title={workout.name}
+                                  description={describeSession(workout)}
+                                  descriptionNumberOfLines={2}
+                                  // Indented under its day, so sessions read as
+                                  // inside the heading rather than beside it.
+                                  style={{ 
+                                    paddingLeft: Spacing.five, 
+                                    backgroundColor: theme.colors.surface}}
+                                >
+                                  {renderExercises(workout)}
+                                </List.Accordion>
+                              ))}
+                            </List.AccordionGroup>
+                          </List.Accordion>
+                        );
+                      })}
+                    </List.AccordionGroup>
+                  </ScrollView>
+                </>
+              )}
+            </Card.Content>
+          </Card>
+        )}
+      </Modal>
+    </Portal>
   );
 }
 
