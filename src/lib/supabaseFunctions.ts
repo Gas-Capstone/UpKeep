@@ -139,24 +139,36 @@ export async function getCompletedWorkouts(user: UserRef) {
             duration_min,
             completed_at,
             workout_plan_id,
-            workout_plans ( name )
+            sets_done,
+            sets_total,
+            workout_plans ( name, target )
         `,
     )
     .eq("user_id", user.id)
     .order("completed_at", { ascending: false });
   if (error) console.log("Error fetching completed workouts: ", error);
 
-  return (data ?? []).map((session) => ({
-    id: session.id,
-    duration_min: session.duration_min,
-    completed_at: session.completed_at,
-    // Lets a scheduled workout count as done when its plan was logged that day.
-    workout_plan_id: (session.workout_plan_id as string | null) ?? null,
-    // workout_plan_id is ON DELETE SET NULL, so a session outlives the plan it
-    // was logged against and the embed comes back null. The workout still
-    // happened — keep the row, just say what's missing.
-    name: (session.workout_plans as any)?.name ?? "Deleted plan",
-  }));
+  return (data ?? []).map((session) => {
+    // A to-one embed: one plan, or null once the plan has been deleted.
+    const plan = session.workout_plans as unknown as {
+      name: string;
+      target: string | null;
+    } | null;
+    return {
+      id: session.id,
+      duration_min: session.duration_min,
+      completed_at: session.completed_at,
+      // Lets a scheduled workout count as done when its plan was logged that day.
+      workout_plan_id: (session.workout_plan_id as string | null) ?? null,
+      // workout_plan_id is ON DELETE SET NULL, so a session outlives the plan it
+      // was logged against and the embed comes back null. The workout still
+      // happened — keep the row, just say what's missing.
+      name: plan?.name ?? "Deleted plan",
+      workout_type: plan?.target?.trim() || null,
+      sets_done: (session.sets_done as number | null) ?? null,
+      sets_total: (session.sets_total as number | null) ?? null,
+    };
+  });
 }
 
 /* --------------

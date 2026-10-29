@@ -11,6 +11,7 @@ import {
   formatRecord,
   personalRecords,
   type ExerciseRecords,
+  type ExerciseResult,
   type SavedExerciseResult,
 } from "./personalRecords";
 import type { WeightUnit } from "./units";
@@ -160,6 +161,9 @@ export function buildSessionSummary({
       duration_min: minutes,
       completed_at: new Date().toISOString(),
       workout_plan_id: null,
+      workout_type: null,
+      sets_done: totals.setsDone,
+      sets_total: totals.setsTotal,
     },
   ];
 
@@ -249,4 +253,76 @@ export function describeNewRecord(
     previous,
     spoken: `${record.name}: ${resultSpoken}, beating your previous best of ${previousSpoken}`,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Per-exercise breakdown, for a session's row in History
+// ---------------------------------------------------------------------------
+
+export type SessionExercise = {
+  workoutId: string;
+  name: string;
+  setsDone: number;
+  // Sets the plan has for it now. Null when the exercise is no longer in the
+  // plan, or the plan was deleted.
+  setsTotal: number | null;
+  // What each set was: reps and weight, or a time. Null when no set was logged.
+  result: Pick<ExerciseProgress, "reps" | "weightKg" | "durationSec"> | null;
+};
+
+/**
+ * Every exercise in the plan, in plan order, with what this session did for
+ * it — 0 sets for the ones it skipped. Only exercises with a set logged are
+ * saved, so an exercise since removed from the plan is still listed, after
+ * the rest.
+ */
+export function buildSessionExercises(
+  plan: readonly PlanExercise[],
+  results: readonly (ExerciseResult & { name: string })[],
+): SessionExercise[] {
+  const byWorkout = new Map(results.map((result) => [result.workoutId, result]));
+  const fromResult = (result: ExerciseResult) => ({
+    reps: result.reps ?? 0,
+    weightKg: result.weightKg,
+    durationSec: result.durationSec,
+  });
+
+  const planned: SessionExercise[] = plan.map((exercise) => {
+    const result = byWorkout.get(exercise.workoutId);
+    return {
+      workoutId: exercise.workoutId,
+      name: exercise.name,
+      setsDone: result?.setsDone ?? 0,
+      setsTotal: exercise.sets,
+      result: result ? fromResult(result) : null,
+    };
+  });
+
+  const inPlan = new Set(plan.map((exercise) => exercise.workoutId));
+  const extra: SessionExercise[] = results
+    .filter((result) => !inPlan.has(result.workoutId))
+    .map((result) => ({
+      workoutId: result.workoutId,
+      name: result.name,
+      setsDone: result.setsDone,
+      setsTotal: null,
+      result: fromResult(result),
+    }));
+
+  return [...planned, ...extra];
+}
+
+/** "2 of 4 sets · 40 kg × 6 reps", "3 sets · 45 sec", or "Skipped". */
+export function describeSessionExercise(
+  exercise: SessionExercise,
+  unit: WeightUnit,
+): string {
+  if (exercise.setsDone === 0) return "Skipped";
+  const total = exercise.setsTotal ?? exercise.setsDone;
+  const sets =
+    exercise.setsTotal === null
+      ? `${exercise.setsDone} ${exercise.setsDone === 1 ? "set" : "sets"}`
+      : `${exercise.setsDone} of ${total} ${total === 1 ? "set" : "sets"}`;
+  const each = exercise.result ? formatAttempt(exercise.result, { unit }) : null;
+  return each ? `${sets} · ${each}` : sets;
 }

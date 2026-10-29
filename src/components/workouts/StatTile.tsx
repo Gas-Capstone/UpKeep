@@ -17,10 +17,14 @@ export function StatTile({
   label,
   value,
   detail,
+  compact = false,
 }: {
   label: string;
   value: string;
   detail?: string;
+  // Tighter padding and a smaller figure, for summaries that share space
+  // with a list (History).
+  compact?: boolean;
 }) {
   const theme = useTheme();
 
@@ -28,13 +32,17 @@ export function StatTile({
     <View
       accessible
       accessibilityLabel={[label, value, detail].filter(Boolean).join(", ")}
-      style={[styles.tile, { backgroundColor: theme.colors.surfaceVariant }]}
+      style={[
+        styles.tile,
+        compact && styles.compactTile,
+        { backgroundColor: theme.colors.surfaceVariant },
+      ]}
     >
       <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>
         {label}
       </Text>
       <Text
-        variant="titleLarge"
+        variant={compact ? "titleMedium" : "titleLarge"}
         numberOfLines={1}
         style={[styles.value, { color: theme.colors.onSurface }]}
       >
@@ -61,6 +69,11 @@ const styles = StyleSheet.create({
     padding: Spacing.three,
     borderRadius: Radius.medium,
     gap: Spacing.half,
+  },
+  compactTile: {
+    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    gap: 0,
   },
   value: {
     fontWeight: "600",
