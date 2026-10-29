@@ -25,7 +25,10 @@ import {
   getPlanEquipment,
   getWorkouts,
   removeFavoriteWorkout,
+  replacePlanExercises,
+  updateWorkoutPlan,
 } from "@/lib/supabaseFunctions";
+import type { PlanExercise } from "@/lib/workouts";
 import {
   ScheduledWorkout,
   WorkoutSchedule,
@@ -94,6 +97,8 @@ export type NewWorkoutPlan = {
 };
 
 export type WorkoutsDataContextType = {
+  loadPlanExercises: (planId: string) => Promise<PlanExercise[]>;
+  updatePlan: (planId: string, plan: NewWorkoutPlan, selections: PlanWorkoutSelection[]) => Promise<boolean>;
   workoutList: Workout[];
   completedWorkouts: CompletedWorkout[];
   // Set of workout ids the current user has favorited, so a card can check
@@ -149,6 +154,10 @@ async function loadWorkoutSchedule(user: { id: string }) {
     rows.map((row) => ({ habit_id: row.entry_id, completed_on: row.completed_on })),
   );
   return { entries, completions };
+}
+
+async function loadPlanExercises(planId: string) {
+  return getPlanExercises(planId, { throwOnError: true });
 }
 
 export const WorkoutsDataProvider = ({
@@ -389,7 +398,22 @@ export const WorkoutsDataProvider = ({
     refreshCompletedWorkouts();
   };
 
+  async function updatePlan(planId: string, plan: NewWorkoutPlan, selections: PlanWorkoutSelection[]) {
+    if (!user?.id || !workoutList.some((workout) => String(workout.id) === planId && workout.created_by === user.id)) return false;
+    try {
+      if (!await updateWorkoutPlan(planId, plan)) return false;
+      if (!await replacePlanExercises(planId, selections)) return false;
+      refreshWorkouts();
+      return true;
+    } catch (error) {
+      console.log("Error updating workout plan: ", error);
+      return false;
+    }
+  }
+
   const contextValue: WorkoutsDataContextType = {
+    loadPlanExercises,
+    updatePlan,
     workoutList,
     completedWorkouts,
     favoriteIds,

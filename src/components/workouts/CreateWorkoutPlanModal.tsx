@@ -26,14 +26,17 @@ import {
 import { useThemeMode } from "@/components/context/ThemeContext";
 import { Colors, Radius, Spacing } from "@/constants/theme";
 import {
+  draftFromPlanExercise,
   newExerciseDraft,
   selectionFromDraft,
   type ExerciseAmountDraft,
+  type PlanExercise,
 } from "@/lib/workouts";
 import type {
   NewWorkoutPlan,
   PlanWorkout,
   PlanWorkoutSelection,
+  Workout,
 } from "../context/workoutsDataContext";
 import { ExercisePicker } from "./ExercisePicker";
 import { ExerciseAmountFields } from "./ExerciseAmountFields";
@@ -50,6 +53,8 @@ type CreateWorkoutPlanModalProps = {
   visible: boolean;
   onDismiss: () => void;
   availableWorkouts: PlanWorkout[];
+  initialPlan?: Workout;
+  initialExercises?: PlanExercise[];
   onCreate: (
     plan: NewWorkoutPlan,
     selections: PlanWorkoutSelection[],
@@ -63,19 +68,23 @@ export function CreateWorkoutPlanModal({
   onDismiss,
   availableWorkouts,
   onCreate,
+  initialPlan,
+  initialExercises = [],
 }: CreateWorkoutPlanModalProps) {
   const theme = useTheme();
   const [pickingExercises, setPickingExercises] = useState(false);
   const { resolvedTheme } = useThemeMode();
   const colors = Colors[resolvedTheme];
 
-  const [name, setName] = useState("");
-  const [difficulty, setDifficulty] = useState(DIFFICULTIES[0]);
-  const [target, setTarget] = useState("");
-  const [durationMin, setDurationMin] = useState("30");
+  const [name, setName] = useState(initialPlan?.name ?? "");
+  const [difficulty, setDifficulty] = useState(initialPlan?.difficulty || DIFFICULTIES[0]);
+  const [target, setTarget] = useState(initialPlan?.target ?? "");
+  const [durationMin, setDurationMin] = useState(String(initialPlan?.duration_min ?? 30));
   const [selections, setSelections] = useState<
     Record<string, ExerciseAmountDraft>
-  >({});
+  >(() => Object.fromEntries(initialExercises.map((exercise) => [
+    exercise.workoutId, draftFromPlanExercise(exercise),
+  ])));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [footerHeight, setFooterHeight] = useState(0);
@@ -160,17 +169,22 @@ export function CreateWorkoutPlanModal({
       selectionFromDraft(workoutId, selections[workoutId]),
     );
 
-    const ok = await onCreate(
-      {
-        name: name.trim(),
-        difficulty,
-        target: target.trim(),
-        duration_min: minutes,
-      },
-      payload,
-    );
-
-    setSaving(false);
+    let ok = false;
+    try {
+      ok = await onCreate(
+        {
+          name: name.trim(),
+          difficulty,
+          target: target.trim(),
+          duration_min: minutes,
+        },
+        payload,
+      );
+    } catch {
+      // Keep the draft open so a failed request can be retried.
+    } finally {
+      setSaving(false);
+    }
 
     if (!ok) {
       setError("Couldn't save your plan. Please try again.");
@@ -223,7 +237,7 @@ export function CreateWorkoutPlanModal({
                       variant="titleLarge"
                       style={[styles.title, { color: colors.text }]}
                     >
-                      {pickingExercises ? "Choose exercises" : "New workout plan"}
+                      {pickingExercises ? "Choose exercises" : initialPlan ? "Edit workout plan" : "New workout plan"}
                     </Text>
                   </View>
 
@@ -467,7 +481,7 @@ export function CreateWorkoutPlanModal({
                         textColor={theme.colors.onPrimary}
                         style={styles.createButton}
                       >
-                        Create plan
+                        {initialPlan ? "Save changes" : "Create plan"}
                       </Button>
                     </>
                   )}

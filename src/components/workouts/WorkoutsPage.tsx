@@ -33,6 +33,7 @@ import { sortFavoritesFirst } from "@/lib/workouts";
 
 import { CompletedWorkoutsModal } from "./CompletedWorkoutsModal";
 import { CreateWorkoutPlanModal } from "./CreateWorkoutPlanModal";
+import { EditWorkoutPlanModal } from "./EditWorkoutPlanModal";
 import { FilterMenuChip } from "./FilterMenuChip";
 import { StartWorkoutModal } from "./StartWorkoutModal";
 import { WeeklyProgress } from "./WeeklyProgress";
@@ -71,6 +72,7 @@ export default function WorkoutsPage() {
   const [completedModalVisible, setCompletedModalVisible] = useState(false);
   const [startModalVisible, setStartModalVisible] = useState(false);
   const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [editTarget, setEditTarget] = useState<Workout | null>(null);
   const [selectedWorkout, setSelectedWorkout] = useState<Workout | null>(null);
   // Plan being added to the Habits page schedule, or null when closed.
   const [scheduleTarget, setScheduleTarget] = useState<Workout | null>(null);
@@ -137,13 +139,6 @@ export default function WorkoutsPage() {
     } finally {
       setPhotoUploadingId(null);
     }
-  };
-
-  const openEditPlan = (workout: Workout) => {
-    router.navigate({
-      pathname: "/edit-workout",
-      params: { id: String(workout.id) },
-    });
   };
 
   const confirmDelete = async () => {
@@ -236,6 +231,14 @@ export default function WorkoutsPage() {
             availableWorkouts={availableWorkouts}
             onCreate={createPlan}
           />
+
+          {editTarget ? (
+            <EditWorkoutPlanModal
+              key={String(editTarget.id)}
+              plan={editTarget}
+              onDismiss={() => setEditTarget(null)}
+            />
+          ) : null}
 
           <ConfirmDialog
             visible={deleteTarget !== null}
@@ -465,7 +468,7 @@ export default function WorkoutsPage() {
                 ? {
                     onChangePhoto: () => changePhoto(workout),
                     photoUploading: photoUploadingId === String(workout.id),
-                    onEdit: () => openEditPlan(workout),
+                    onEdit: () => setEditTarget(workout),
                     onDelete: () => setDeleteTarget(workout),
                   }
                 : {})}
