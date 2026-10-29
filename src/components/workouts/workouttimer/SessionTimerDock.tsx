@@ -13,6 +13,7 @@ type Props = {
   completed: boolean;
   saving: boolean;
   error: string;
+  exercisesLoading: boolean;
   onToggle: () => void;
   onFinish: () => void;
   onBackToWorkouts: () => void;
@@ -27,6 +28,7 @@ export function SessionTimerDock({
   completed,
   saving,
   error,
+  exercisesLoading,
   onToggle,
   onFinish,
   onBackToWorkouts,
@@ -85,7 +87,7 @@ export function SessionTimerDock({
                 <Button
                   mode="outlined"
                   compact
-                  disabled={saving || idle}
+                  disabled={saving || idle || exercisesLoading}
                   loading={saving}
                   onPress={onFinish}
                   style={styles.action}

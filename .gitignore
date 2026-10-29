@@ -60,3 +60,7 @@ workout-images-upload/
 .claude/
 .codex/
 .impeccable/
+
+# impeccable documents
+DESIGN.md
+PRODUCT.md

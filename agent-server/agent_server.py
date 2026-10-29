@@ -19,6 +19,7 @@ import base64
 import json
 import os
 import re
+import time
 from datetime import date, datetime, timedelta
 
 from dotenv import load_dotenv
@@ -1039,14 +1040,56 @@ def clarification_response(name: str, args: dict, pending: dict, done: list):
     }
 
 
+def ms_since(started: float) -> int:
+    return round((time.perf_counter() - started) * 1000)
+
+
+def timed_execute(timing: dict, sb, name: str, args: dict):
+    """execute(), with its time added to the turn's running tool total."""
+    started = time.perf_counter()
+    try:
+        return execute(sb, name, args)
+    finally:
+        timing["tool_ms"] = timing.get("tool_ms", 0) + ms_since(started)
+
+
+def outcome_of(result: dict) -> str:
+    if result.get("needs_clarification"):
+        return "needs_clarification"
+    if result.get("ok"):
+        return "ok"
+    return result.get("error", "error")
+
+
 @app.post("/agent")
 def run_agent(req: AgentRequest):
+    """
+    Every response carries `timing`: where this turn spent its time on the
+    server. The app records it alongside its own end-to-end figure, and the
+    gap between the two is the network and the tunnel — something neither
+    side can measure alone.
+
+    Also prints one line per turn, never including the message itself.
+    """
+    timing = {}
+    started = time.perf_counter()
+    result = handle_agent(req, timing)
+    timing["server_ms"] = ms_since(started)
+    result["timing"] = timing
+    print(f"agent {outcome_of(result):<20} {timing}", flush=True)
+    return result
+
+
+def handle_agent(req: AgentRequest, timing: dict):
     jwt = req.jwt or (TEST_JWT if ALLOW_TEST_JWT else "")
     if not jwt:
         return {"ok": False, "error": "no_jwt", "detail": "Sign in and try again."}
 
     # Checked before the model is touched, not after.
-    if not verify_jwt(jwt):
+    started = time.perf_counter()
+    valid = verify_jwt(jwt)
+    timing["auth_ms"] = ms_since(started)
+    if not valid:
         return {"ok": False, "error": "bad_jwt", "detail": "Sign in and try again."}
 
     sb = client_for(jwt)
@@ -1075,7 +1118,7 @@ def run_agent(req: AgentRequest):
         elif field:
             args[field] = req.message.strip()
 
-        result, err = execute(sb, name, args)
+        result, err = timed_execute(timing, sb, name, args)
         if err:
             return err
 
@@ -1086,6 +1129,7 @@ def run_agent(req: AgentRequest):
         return {"ok": True, "completed": [{"tool": name, "args": args, "reply": result}], "reply": result}
 
     # ---- Normal path: let the model route ----------------------------
+    started = time.perf_counter()
     response = ollama.chat(
         model=MODEL,
         messages=[
@@ -1096,6 +1140,7 @@ def run_agent(req: AgentRequest):
         tools=TOOLS,
         think=False,
     )
+    timing["model_ms"] = ms_since(started)
 
     calls = response["message"].get("tool_calls")
     if not calls:
@@ -1110,7 +1155,7 @@ def run_agent(req: AgentRequest):
         name = call["function"]["name"]
         args = call["function"]["arguments"] or {}
 
-        result, err = execute(sb, name, args)
+        result, err = timed_execute(timing, sb, name, args)
         if err:
             return err
 

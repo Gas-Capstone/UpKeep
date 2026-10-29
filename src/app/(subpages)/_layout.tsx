@@ -30,6 +30,10 @@ export default function SubpagesLayout() {
         name="edit-workout"
         options={{ title: "Edit Plan", presentation: "card" }}
       />
+      <Stack.Screen
+        name="developer"
+        options={{ title: "Performance", presentation: "card" }}
+      />
     </Stack>
   );
 }

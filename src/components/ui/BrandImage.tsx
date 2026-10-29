@@ -5,6 +5,7 @@ import { Image } from "expo-image";
 import { useThemeMode } from "@/components/context/ThemeContext";
 import { BrandImagePlaceholder } from "@/components/ui/BrandImagePlaceholder";
 import { Colors, Radius } from "@/constants/theme";
+import { track } from "@/lib/metrics";
 
 type BrandImageProps = {
   /** Public URL of the photo. Null or empty falls back to the placeholder. */
@@ -52,6 +53,15 @@ export function BrandImage({
           // Falling back silently hides the cause — a 404 from a renamed
           // object and a private bucket look identical on screen.
           console.warn("Image failed to load", uri, event.error);
+          // The bucket only: object names under user-images carry user ids.
+          track("image_error", {
+            ok: false,
+            props: {
+              bucket:
+                uri.match(/\/storage\/v1\/object\/public\/([^/]+)\//)?.[1] ??
+                "external",
+            },
+          });
           setFailed(true);
         }}
         contentFit="cover"

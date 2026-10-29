@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { AppState, Keyboard, StyleSheet, View } from "react-native";
 import { useRouter } from "expo-router";
-import { Button, IconButton, ProgressBar, Snackbar, Text, useTheme } from "react-native-paper";
+import { Button, IconButton, ProgressBar, Text, useTheme } from "react-native-paper";
 
 import { useWorkoutSessionContext } from "@/components/context/workoutSessionContext";
 import { ScreenView } from "@/components/ui/ScreenView";
 import { Spacing, Radius } from "@/constants/theme";
 import { ConfirmStopModal } from "./ConfirmStopModal";
 import { SessionExerciseCard } from "./SessionExerciseCard";
+import { SessionSummaryModal } from "./SessionSummaryModal";
 import { ExerciseDetailsModal } from "./ExerciseDetailsModal";
 import type { PlanExercise } from "@/lib/workouts";
 import { Center } from "@/components/ui/center";
@@ -18,12 +19,12 @@ export default function WorkoutTimerPage() {
   const theme = useTheme();
   const {
     workoutSession, exercises, exercisesLoading, exercisesError, reloadExercises,
-    exerciseProgress, setExerciseProgress, completeSession,
+    exerciseProgress, setExerciseProgress, completeSession, personalRecords, sessionSummary,
     pauseSession, resumeSession, getElapsedTime, saving, saveError,
   } = useWorkoutSessionContext();
   const [dockHeight, setDockHeight] = useState(0);
   const [confirmStopOpen, setConfirmStopOpen] = useState(false);
-  const [finishedFeedbackVisible, setFinishedFeedbackVisible] = useState(false);
+  const [summaryOpen, setSummaryOpen] = useState(false);
   const [selectedExercise, setSelectedExercise] = useState<PlanExercise | null>(null);
   const [elapsed, setElapsed] = useState(getElapsedTime);
 
@@ -98,6 +99,7 @@ export default function WorkoutTimerPage() {
             completed={isCompleted}
             saving={saving}
             error={confirmStopOpen ? "" : saveError}
+            exercisesLoading={exercisesLoading}
             onToggle={isActive ? pauseSession : resumeSession}
             onFinish={() => {
               Keyboard.dismiss();
@@ -121,23 +123,38 @@ export default function WorkoutTimerPage() {
             onConfirm={async () => {
               if (await completeSession()) {
                 setConfirmStopOpen(false);
-                setFinishedFeedbackVisible(true);
+                setSummaryOpen(true);
               }
             }}
           />
 
-          <Snackbar
-            visible={finishedFeedbackVisible}
-            onDismiss={() => setFinishedFeedbackVisible(false)}
-            duration={4000}
-            wrapperStyle={{ bottom: dockHeight + Spacing.two }}
-            accessibilityLiveRegion="polite"
-          >
-            Workout finished and saved.
-          </Snackbar>
+          {/* Replaces the old "Workout finished and saved." snackbar: the
+              summary says it was saved, and shows how it went. */}
+          {sessionSummary && (
+            <SessionSummaryModal
+              visible={summaryOpen}
+              summary={sessionSummary}
+              onDismiss={() => setSummaryOpen(false)}
+              onBackToWorkouts={() => {
+                setSummaryOpen(false);
+                router.replace("/(tabs)/workouts");
+              }}
+            />
+          )}
         </>
       }
     >
+      {isCompleted && sessionSummary && (
+        <Button
+          mode="outlined"
+          icon="chart-box-outline"
+          onPress={() => setSummaryOpen(true)}
+          style={styles.summaryButton}
+        >
+          View session summary
+        </Button>
+      )}
+
       <View style={styles.section}>
         <View style={styles.sectionHeading}>
           <Text variant="titleLarge" style={styles.title}>Exercises</Text>
@@ -173,6 +190,7 @@ export default function WorkoutTimerPage() {
         return progress ? (
           <SessionExerciseCard
             key={`${workoutSession.workout.id}:${exercise.workoutId}`} exercise={exercise} progress={progress}
+            record={personalRecords.get(exercise.workoutId)}
             disabled={isCompleted || saving}
             trackingDisabled={!isActive}
             onViewDetails={() => {
@@ -185,7 +203,11 @@ export default function WorkoutTimerPage() {
       })}
 
       {!isCompleted && <Center>
-        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>Exercise adjustments apply to this session only.</Text>
+        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, textAlign: "center" }}>
+          {workoutSession.workout.builtIn
+            ? "Weights, sets and reps you change are remembered for next time."
+            : "Weights are remembered for next time. To keep sets and reps, edit the plan."}
+        </Text>
       </Center>}
     </ScreenView>
   );
@@ -209,4 +231,5 @@ const styles = StyleSheet.create({
   sectionHeading: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: Spacing.two },
   progress: { borderRadius: Radius.pill },
   loading: { gap: Spacing.three, paddingVertical: Spacing.three },
+  summaryButton: { alignSelf: "stretch", marginTop: Spacing.two },
 });

@@ -19,11 +19,17 @@ import {
 
 import { useThemeMode } from "@/components/context/ThemeContext";
 import { Colors, Radius, Spacing } from "@/constants/theme";
+import {
+  newExerciseDraft,
+  selectionFromDraft,
+  type ExerciseAmountDraft,
+} from "@/lib/workouts";
 import type {
   NewWorkoutPlan,
   PlanWorkout,
   PlanWorkoutSelection,
 } from "../context/workoutsDataContext";
+import { ExerciseAmountFields } from "./ExerciseAmountFields";
 
 type CreateWorkoutPlanModalProps = {
   visible: boolean;
@@ -36,8 +42,6 @@ type CreateWorkoutPlanModalProps = {
 };
 
 const DIFFICULTIES = ["beginner", "intermediate", "advanced"];
-const DEFAULT_SETS = 3;
-const DEFAULT_REPS = 10;
 
 export function CreateWorkoutPlanModal({
   visible,
@@ -53,7 +57,7 @@ export function CreateWorkoutPlanModal({
   const [target, setTarget] = useState("");
   const [durationMin, setDurationMin] = useState("30");
   const [selections, setSelections] = useState<
-    Record<string, { sets: string; reps: string }>
+    Record<string, ExerciseAmountDraft>
   >({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -68,25 +72,12 @@ export function CreateWorkoutPlanModal({
         return next;
       }
 
-      return {
-        ...current,
-        [workoutId]: {
-          sets: String(DEFAULT_SETS),
-          reps: String(DEFAULT_REPS),
-        },
-      };
+      return { ...current, [workoutId]: newExerciseDraft() };
     });
   };
 
-  const updateSelection = (
-    workoutId: string,
-    field: "sets" | "reps",
-    value: string,
-  ) => {
-    setSelections((current) => ({
-      ...current,
-      [workoutId]: { ...current[workoutId], [field]: value },
-    }));
+  const updateSelection = (workoutId: string, draft: ExerciseAmountDraft) => {
+    setSelections((current) => ({ ...current, [workoutId]: draft }));
   };
 
   const resetForm = () => {
@@ -124,17 +115,9 @@ export function CreateWorkoutPlanModal({
     setError("");
     setSaving(true);
 
-    const payload: PlanWorkoutSelection[] = selectedIds.map((workoutId) => {
-      const entry = selections[workoutId];
-      const sets = Number(entry.sets);
-      const reps = Number(entry.reps);
-
-      return {
-        workout_id: workoutId,
-        sets: Number.isFinite(sets) && sets > 0 ? sets : DEFAULT_SETS,
-        reps: Number.isFinite(reps) && reps > 0 ? reps : DEFAULT_REPS,
-      };
-    });
+    const payload: PlanWorkoutSelection[] = selectedIds.map((workoutId) =>
+      selectionFromDraft(workoutId, selections[workoutId]),
+    );
 
     const ok = await onCreate(
       {
@@ -394,29 +377,12 @@ export function CreateWorkoutPlanModal({
                           </Chip>
 
                           {isSelected ? (
-                            <View style={styles.repsRow}>
-                              <TextInput
-                                label="Sets"
-                                mode="outlined"
-                                dense
-                                keyboardType="numeric"
-                                style={styles.repsInput}
-                                value={entry.sets}
-                                onChangeText={(text) =>
-                                  updateSelection(workout.id, "sets", text)
-                                }
-                                outlineColor={colors.border}
-                                activeOutlineColor={colors.brand}
-                              />
-                              <TextInput
-                                label="Reps"
-                                mode="outlined"
-                                dense
-                                keyboardType="numeric"
-                                style={styles.repsInput}
-                                value={entry.reps}
-                                onChangeText={(text) =>
-                                  updateSelection(workout.id, "reps", text)
+                            <View style={styles.amountFields}>
+                              <ExerciseAmountFields
+                                exerciseName={workout.name}
+                                draft={entry}
+                                onChange={(draft) =>
+                                  updateSelection(workout.id, draft)
                                 }
                                 outlineColor={colors.border}
                                 activeOutlineColor={colors.brand}
@@ -553,14 +519,9 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     padding: Spacing.two,
   },
-  repsRow: {
-    flexDirection: "row",
-    gap: Spacing.two,
+  amountFields: {
     paddingHorizontal: Spacing.two,
     paddingBottom: Spacing.two,
-  },
-  repsInput: {
-    flex: 1,
   },
   emptyBox: {
     minHeight: 110,
