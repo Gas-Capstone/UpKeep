@@ -16,7 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { styles as shared } from "@/constants/styles";
-import { BottomTabInset, Spacing } from "@/constants/theme";
+import { Spacing } from "@/constants/theme";
 import { useWeightUnit } from "@/components/context/UnitsContext";
 import {
   describeSessionExercise,
@@ -237,11 +237,9 @@ export function CompletedWorkoutsModal({
       <Modal
         visible={visible}
         onDismiss={close}
-        // Kept between the status bar and the floating tab bar, so the panel
-        // never runs behind either. Long content scrolls inside it instead.
         style={{
           marginTop: insets.top + Spacing.three,
-          marginBottom: BottomTabInset + insets.bottom + Spacing.four,
+          marginBottom: insets.bottom + Spacing.three,
         }}
         contentContainerStyle={[shared.modalContent, fit.fill]}
       >
