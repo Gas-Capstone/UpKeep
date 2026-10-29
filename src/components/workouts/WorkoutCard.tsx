@@ -60,7 +60,7 @@ export function WorkoutCard({
     >
       <BrandImage
         uri={workout.image_url}
-        label="Workout photo"
+        label="No photo added"
         icon="dumbbell"
         accessibilityLabel={`Photo of ${workout.name}`}
         style={styles.imageSlot}
