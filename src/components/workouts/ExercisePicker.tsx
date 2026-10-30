@@ -76,7 +76,7 @@ export function ExercisePicker({ exercises, selectedIds, onToggle }: ExercisePic
             onPress={() => setSelectedOnly(!selectedOnly)}
             accessibilityState={{ selected: selectedOnly }}
           >
-            Show selected exercises
+            Show selected
           </Chip>
         </View>
         {filtersVisible && ([
