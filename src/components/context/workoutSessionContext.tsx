@@ -42,7 +42,7 @@ function recordWorkoutSession(elapsedMs: number, totals: SessionTotals) {
   const outcome =
     setsTotal > 0 && setsDone >= setsTotal
       ? "all_sets_done"
-      : elapsedMs >= plannedMin * 60000
+      : plannedMin !== null && elapsedMs >= plannedMin * 60000
         ? "time_up"
         : "stopped_early";
 
@@ -67,12 +67,12 @@ type WorkoutSession = {
     name: string;
     difficulty: string;
     target: string;
-    duration_min: number;
+    duration_min: number | null;
     // Built-in plans remember sets and reps the user changes; their own plans
     // are changed by editing them.
     builtIn: boolean;
   };
-  plannedDuration: number;
+  plannedDuration: number | null;
   startedAt: number | null;
   pausedAt: number | null;
   accumulatedTime: number; // elapsed milliseconds, excluding pauses
@@ -103,7 +103,7 @@ type WorkoutSessionContextType = {
   // Seeds any exercise not yet tracked; existing entries are left alone so
   // this can run on every screen mount without wiping progress.
   seedExerciseProgress: (exercises: PlanExercise[]) => void;
-  startSession: (workout: Workout, plannedDuration: number) => void;
+  startSession: (workout: Workout) => void;
   pauseSession: () => void;
   resumeSession: () => void;
   completeSession: () => Promise<boolean>;
@@ -228,8 +228,9 @@ const WorkoutSessionProvider = ({
     });
   };
 
-  const startSession = (workout: Workout, plannedDuration: number) => {
+  const startSession = (workout: Workout) => {
     if (savingRef.current) return;
+    const plannedDuration = workout.duration_min ?? null;
     // Progress starts fresh every session. What carries over is the weight
     // last used and, on built-in plans, any sets and reps the user changed.
     setExerciseProgressState(new Map());

@@ -30,7 +30,7 @@ export async function getWorkouts(user: UserRef) {
 export async function getAvailableWorkouts() {
   const { data, error } = await supabase
     .from("workouts")
-    .select("id, name, muscle_group, equipment")
+    .select("id, name, muscle_group, equipment, instructions")
     .order("name", { ascending: true });
   if (error) console.log("Error fetching available workouts: ", error);
   return data;
@@ -748,7 +748,6 @@ export async function getSessionDetails(sessionId: string): Promise<{
 
   const row = session.data;
   const totals =
-    row.planned_min !== null &&
     row.sets_done !== null &&
     row.sets_total !== null &&
     row.exercises_done !== null &&

@@ -139,34 +139,33 @@ export default function HabitsScreen() {
           />
         ) : null
       }
-    >
-      <View style={styles.headingRow}>
-        <View style={{ flex: 1 }}>
-          <View style={styles.titleRow}>
-            <View
-              style={[styles.titleIcon, { backgroundColor: colors.brandSoft }]}
-            >
-              <Icon
-                source="check-circle-outline"
-                size={22}
-                color={colors.brand}
-              />
+      header={
+        <View style={styles.header}>
+          <View style={styles.titleGroup}>
+            <View style={styles.titleRow}>
+              <View
+                style={[styles.titleIcon, { backgroundColor: colors.brandSoft }]}
+              >
+                <Icon
+                  source="check-circle-outline"
+                  size={22}
+                  color={colors.brand}
+                />
+              </View>
+              <Text
+                variant="headlineMedium"
+                style={[styles.title, { color: colors.text }]}
+              >
+                Habits
+              </Text>
             </View>
             <Text
-              variant="headlineMedium"
-              style={[styles.title, { color: colors.text }]}
+              variant="bodyMedium"
+              style={{ color: colors.textSecondary }}
             >
-              Habits
+              Routines and meals, scheduled through your day.
             </Text>
           </View>
-          <Text
-            variant="bodyMedium"
-            style={{ color: colors.textSecondary, marginTop: Spacing.one }}
-          >
-            Routines and meals, scheduled through your day.
-          </Text>
-        </View>
-      </View>
 
       <View
         style={[
@@ -369,6 +368,9 @@ const styles = StyleSheet.create({
     borderRadius: Radius.medium,
     alignItems: "center",
     justifyContent: "center",
+  },
+  titleGroup: {
+    gap: Spacing.one,
   },
   title: {
     fontWeight: "900",

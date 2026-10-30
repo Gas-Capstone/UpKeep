@@ -13,6 +13,7 @@ import {
 } from "react-native-paper";
 
 import { useTour } from "@/components/context/tourContext";
+import type { AppTheme } from "@/constants/paper-theme";
 import { styles } from "@/constants/styles";
 import { Radius, Spacing } from "@/constants/theme";
 
@@ -67,7 +68,8 @@ const STEPS: TourStep[] = [
  * Moves through each tab as it goes.
  */
 export function AppTourModal() {
-  const theme = useTheme();
+  const theme = useTheme<AppTheme>();
+  const insets = useSafeAreaInsets();
   const { visible, startFirstVisitTour, finishTour } = useTour();
   const pathname = usePathname();
   const [stepIndex, setStepIndex] = useState(0);
@@ -97,7 +99,12 @@ export function AppTourModal() {
         onDismiss={close}
         dismissable={false}
         dismissableBackButton
-        contentContainerStyle={styles.modalContent}
+        theme={{ colors: { backdrop: theme.colors.tourBackdrop } }}
+        style={local.wrapper}
+        contentContainerStyle={[
+          styles.modalContent,
+          { paddingBottom: BottomTabInset + insets.bottom + Spacing.three },
+        ]}
       >
         <Card
           mode="contained"
@@ -144,7 +151,10 @@ export function AppTourModal() {
               )}
             </View>
             {!isFirst && (
-              <Button mode="outlined" onPress={() => setStepIndex(stepIndex - 1)}>
+              <Button
+                mode="outlined"
+                onPress={() => setStepIndex(stepIndex - 1)}
+              >
                 Back
               </Button>
             )}
