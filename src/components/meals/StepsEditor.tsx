@@ -46,19 +46,26 @@ export function StepsEditor({ steps, onChange }: StepsEditorProps) {
             >
               {index + 1}
             </Text>
-            <TextInput
-              mode="outlined"
-              dense
-              multiline
-              placeholder="Describe this step"
-              value={step}
-              onChangeText={(text) => update(index, text)}
-              style={{ flex: 1, minWidth: 0 }}
-              // Paper pins multiline text to the top of the box; centre it so
-              // a one-line step sits in the middle like a normal field.
-              contentStyle={{ textAlignVertical: "center" }}
-              accessibilityLabel={`Step ${index + 1}`}
-            />
+            {/* The row stretches its children to the height of the stacked
+                up/down arrows. This wrapper takes that stretch so the input
+                inside keeps the height of its own text, centred, instead of
+                becoming a tall box with one line pinned to the top. */}
+            <View style={{ flex: 1, minWidth: 0, justifyContent: "center" }}>
+              <TextInput
+                mode="outlined"
+                dense
+                multiline
+                placeholder="Describe this step"
+                value={step}
+                onChangeText={(text) => update(index, text)}
+                contentStyle={{
+                  textAlignVertical: "center",
+                  paddingTop: Spacing.two,
+                  paddingBottom: Spacing.two,
+                }}
+                accessibilityLabel={`Step ${index + 1}`}
+              />
+            </View>
             <VStack>
               <IconButton
                 icon="chevron-up"

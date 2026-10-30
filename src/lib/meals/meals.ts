@@ -89,6 +89,32 @@ export function stepsToInstructions(steps: string[]): string | null {
   return lines.length > 0 ? lines.join("\n") : null;
 }
 
+/**
+ * Keeps typed amounts to digits, one decimal point, and two decimal places —
+ * quantities are fractional (half a pound of beef), so the floor is one
+ * hundredth rather than one.
+ */
+export function sanitizeDecimal(text: string): string {
+  const cleaned = text.replace(/[^0-9.]/g, "");
+  const [whole, ...rest] = cleaned.split(".");
+  if (rest.length === 0) return whole;
+  return `${whole}.${rest.join("").slice(0, 2)}`;
+}
+
+/**
+ * "4 lb", but "1 × 170g container".
+ *
+ * Some units in the catalog are themselves a measurement ("170g container",
+ * "1/2 cup"), so plain juxtaposition runs two numbers together and reads as
+ * one — "1 170g container". A times sign separates the count from the unit
+ * wherever the unit starts with a digit.
+ */
+export function formatAmount(entry: FridgeEntry): string {
+  if (!entry.unit) return String(entry.quantity);
+  const separator = /^\d/.test(entry.unit) ? " × " : " ";
+  return `${entry.quantity}${separator}${entry.unit}`;
+}
+
 /** Catalog and custom recipes have independent id spaces — never mix them as one key. */
 export function recipeKey(recipe: Pick<Recipe, "id" | "isCustom">): string {
   return recipe.isCustom ? `custom:${recipe.id}` : `catalog:${recipe.id}`;

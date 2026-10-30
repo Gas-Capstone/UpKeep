@@ -26,6 +26,7 @@ import {
 } from "@/lib/meals/cooking";
 import { RecipeDetail, parseInstructionSteps } from "@/lib/meals/meals";
 import { fetchRecipeDetail } from "@/lib/meals/queries";
+import { UpdateFridgeModal } from "./UpdateFridgeModal";
 
 const ERROR_COLOR = "#ff4d4f";
 
@@ -45,6 +46,7 @@ export default function CookingScreen() {
   // No id means nothing to load; the "couldn't be found" message shows instead.
   const [loading, setLoading] = useState(Boolean(id));
   const [error, setError] = useState("");
+  const [updatingFridge, setUpdatingFridge] = useState(false);
 
   const steps = parseInstructionSteps(recipe?.instructions ?? null);
   const finished = steps.length > 0 && checked.size === steps.length;
@@ -89,13 +91,24 @@ export default function CookingScreen() {
     updateChecked(next);
   };
 
+  // Runs after the fridge step, whether it was saved or skipped.
   const finishCooking = async () => {
+    setUpdatingFridge(false);
     if (recipe) await clearCookingProgress(recipe).catch(() => {});
     router.back();
   };
 
   return (
     <ScreenView
+      overlay={
+        updatingFridge && recipe ? (
+          <UpdateFridgeModal
+            recipe={recipe}
+            onDismiss={() => setUpdatingFridge(false)}
+            onFinished={finishCooking}
+          />
+        ) : null
+      }
       header={
         <VStack
           style={{
@@ -157,7 +170,7 @@ export default function CookingScreen() {
                   </Text>
                 </Card.Content>
                 <Card.Actions>
-                  <Button mode="contained" onPress={finishCooking}>
+                  <Button mode="contained" onPress={() => setUpdatingFridge(true)}>
                     Done
                   </Button>
                 </Card.Actions>
