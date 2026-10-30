@@ -29,7 +29,7 @@ export type NewRecord = {
 
 // What a session is measured against, saved with it so History can show it.
 export type SessionTotals = {
-  plannedMin: number;
+  plannedMin: number | null;
   setsDone: number;
   setsTotal: number;
   exercisesDone: number;
@@ -42,7 +42,7 @@ export type SessionSummary = {
   planName: string;
   // As saved: elapsed time rounded up to the minute.
   minutes: number;
-  // Null on sessions saved before these were recorded.
+  // Null when no duration was planned or on older sessions without totals.
   plannedMin: number | null;
   sets: Count | null;
   // Exercises with at least one set logged, of those in the plan.
@@ -100,7 +100,7 @@ function volumeOf(progress: ExerciseProgress, setsDone: number): number {
 export function sessionTotals(
   exercises: readonly PlanExercise[],
   progress: ReadonlyMap<string, ExerciseProgress>,
-  plannedMin: number,
+  plannedMin: number | null,
 ): SessionTotals {
   let setsDone = 0;
   let setsTotal = 0;

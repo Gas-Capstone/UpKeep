@@ -748,7 +748,6 @@ export async function getSessionDetails(sessionId: string): Promise<{
 
   const row = session.data;
   const totals =
-    row.planned_min !== null &&
     row.sets_done !== null &&
     row.sets_total !== null &&
     row.exercises_done !== null &&

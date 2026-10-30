@@ -35,7 +35,6 @@ import { CompletedWorkoutsModal } from "./CompletedWorkoutsModal";
 import { CreateWorkoutPlanModal } from "./CreateWorkoutPlanModal";
 import { EditWorkoutPlanModal } from "./EditWorkoutPlanModal";
 import { FilterMenuChip } from "./FilterMenuChip";
-import { StartWorkoutModal } from "./StartWorkoutModal";
 import { WeeklyProgress } from "./WeeklyProgress";
 import { WorkoutCard } from "./WorkoutCard";
 import { WorkoutFilterChip } from "./WorkoutFilterChip";
@@ -70,10 +69,8 @@ export default function WorkoutsPage() {
 
   const [filters, setFilters] = useState<WorkoutFilters>(NO_FILTERS);
   const [completedModalVisible, setCompletedModalVisible] = useState(false);
-  const [startModalVisible, setStartModalVisible] = useState(false);
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [editTarget, setEditTarget] = useState<Workout | null>(null);
-  const [selectedWorkout, setSelectedWorkout] = useState<Workout | null>(null);
   // Plan being added to the Habits page schedule, or null when closed.
   const [scheduleTarget, setScheduleTarget] = useState<Workout | null>(null);
   // Plan awaiting delete confirmation.
@@ -172,13 +169,7 @@ export default function WorkoutsPage() {
   );
 
   const handleStart = (workout: Workout) => {
-    setSelectedWorkout(workout);
-    setStartModalVisible(true);
-  };
-
-  const handleTimer = (workout: Workout, mins: number) => {
-    startSession(workout, mins);
-    setStartModalVisible(false);
+    startSession(workout);
     router.navigate({
       pathname: "/workouttimer",
       params: { workoutId: String(workout.id) },
@@ -215,15 +206,6 @@ export default function WorkoutsPage() {
               onSaveWorkout={scheduleWorkout}
             />
           ) : null}
-
-          {selectedWorkout && (
-            <StartWorkoutModal
-              visible={startModalVisible}
-              onDismiss={() => setStartModalVisible(false)}
-              workout={selectedWorkout}
-              onStart={handleTimer}
-            />
-          )}
 
           <CreateWorkoutPlanModal
             visible={createModalVisible}
