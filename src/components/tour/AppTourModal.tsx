@@ -11,11 +11,10 @@ import {
   Text,
   useTheme,
 } from "react-native-paper";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useTour } from "@/components/context/tourContext";
 import { styles } from "@/constants/styles";
-import { BottomTabInset, Radius, Spacing } from "@/constants/theme";
+import { Radius, Spacing } from "@/constants/theme";
 
 type TourStep = {
   href: Href;
@@ -69,7 +68,6 @@ const STEPS: TourStep[] = [
  */
 export function AppTourModal() {
   const theme = useTheme();
-  const insets = useSafeAreaInsets();
   const { visible, startFirstVisitTour, finishTour } = useTour();
   const pathname = usePathname();
   const [stepIndex, setStepIndex] = useState(0);
@@ -78,8 +76,6 @@ export function AppTourModal() {
   const isFirst = stepIndex === 0;
   const isLast = stepIndex === STEPS.length - 1;
 
-  // Re-runs when the "has this account seen it" check resolves, so a slow
-  // check still opens the tour if the user is on Home by then.
   useEffect(() => {
     if (pathname === "/") startFirstVisitTour();
   }, [pathname, startFirstVisitTour]);
@@ -101,18 +97,17 @@ export function AppTourModal() {
         onDismiss={close}
         dismissable={false}
         dismissableBackButton
-        style={local.wrapper}
-        contentContainerStyle={[
-          styles.modalContent,
-          { paddingBottom: BottomTabInset + insets.bottom + Spacing.three },
-        ]}
+        contentContainerStyle={styles.modalContent}
       >
         <Card
-          mode="elevated"
+          mode="contained"
           style={[
             styles.modalCard,
             local.card,
-            { backgroundColor: theme.colors.surface },
+            {
+              backgroundColor: theme.colors.surface,
+              borderColor: theme.colors.outlineVariant,
+            },
           ]}
         >
           <Card.Title
@@ -167,17 +162,17 @@ export function AppTourModal() {
 }
 
 const local = StyleSheet.create({
-  wrapper: {
-    justifyContent: "flex-end",
-  },
   card: {
     borderRadius: Radius.large,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: "hidden",
   },
   content: {
     gap: Spacing.three,
   },
   progress: {
     borderRadius: Radius.pill,
+    overflow: "hidden",
   },
   spacer: {
     flex: 1,
