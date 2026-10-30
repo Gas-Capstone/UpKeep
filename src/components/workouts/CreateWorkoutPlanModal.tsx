@@ -11,13 +11,13 @@ import {
 } from "react-native-keyboard-controller";
 import {
   Button,
-  Chip,
   HelperText,
   Icon,
   IconButton,
   List,
   Modal,
   Portal,
+  RadioButton,
   Text,
   TextInput,
   useTheme,
@@ -326,33 +326,33 @@ export function CreateWorkoutPlanModal({
                       <Text variant="labelLarge" style={{ color: colors.text }}>
                         Difficulty
                       </Text>
-                      <View style={styles.chipRow}>
-                        {DIFFICULTIES.map((level) => {
+                      <RadioButton.Group value={difficulty} onValueChange={setDifficulty}>
+                        {DIFFICULTIES.map((level, index) => {
                           const selected = difficulty === level;
                           return (
-                            <Chip
+                            <RadioButton.Item
                               key={level}
-                              selected={selected}
-                              showSelectedCheck={false}
-                              onPress={() => setDifficulty(level)}
-                              style={{
+                              value={level}
+                              label={level.charAt(0).toUpperCase() + level.slice(1)}
+                              position="leading"
+                              color={colors.brand}
+                              uncheckedColor={colors.textSecondary}
+                              style={[styles.difficultyOption, {
+                                marginTop: index > 0 ? Spacing.one : 0,
+                                marginBottom: index < DIFFICULTIES.length - 1 ? Spacing.one : 0,
                                 backgroundColor: selected
                                   ? colors.backgroundSelected
                                   : colors.background,
-                                borderColor: selected
-                                  ? colors.brand
-                                  : colors.border,
-                              }}
-                              textStyle={{
+                              }]}
+                              labelStyle={{
                                 color: selected ? colors.brandStrong : colors.text,
                                 fontWeight: selected ? "700" : "500",
+                                textAlign: "left",
                               }}
-                            >
-                              {level.charAt(0).toUpperCase() + level.slice(1)}
-                            </Chip>
+                            />
                           );
                         })}
-                      </View>
+                      </RadioButton.Group>
                     </View>
                   </View>
 
@@ -574,10 +574,9 @@ const styles = StyleSheet.create({
   fieldGroup: {
     gap: Spacing.two,
   },
-  chipRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: Spacing.two,
+  difficultyOption: {
+    minHeight: 48,
+    borderRadius: Radius.small,
   },
   countBadge: {
     borderRadius: Radius.pill,
