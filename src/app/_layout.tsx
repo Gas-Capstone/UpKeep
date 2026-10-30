@@ -3,7 +3,10 @@ import { Observe, ObserveRoot } from "expo-observe";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
 import { KeyboardProvider } from "react-native-keyboard-controller";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import {
+  initialWindowMetrics,
+  SafeAreaProvider,
+} from "react-native-safe-area-context";
 import { PaperProvider } from "react-native-paper";
 import { en, registerTranslation } from "react-native-paper-dates";
 
@@ -56,50 +59,50 @@ function RootContent() {
 
   return (
     <KeyboardProvider>
-      <SafeAreaProvider>
+      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
         <UserProvider>
-        <WorkoutsDataProvider>
-          <MealsDataProvider>
-            <ProfileDataProvider>
-              <HabitsProvider>
-                <NotificationsProvider>
-                  <WorkoutSessionProvider>
-                    <UnitsProvider>
-                    <TourProvider>
-                      <GluestackUIProvider mode={theme}>
-                        <PaperProvider theme={curTheme}>
-                          <StartupContext.Provider value={splashHidden}>
-                            <Stack
-                              screenOptions={{
-                                headerShown: false,
-                                contentStyle: {
-                                  backgroundColor: curTheme.colors.background,
-                                },
-                              }}
-                            >
-                              <Stack.Screen name="(auth)" />
-                              <Stack.Screen name="(tabs)" />
-                              <Stack.Screen name="(subpages)" />
-                            </Stack>
+          <WorkoutsDataProvider>
+            <MealsDataProvider>
+              <ProfileDataProvider>
+                <HabitsProvider>
+                  <NotificationsProvider>
+                    <WorkoutSessionProvider>
+                      <UnitsProvider>
+                        <TourProvider>
+                          <GluestackUIProvider mode={theme}>
+                            <PaperProvider theme={curTheme}>
+                              <StartupContext.Provider value={splashHidden}>
+                                <Stack
+                                  screenOptions={{
+                                    headerShown: false,
+                                    contentStyle: {
+                                      backgroundColor: curTheme.colors.background,
+                                    },
+                                  }}
+                                >
+                                  <Stack.Screen name="(auth)" />
+                                  <Stack.Screen name="(tabs)" />
+                                  <Stack.Screen name="(subpages)" />
+                                </Stack>
 
-                            <AuthBootstrap
-                              themeReady={themeReady}
-                              onSplashHidden={setSplashHidden}
-                            />
-                            <MetricsBootstrap />
-                            <BirthdayCelebration />
-                          </StartupContext.Provider>
-                        </PaperProvider>
-                      </GluestackUIProvider>
-                    </TourProvider>
-                    </UnitsProvider>
-                  </WorkoutSessionProvider>
-                </NotificationsProvider>
-              </HabitsProvider>
-            </ProfileDataProvider>
-          </MealsDataProvider>
-        </WorkoutsDataProvider>
-      </UserProvider>
+                                <AuthBootstrap
+                                  themeReady={themeReady}
+                                  onSplashHidden={setSplashHidden}
+                                />
+                                <MetricsBootstrap />
+                                <BirthdayCelebration />
+                              </StartupContext.Provider>
+                            </PaperProvider>
+                          </GluestackUIProvider>
+                        </TourProvider>
+                      </UnitsProvider>
+                    </WorkoutSessionProvider>
+                  </NotificationsProvider>
+                </HabitsProvider>
+              </ProfileDataProvider>
+            </MealsDataProvider>
+          </WorkoutsDataProvider>
+        </UserProvider>
       </SafeAreaProvider>
     </KeyboardProvider>
   );
