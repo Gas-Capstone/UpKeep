@@ -55,11 +55,10 @@ export default function ProfileScreen() {
     }
   };
 
-  // Settings is reached only from the cards here, and each opens the one
-  // section it's about, so no two buttons do the same thing. The rest of
-  // Settings (appearance, notifications, security) is on the same page.
-  const openSettings = (section: "profile" | "goal" | "wellness") =>
-    router.push({ pathname: "/settings", params: { section } });
+  // The Settings button opens Settings as a whole; the goal card and the
+  // wellness Edit link open the one section they're about.
+  const openSettings = (section?: "goal" | "wellness") =>
+    router.push(section ? { pathname: "/settings", params: { section } } : "/settings");
 
   const memberSince = profile?.created_at
     ? format(new Date(profile.created_at), "MMMM d, yyyy")
@@ -125,9 +124,9 @@ export default function ProfileScreen() {
         </View>
 
         <Pressable
-          onPress={() => openSettings("profile")}
+          onPress={() => openSettings()}
           accessibilityRole="button"
-          accessibilityLabel="Edit profile"
+          accessibilityLabel="Open settings"
           style={({ pressed }) => [
             styles.editButton,
             { backgroundColor: colors.brandSoft },
@@ -135,12 +134,12 @@ export default function ProfileScreen() {
           ]}
         >
           <Ionicons
-            name="create-outline"
+            name="settings-outline"
             size={17}
             color={colors.brandStrong}
           />
           <ThemedText type="smallBold" style={{ color: colors.brandStrong }}>
-            Edit profile
+            Settings
           </ThemedText>
         </Pressable>
 

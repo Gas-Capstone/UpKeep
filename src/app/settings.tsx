@@ -115,7 +115,7 @@ type SectionKey =
   | null;
 
 // Cards other screens may open directly via /settings?section=<key>.
-const LINKABLE_SECTIONS = ["profile", "goal", "wellness"] as const;
+const LINKABLE_SECTIONS = ["goal", "wellness"] as const;
 
 const GOALS = [
   { key: "muscle", label: "Build muscle", icon: "barbell-outline" },
