@@ -55,6 +55,7 @@ export const paperLightTheme = {
     surfaceDisabled: "rgba(18, 35, 33, 0.12)",
     onSurfaceDisabled: "rgba(18, 35, 33, 0.38)",
     backdrop: "rgba(18, 35, 33, 0.45)",
+    tourBackdrop: "rgba(18, 35, 33, 0.2)",
 
     // App-specific additions used by existing components.
     accentWorkouts: Colors.light.accentWorkouts,
@@ -115,6 +116,7 @@ export const paperDarkTheme = {
     surfaceDisabled: "rgba(250, 247, 242, 0.12)",
     onSurfaceDisabled: "rgba(250, 247, 242, 0.38)",
     backdrop: "rgba(0, 0, 0, 0.6)",
+    tourBackdrop: "rgba(0, 0, 0, 0.2)",
 
     // App-specific additions used by existing components.
     accentWorkouts: Colors.dark.accentWorkouts,
