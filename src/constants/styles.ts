@@ -1,6 +1,7 @@
 import {
   BottomTabInset,
   MaxContentWidth,
+  Radius,
   Spacing,
   TopBadgeInset,
 } from "@/constants/theme";
@@ -53,7 +54,7 @@ export const styles = StyleSheet.create({
     alignSelf: "stretch",
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.four,
-    borderRadius: 16,
+    borderRadius: Radius.medium,
   },
   centerContent: {
     flex: 1,
@@ -65,13 +66,17 @@ export const styles = StyleSheet.create({
     position: "absolute",
   },
   modalContent: {
+    flex: 1,
     justifyContent: "center",
-    paddingHorizontal: Spacing.four,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.four,
   },
   modalCard: {
     alignSelf: "center",
     width: "100%",
     maxWidth: MaxContentWidth,
+    borderRadius: Radius.large,
+    overflow: "hidden",
   },
   safeArea: {
     flex: 1,

@@ -106,7 +106,10 @@ export function AppTourModal() {
         style={local.wrapper}
         contentContainerStyle={[
           styles.modalContent,
-          { paddingBottom: BottomTabInset + insets.bottom + Spacing.three },
+          {
+            justifyContent: "flex-end",
+            paddingBottom: BottomTabInset + insets.bottom + Spacing.three,
+          },
         ]}
       >
         <Card

@@ -35,8 +35,6 @@ import { AddHabitModal } from "./AddHabitModal";
 import { HabitCard, getScheduleLabel } from "./HabitCard";
 import { WeekStrip } from "./WeekStrip";
 
-// Habits, planned meals, and scheduled workouts share one timeline for the
-// selected day.
 type DayItem =
   | { kind: "habit"; habit: Habit }
   | { kind: "meal"; entry: MealPlanEntry }
@@ -51,7 +49,6 @@ function scheduleLabelFor(entry: { weekdays: Habit["weekdays"] | null }) {
 }
 
 export default function HabitsScreen() {
-  // This tab stays interactive while its providers refresh in the background.
   useScreenInteractive();
   const { resolvedTheme } = useThemeMode();
   const colors = Colors[resolvedTheme];
@@ -83,8 +80,6 @@ export default function HabitsScreen() {
     toggleScheduledWorkout,
   } = useWorkoutsData();
 
-  // Finishing a workout elsewhere checks off its scheduled slot here, so pick
-  // up newly logged sessions whenever this tab comes into view.
   useFocusEffect(refreshCompletedWorkouts);
 
   const [modalVisible, setModalVisible] = useState(false);
@@ -133,7 +128,6 @@ export default function HabitsScreen() {
     <ScreenView
       contentContainerStyle={styles.content}
       overlay={
-        // Mounted only while open so it picks up the selected day each time.
         modalVisible ? (
           <AddHabitModal
             visible
@@ -145,92 +139,88 @@ export default function HabitsScreen() {
           />
         ) : null
       }
-      header={
-        <View style={styles.header}>
-          <View style={styles.titleGroup}>
-            <View style={styles.titleRow}>
-              <View
-                style={[styles.titleIcon, { backgroundColor: colors.brandSoft }]}
-              >
-                <Icon
-                  source="check-circle-outline"
-                  size={22}
-                  color={colors.brand}
-                />
-              </View>
-              <Text
-                variant="headlineMedium"
-                style={[styles.title, { color: colors.text }]}
-              >
-                Habits
-              </Text>
+    >
+      <View style={styles.headingRow}>
+        <View style={{ flex: 1 }}>
+          <View style={styles.titleRow}>
+            <View
+              style={[styles.titleIcon, { backgroundColor: colors.brandSoft }]}
+            >
+              <Icon
+                source="check-circle-outline"
+                size={22}
+                color={colors.brand}
+              />
             </View>
             <Text
-              variant="bodyMedium"
+              variant="headlineMedium"
+              style={[styles.title, { color: colors.text }]}
+            >
+              Habits
+            </Text>
+          </View>
+          <Text
+            variant="bodyMedium"
+            style={{ color: colors.textSecondary, marginTop: Spacing.one }}
+          >
+            Routines and meals, scheduled through your day.
+          </Text>
+        </View>
+      </View>
+
+      <View
+        style={[
+          styles.progressCard,
+          {
+            backgroundColor: colors.backgroundElement,
+            borderColor: colors.border,
+          },
+        ]}
+      >
+        <View style={styles.progressTopRow}>
+          <View>
+            <Text
+              variant="labelMedium"
               style={{ color: colors.textSecondary }}
             >
-              Routines and meals, scheduled through your day.
+              {selectedLabel.toUpperCase()}
+            </Text>
+            <Text
+              variant="titleLarge"
+              style={[styles.progressValue, { color: colors.text }]}
+            >
+              {total === 0
+                ? "Nothing planned"
+                : `${habitsComplete}/${total} complete`}
             </Text>
           </View>
 
-          <View
-            style={[
-              styles.progressCard,
-              {
-                backgroundColor: colors.backgroundElement,
-                borderColor: colors.border,
-              },
-            ]}
-          >
-            <View style={styles.progressTopRow}>
-              <View>
-                <Text
-                  variant="labelMedium"
-                  style={{ color: colors.textSecondary }}
-                >
-                  {selectedLabel.toUpperCase()}
-                </Text>
-                <Text
-                  variant="titleLarge"
-                  style={[styles.progressValue, { color: colors.text }]}
-                >
-                  {total === 0
-                    ? "Nothing planned"
-                    : `${habitsComplete}/${total} complete`}
-                </Text>
-              </View>
-
-              {total > 0 ? (
-                <View
-                  style={[
-                    styles.percentBadge,
-                    { backgroundColor: colors.brandSoft },
-                  ]}
-                >
-                  <Text
-                    variant="labelLarge"
-                    style={{ color: colors.brandStrong, fontWeight: "800" }}
-                  >
-                    {Math.round(progress * 100)}%
-                  </Text>
-                </View>
-              ) : null}
+          {total > 0 ? (
+            <View
+              style={[
+                styles.percentBadge,
+                { backgroundColor: colors.brandSoft },
+              ]}
+            >
+              <Text
+                variant="labelLarge"
+                style={{ color: colors.brandStrong, fontWeight: "800" }}
+              >
+                {Math.round(progress * 100)}%
+              </Text>
             </View>
-
-            <ProgressBar
-              progress={progress}
-              color={colors.brand}
-              style={[styles.progressBar, { backgroundColor: colors.border }]}
-            />
-          </View>
-
-          <WeekStrip
-            selectedDate={selectedDate}
-            onSelectDate={setSelectedDate}
-          />
+          ) : null}
         </View>
-      }
-    >
+
+        <ProgressBar
+          progress={progress}
+          color={colors.brand}
+          style={[styles.progressBar, { backgroundColor: colors.border }]}
+        />
+      </View>
+
+      <WeekStrip selectedDate={selectedDate} onSelectDate={setSelectedDate} />
+
       <View style={styles.sectionHeader}>
         <View style={{ flex: 1 }}>
           <Text
@@ -291,7 +281,6 @@ export default function HabitsScreen() {
               title={planNameById.get(item.entry.workoutPlanId) ?? "Deleted plan"}
               time={item.entry.time}
               scheduleLabel={
-                // Logged with the timer: say so, since a tick can't undo it.
                 wasLoggedOn(item.entry, selectedDate, sessionDays)
                   ? `${scheduleLabelFor(item.entry)} · Logged`
                   : scheduleLabelFor(item.entry)
@@ -361,12 +350,13 @@ export default function HabitsScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: {
-    width: "100%",
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.three,
-    paddingBottom: Spacing.two,
-    gap: Spacing.three,
+  content: {
+    gap: Spacing.four,
+  },
+  headingRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: Spacing.two,
   },
   titleRow: {
     flexDirection: "row",
@@ -374,18 +364,14 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
   },
   titleIcon: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     borderRadius: Radius.medium,
     alignItems: "center",
     justifyContent: "center",
   },
-  titleGroup: {
-    gap: Spacing.one,
-  },
   title: {
     fontWeight: "900",
-    letterSpacing: -0.6,
   },
   progressCard: {
     borderWidth: StyleSheet.hairlineWidth,
@@ -415,9 +401,6 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: Radius.pill,
     overflow: "hidden",
-  },
-  content: {
-    gap: Spacing.three,
   },
   sectionHeader: {
     flexDirection: "row",

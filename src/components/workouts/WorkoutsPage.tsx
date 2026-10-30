@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
-import { Button, Card, Icon, Snackbar, Text, useTheme } from "react-native-paper";
+import { Button, Icon, Snackbar, Text } from "react-native-paper";
 import { useFocusEffect, useRouter } from "expo-router";
 
 import { useThemeMode } from "@/components/context/ThemeContext";
@@ -15,7 +15,10 @@ import {
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { ScreenView } from "@/components/ui/ScreenView";
 import { Colors, Radius, Spacing } from "@/constants/theme";
-import { deleteWorkoutPlan, setWorkoutPlanImage } from "@/lib/supabaseFunctions";
+import {
+  deleteWorkoutPlan,
+  setWorkoutPlanImage,
+} from "@/lib/supabaseFunctions";
 import { pickImage, uploadUserImage } from "@/lib/userImages";
 import {
   NO_FILTERS,
@@ -47,7 +50,6 @@ const SOURCES: { value: PlanSource; label: string }[] = [
 
 export default function WorkoutsPage() {
   const router = useRouter();
-  const paperTheme = useTheme();
   const { resolvedTheme } = useThemeMode();
   const colors = Colors[resolvedTheme];
   const { user } = useUserContext();
@@ -74,32 +76,24 @@ export default function WorkoutsPage() {
   const [editTarget, setEditTarget] = useState<Workout | null>(null);
   // Plan being added to the Habits page schedule, or null when closed.
   const [scheduleTarget, setScheduleTarget] = useState<Workout | null>(null);
-  // Plan awaiting delete confirmation.
   const [deleteTarget, setDeleteTarget] = useState<Workout | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
-  // Plan id whose photo is uploading, so only that card's menu reads busy.
   const [photoUploadingId, setPhotoUploadingId] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState("");
 
-  // Seeded plans have a null created_by and belong to everyone, so only the
-  // author gets edit and delete.
   const ownsPlan = (workout: Workout) =>
     Boolean(user?.id) && workout.created_by === user?.id;
 
-  // Each extra filter only appears when it's a real choice — or when it's
-  // set, so an active filter can always be seen and cleared even if the
-  // plans that offered it have since gone.
   const showSource = workoutList.some(ownsPlan) || filters.source !== "all";
-  // Every goal tag on any plan. A plan can have several or none, so even a
-  // single tag narrows the list.
   const goalOptions = [
     ...new Set(workoutList.flatMap((workout) => workout.goal_tags ?? [])),
   ].sort();
   const showGoal = goalOptions.length > 0 || filters.tag !== "all";
   const difficultyOptions = filterOptions(workoutList, "difficulty");
   const targetOptions = filterOptions(workoutList, "target");
-  const showDifficulty = difficultyOptions.length > 1 || filters.difficulty !== null;
+  const showDifficulty =
+    difficultyOptions.length > 1 || filters.difficulty !== null;
   const showTarget = targetOptions.length > 1 || filters.target !== null;
 
   const lastDone = lastDoneByPlan(completedWorkouts);
@@ -114,7 +108,6 @@ export default function WorkoutsPage() {
 
     try {
       const uri = await pickImage();
-      // Backing out of the picker is not a failure, so it says nothing.
       if (!uri) return;
 
       setPhotoUploadingId(String(workout.id));
@@ -127,8 +120,6 @@ export default function WorkoutsPage() {
       await setWorkoutPlanImage(String(workout.id), url);
       refreshWorkouts();
     } catch (error) {
-      // Only a denied permission tells the user something they can act on;
-      // anything else is a storage or network fault they cannot fix from here.
       setPhotoError(
         error instanceof Error && error.message.startsWith("Photo access")
           ? error.message
@@ -182,8 +173,6 @@ export default function WorkoutsPage() {
       contentContainerStyle={{ gap: Spacing.four }}
       overlay={
         <>
-          {/* Photo upload is started from a card menu, so there is no dialog
-              to report back into — a snackbar is the only surface. */}
           <Snackbar
             visible={photoError !== ""}
             onDismiss={() => setPhotoError("")}
@@ -278,7 +267,9 @@ export default function WorkoutsPage() {
               variant="titleLarge"
               style={{ color: colors.text, fontWeight: "700" }}
             >
-              {filters.tag === "all" ? "Your workouts" : sentenceCase(filters.tag)}
+              {filters.tag === "all"
+                ? "Your workouts"
+                : sentenceCase(filters.tag)}
             </Text>
             <Text variant="bodySmall" style={{ color: colors.textSecondary }}>
               {loading
@@ -314,14 +305,22 @@ export default function WorkoutsPage() {
                     label={source.label}
                     isSelected={filters.source === source.value}
                     onSelect={() =>
-                      setFilters((current) => ({ ...current, source: source.value }))
+                      setFilters((current) => ({
+                        ...current,
+                        source: source.value,
+                      }))
                     }
                   />
                 ))
               : null}
 
             {showSource && (showGoal || showDifficulty || showTarget) ? (
-              <View style={[styles.filterDivider, { backgroundColor: colors.border }]} />
+              <View
+                style={[
+                  styles.filterDivider,
+                  { backgroundColor: colors.border },
+                ]}
+              />
             ) : null}
 
             {showGoal ? (
@@ -330,7 +329,9 @@ export default function WorkoutsPage() {
                 options={goalOptions}
                 // "all" is how the filters spell no goal; the menu uses null.
                 value={filters.tag === "all" ? null : filters.tag}
-                onChange={(tag) => setFilters((current) => ({ ...current, tag: tag ?? "all" }))}
+                onChange={(tag) =>
+                  setFilters((current) => ({ ...current, tag: tag ?? "all" }))
+                }
                 formatOption={sentenceCase}
               />
             ) : null}
@@ -352,7 +353,9 @@ export default function WorkoutsPage() {
                 label="Target"
                 options={targetOptions}
                 value={filters.target}
-                onChange={(target) => setFilters((current) => ({ ...current, target }))}
+                onChange={(target) =>
+                  setFilters((current) => ({ ...current, target }))
+                }
                 formatOption={sentenceCase}
               />
             ) : null}
@@ -371,7 +374,10 @@ export default function WorkoutsPage() {
               ]}
             >
               <View
-                style={[styles.emptyIcon, { backgroundColor: colors.brandSoft }]}
+                style={[
+                  styles.emptyIcon,
+                  { backgroundColor: colors.brandSoft },
+                ]}
               >
                 <Icon source="dumbbell" size={28} color={colors.brand} />
               </View>
@@ -408,7 +414,9 @@ export default function WorkoutsPage() {
                 onToggleFavorite={() => toggleFavorite(String(workout.id))}
                 onSchedule={() => setScheduleTarget(workout)}
                 lastDone={lastDoneLabel(workout)}
-                equipment={formatEquipment(planEquipment.get(String(workout.id)))}
+                equipment={formatEquipment(
+                  planEquipment.get(String(workout.id)),
+                )}
                 {...(ownsPlan(workout)
                   ? {
                       onChangePhoto: () => changePhoto(workout),
@@ -442,21 +450,19 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
   },
   titleIcon: {
-    width: 42,
-    height: 42,
+    width: 40,
+    height: 40,
     borderRadius: Radius.medium,
     alignItems: "center",
     justifyContent: "center",
   },
   title: {
-    fontWeight: "800",
-    letterSpacing: -0.4,
+    fontWeight: "900",
   },
   filterRow: {
     paddingHorizontal: Spacing.four,
     gap: Spacing.two,
   },
-  // Splits "who made it" from "what it is" in the filter row.
   filterDivider: {
     width: StyleSheet.hairlineWidth,
     alignSelf: "stretch",
