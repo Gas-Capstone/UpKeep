@@ -42,7 +42,9 @@ import { Colors, Radius, Spacing, TopBadgeInset } from "@/constants/theme";
 import {
   FridgeEntry,
   Ingredient,
+  formatAmount,
   groupIngredientsByCategory,
+  sanitizeDecimal,
 } from "@/lib/meals/meals";
 
 // Quantities are fractional (half a pound of beef), so the floor is one
@@ -53,28 +55,6 @@ const DEFAULT_QUANTITY = 1;
 // Long enough to batch a burst of taps into one write, short enough that
 // leaving the screen straight afterwards still lands.
 const SAVE_DEBOUNCE_MS = 600;
-
-/** Digits, at most one decimal point, at most two decimal places. */
-function sanitizeDecimal(text: string): string {
-  const cleaned = text.replace(/[^0-9.]/g, "");
-  const [whole, ...rest] = cleaned.split(".");
-  if (rest.length === 0) return whole;
-  return `${whole}.${rest.join("").slice(0, 2)}`;
-}
-
-/**
- * "4 lb", but "1 × 170g container".
- *
- * Some units in the catalog are themselves a measurement ("170g container",
- * "1/2 cup"), so plain juxtaposition runs two numbers together and reads as
- * one — "1 170g container". A times sign separates the count from the unit
- * wherever the unit starts with a digit.
- */
-function formatAmount(entry: FridgeEntry): string {
-  if (!entry.unit) return String(entry.quantity);
-  const separator = /^\d/.test(entry.unit) ? " × " : " ";
-  return `${entry.quantity}${separator}${entry.unit}`;
-}
 
 export default function FridgeScreen() {
   const router = useRouter();
@@ -110,6 +90,15 @@ export default function FridgeScreen() {
   // Compiler forbids.
   const pendingDraft = useRef<ReadonlyMap<string, FridgeEntry> | null>(null);
 
+  // Once a draft is saved the context holds it, so go back to reading the
+  // context. Keeping the draft would hide changes made elsewhere (cooking
+  // takes ingredients out of the fridge) and the next edit here would save
+  // the stale draft over them. A newer edit made mid-save is left alone.
+  const saveDraft = (next: ReadonlyMap<string, FridgeEntry>) =>
+    saveFridge(next)
+      .then(() => setEdits((current) => (current === next ? null : current)))
+      .catch((err) => console.log("Error saving fridge: ", err));
+
   /** Apply an edit locally and queue the write behind the debounce. */
   const applyDraft = (next: ReadonlyMap<string, FridgeEntry>) => {
     setEdits(next);
@@ -119,7 +108,7 @@ export default function FridgeScreen() {
     saveTimer.current = setTimeout(() => {
       saveTimer.current = null;
       pendingDraft.current = null;
-      void saveFridge(next);
+      void saveDraft(next);
     }, SAVE_DEBOUNCE_MS);
   };
 
@@ -133,7 +122,10 @@ export default function FridgeScreen() {
 
         const next = pendingDraft.current;
         pendingDraft.current = null;
-        if (next) void saveFridge(next);
+        if (!next) return;
+        void saveFridge(next)
+          .then(() => setEdits((current) => (current === next ? null : current)))
+          .catch((err) => console.log("Error saving fridge: ", err));
       };
     }, [saveFridge]),
   );

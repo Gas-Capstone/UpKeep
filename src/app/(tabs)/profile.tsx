@@ -55,6 +55,11 @@ export default function ProfileScreen() {
     }
   };
 
+  // The Settings button opens Settings as a whole; the goal card and the
+  // wellness Edit link open the one section they're about.
+  const openSettings = (section?: "goal" | "wellness") =>
+    router.push(section ? { pathname: "/settings", params: { section } } : "/settings");
+
   const memberSince = profile?.created_at
     ? format(new Date(profile.created_at), "MMMM d, yyyy")
     : null;
@@ -72,22 +77,6 @@ export default function ProfileScreen() {
           </ThemedText>
           <ThemedText style={styles.pageTitle}>Profile</ThemedText>
         </View>
-
-        <Pressable
-          onPress={() => router.push("/settings")}
-          accessibilityRole="button"
-          accessibilityLabel="Open settings"
-          style={({ pressed }) => [
-            styles.headerButton,
-            {
-              backgroundColor: colors.backgroundElement,
-              borderColor: colors.border,
-            },
-            pressed && styles.pressed,
-          ]}
-        >
-          <Ionicons name="settings-outline" size={21} color={colors.brand} />
-        </Pressable>
       </View>
 
       <View
@@ -135,7 +124,9 @@ export default function ProfileScreen() {
         </View>
 
         <Pressable
-          onPress={() => router.push("/settings")}
+          onPress={() => openSettings()}
+          accessibilityRole="button"
+          accessibilityLabel="Open settings"
           style={({ pressed }) => [
             styles.editButton,
             { backgroundColor: colors.brandSoft },
@@ -143,23 +134,78 @@ export default function ProfileScreen() {
           ]}
         >
           <Ionicons
-            name="create-outline"
+            name="settings-outline"
             size={17}
             color={colors.brandStrong}
           />
           <ThemedText type="smallBold" style={{ color: colors.brandStrong }}>
-            Edit profile
+            Settings
           </ThemedText>
         </Pressable>
+
+        <View style={[styles.heroDivider, { backgroundColor: colors.border }]} />
+
+        <View style={styles.wellnessHeader}>
+          <View style={{ flex: 1 }}>
+            <ThemedText style={styles.wellnessTitle}>Wellness details</ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">
+              Used for your personalized estimates
+            </ThemedText>
+          </View>
+          <Pressable
+            onPress={() => openSettings("wellness")}
+            accessibilityRole="button"
+            accessibilityLabel="Edit wellness details"
+            hitSlop={8}
+            style={({ pressed }) => pressed && styles.pressed}
+          >
+            <ThemedText type="smallBold" style={{ color: colors.brand }}>
+              Edit
+            </ThemedText>
+          </Pressable>
+        </View>
+
+        <View style={styles.statsGrid}>
+          <DetailTile
+            icon="resize-outline"
+            label="Height"
+            value={loading ? "..." : formatHeight(profile?.height ?? null)}
+          />
+          <DetailTile
+            icon="scale-outline"
+            label="Weight"
+            value={
+              loading
+                ? "..."
+                : profile?.weight
+                  ? `${profile.weight} lb`
+                  : "Not set"
+            }
+          />
+          <DetailTile
+            icon="calendar-outline"
+            label="Age"
+            value={loading ? "..." : formatAge(getAge(profile))}
+          />
+          <DetailTile
+            icon="person-outline"
+            label="Sex"
+            value={loading ? "..." : formatSex(profile?.sex ?? null)}
+          />
+        </View>
       </View>
 
-      <View
-        style={[
+      <Pressable
+        onPress={() => openSettings("goal")}
+        accessibilityRole="button"
+        accessibilityLabel={`Primary goal: ${goalLabel}. Change goal`}
+        style={({ pressed }) => [
           styles.goalCard,
           {
             backgroundColor: colors.brandSoft,
             borderColor: colors.border,
           },
+          pressed && styles.pressed,
         ]}
       >
         <View
@@ -178,50 +224,12 @@ export default function ProfileScreen() {
             {loading ? "..." : goalLabel}
           </ThemedText>
         </View>
-        <Pressable onPress={() => router.push("/settings")} hitSlop={8}>
-          <Ionicons
-            name="chevron-forward"
-            size={20}
-            color={colors.textSecondary}
-          />
-        </Pressable>
-      </View>
-
-      <View style={styles.sectionHeader}>
-        <ThemedText style={styles.sectionTitle}>Wellness details</ThemedText>
-        <ThemedText type="small" themeColor="textSecondary">
-          Used for your personalized estimates
-        </ThemedText>
-      </View>
-
-      <View style={styles.statsGrid}>
-        <DetailTile
-          icon="resize-outline"
-          label="Height"
-          value={loading ? "..." : formatHeight(profile?.height ?? null)}
+        <Ionicons
+          name="chevron-forward"
+          size={20}
+          color={colors.textSecondary}
         />
-        <DetailTile
-          icon="scale-outline"
-          label="Weight"
-          value={
-            loading
-              ? "..."
-              : profile?.weight
-                ? `${profile.weight} lb`
-                : "Not set"
-          }
-        />
-        <DetailTile
-          icon="calendar-outline"
-          label="Age"
-          value={loading ? "..." : formatAge(getAge(profile))}
-        />
-        <DetailTile
-          icon="person-outline"
-          label="Sex"
-          value={loading ? "..." : formatSex(profile?.sex ?? null)}
-        />
-      </View>
+      </Pressable>
 
       <View style={styles.sectionHeader}>
         <ThemedText style={styles.sectionTitle}>Account</ThemedText>
@@ -236,15 +244,6 @@ export default function ProfileScreen() {
           },
         ]}
       >
-        <MenuRow
-          icon="settings-outline"
-          title="Settings"
-          subtitle="Profile, appearance, security, and account"
-          onPress={() => router.push("/settings")}
-        />
-
-        <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
         <MenuRow
           icon="log-out-outline"
           title={loggingOut ? "Signing out..." : "Sign out"}
@@ -275,7 +274,7 @@ function DetailTile({
       style={[
         styles.detailTile,
         {
-          backgroundColor: colors.backgroundElement,
+          backgroundColor: colors.background,
           borderColor: colors.border,
         },
       ]}
@@ -368,14 +367,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     marginTop: 2,
   },
-  headerButton: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.medium,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   heroCard: {
     borderWidth: 1,
     borderRadius: Radius.large,
@@ -441,7 +432,25 @@ const styles = StyleSheet.create({
     lineHeight: 25,
     fontWeight: "800",
   },
+  heroDivider: {
+    alignSelf: "stretch",
+    height: StyleSheet.hairlineWidth,
+    marginVertical: Spacing.four,
+  },
+  wellnessHeader: {
+    alignSelf: "stretch",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.three,
+    marginBottom: Spacing.three,
+  },
+  wellnessTitle: {
+    fontSize: 18,
+    lineHeight: 23,
+    fontWeight: "800",
+  },
   statsGrid: {
+    alignSelf: "stretch",
     flexDirection: "row",
     flexWrap: "wrap",
     gap: Spacing.three,
@@ -482,10 +491,6 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     alignItems: "center",
     justifyContent: "center",
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    marginLeft: 68,
   },
   pressed: {
     opacity: 0.72,
