@@ -69,7 +69,6 @@ const STEPS: TourStep[] = [
  */
 export function AppTourModal() {
   const theme = useTheme<AppTheme>();
-  const insets = useSafeAreaInsets();
   const { visible, startFirstVisitTour, finishTour } = useTour();
   const pathname = usePathname();
   const [stepIndex, setStepIndex] = useState(0);
@@ -100,11 +99,7 @@ export function AppTourModal() {
         dismissable={false}
         dismissableBackButton
         theme={{ colors: { backdrop: theme.colors.tourBackdrop } }}
-        style={local.wrapper}
-        contentContainerStyle={[
-          styles.modalContent,
-          { paddingBottom: BottomTabInset + insets.bottom + Spacing.three },
-        ]}
+        contentContainerStyle={styles.modalContent}
       >
         <Card
           mode="contained"
