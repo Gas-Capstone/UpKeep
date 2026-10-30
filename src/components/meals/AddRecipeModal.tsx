@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
-  KeyboardAvoidingView,
-  Platform,
+  Keyboard,
   ScrollView,
   StyleSheet,
   View,
 } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import {
   Button,
   HelperText,
@@ -21,6 +22,13 @@ import { Colors, Radius, Spacing } from "@/constants/theme";
 import { stepsToInstructions, type Ingredient } from "@/lib/meals/meals";
 import { IngredientPicker } from "./IngredientPicker";
 import { StepsEditor } from "./StepsEditor";
+
+function revealFocusedInput(scroll: ScrollView | null, target: number | null, offset: number) {
+  if (!scroll || target === null) return;
+  requestAnimationFrame(() => {
+    scroll.scrollResponderScrollNativeHandleToKeyboard(target, offset, true);
+  });
+}
 
 type RecipeIngredientInput = {
   ingredient_id: string;
@@ -57,10 +65,27 @@ export function AddRecipeModal({
   );
   const [steps, setSteps] = useState<string[]>([]);
   const [error, setError] = useState("");
+  const [footerHeight, setFooterHeight] = useState(0);
+  const formScroll = useRef<ScrollView>(null);
+  const focusedInput = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!visible) return;
+    const shown = Keyboard.addListener("keyboardDidShow", () => {
+      revealFocusedInput(
+        formScroll.current,
+        focusedInput.current,
+        footerHeight + Spacing.four + Spacing.three,
+      );
+    });
+    return () => shown.remove();
+  }, [footerHeight, visible]);
+  const insets = useSafeAreaInsets();
   const [saving, setSaving] = useState(false);
 
   const handleDismiss = () => {
     if (saving) return;
+    Keyboard.dismiss();
     setError("");
     onDismiss();
   };
@@ -122,6 +147,7 @@ export function AddRecipeModal({
       setError("");
       setSaving(true);
       await onCreate(input);
+      Keyboard.dismiss();
       setName("");
       setPrepTime("10");
       setSelectedIds(new Set());
@@ -146,168 +172,191 @@ export function AddRecipeModal({
         contentContainerStyle={styles.modalOuter}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          behavior="height"
+          keyboardVerticalOffset={insets.top}
           style={styles.keyboardWrap}
         >
-          <View
-            style={[
-              styles.sheet,
-              {
-                backgroundColor: colors.backgroundElement,
-                borderColor: colors.border,
-              },
-            ]}
-          >
-            <View style={styles.header}>
-              <View style={styles.titleRow}>
-                <View
-                  style={[
-                    styles.titleIcon,
-                    { backgroundColor: colors.brandSoft },
-                  ]}
-                >
-                  <Icon source="chef-hat" size={21} color={colors.brand} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text
-                    variant="titleLarge"
-                    style={[styles.title, { color: colors.text }]}
-                  >
-                    Create recipe
-                  </Text>
-                  <Text
-                    variant="bodySmall"
-                    style={{ color: colors.textSecondary, marginTop: 2 }}
-                  >
-                    Add the basics now. A photo can be added later.
-                  </Text>
-                </View>
-              </View>
-            </View>
-
-            <ScrollView
-              style={styles.scroll}
-              contentContainerStyle={styles.scrollContent}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
+          <View style={styles.viewport}>
+            <View
+              style={[
+                styles.sheet,
+                {
+                  backgroundColor: colors.backgroundElement,
+                  borderColor: colors.border,
+                },
+              ]}
             >
-              <View style={styles.detailsSection}>
-                <TextInput
-                  label="Recipe name"
-                  mode="outlined"
-                  value={name}
-                  onChangeText={setName}
-                  outlineColor={colors.border}
-                  activeOutlineColor={colors.brand}
-                />
-
-                <TextInput
-                  label="Prep time (minutes)"
-                  mode="outlined"
-                  value={prepTime}
-                  onChangeText={setPrepTime}
-                  keyboardType="number-pad"
-                  outlineColor={colors.border}
-                  activeOutlineColor={colors.brand}
-                />
-              </View>
-
-              <View
-                style={[
-                  styles.ingredientsSection,
-                  { borderTopColor: colors.border },
-                ]}
-              >
-                <View style={styles.sectionHeadingRow}>
-                  <View>
+              <View style={styles.header}>
+                <View style={styles.titleRow}>
+                  <View
+                    style={[
+                      styles.titleIcon,
+                      { backgroundColor: colors.brandSoft },
+                    ]}
+                  >
+                    <Icon source="chef-hat" size={21} color={colors.brand} />
+                  </View>
+                  <View style={{ flex: 1 }}>
                     <Text
-                      variant="titleMedium"
-                      style={{ color: colors.text, fontWeight: "800" }}
+                      variant="titleLarge"
+                      style={[styles.title, { color: colors.text }]}
                     >
-                      Ingredients
+                      Create recipe
                     </Text>
                     <Text
                       variant="bodySmall"
                       style={{ color: colors.textSecondary, marginTop: 2 }}
                     >
-                      Choose everything this recipe needs.
+                      Add the basics now. A photo can be added later.
                     </Text>
                   </View>
+                </View>
+              </View>
 
-                  <View
-                    style={[
-                      styles.countBadge,
-                      { backgroundColor: colors.brandSoft },
-                    ]}
-                  >
-                    <Text
-                      variant="labelMedium"
-                      style={{ color: colors.brandStrong, fontWeight: "800" }}
+              <ScrollView
+                ref={formScroll}
+                automaticallyAdjustKeyboardInsets={false}
+                contentInsetAdjustmentBehavior="never"
+                bounces={false}
+                overScrollMode="never"
+                onFocus={(event) => {
+                  focusedInput.current = event.nativeEvent.target;
+                  if (Keyboard.isVisible()) {
+                    revealFocusedInput(
+                      formScroll.current,
+                      focusedInput.current,
+                      footerHeight + Spacing.four + Spacing.three,
+                    );
+                  }
+                }}
+                onBlur={() => {
+                  focusedInput.current = null;
+                }}
+                style={styles.scroll}
+                contentContainerStyle={styles.scrollContent}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                <View style={styles.detailsSection}>
+                  <TextInput
+                    label="Recipe name"
+                    mode="outlined"
+                    value={name}
+                    onChangeText={setName}
+                    outlineColor={colors.border}
+                    activeOutlineColor={colors.brand}
+                  />
+
+                  <TextInput
+                    label="Prep time (minutes)"
+                    mode="outlined"
+                    value={prepTime}
+                    onChangeText={setPrepTime}
+                    keyboardType="number-pad"
+                    outlineColor={colors.border}
+                    activeOutlineColor={colors.brand}
+                  />
+                </View>
+
+                <View
+                  style={[
+                    styles.ingredientsSection,
+                    { borderTopColor: colors.border },
+                  ]}
+                >
+                  <View style={styles.sectionHeadingRow}>
+                    <View>
+                      <Text
+                        variant="titleMedium"
+                        style={{ color: colors.text, fontWeight: "800" }}
+                      >
+                        Ingredients
+                      </Text>
+                      <Text
+                        variant="bodySmall"
+                        style={{ color: colors.textSecondary, marginTop: 2 }}
+                      >
+                        Choose everything this recipe needs.
+                      </Text>
+                    </View>
+
+                    <View
+                      style={[
+                        styles.countBadge,
+                        { backgroundColor: colors.brandSoft },
+                      ]}
                     >
-                      {selectedIds.size} selected
+                      <Text
+                        variant="labelMedium"
+                        style={{ color: colors.brandStrong, fontWeight: "800" }}
+                      >
+                        {selectedIds.size} selected
+                      </Text>
+                    </View>
+                  </View>
+
+                  <IngredientPicker
+                    ingredients={availableIngredients}
+                    selectedIds={selectedIds}
+                    onToggle={toggleIngredient}
+                  />
+                </View>
+
+                <View
+                  style={[
+                    styles.ingredientsSection,
+                    { borderTopColor: colors.border },
+                  ]}
+                >
+                  <View>
+                    <Text
+                      variant="titleMedium"
+                      style={{ color: colors.text, fontWeight: "800" }}
+                    >
+                      Steps
+                    </Text>
+                    <Text
+                      variant="bodySmall"
+                      style={{ color: colors.textSecondary, marginTop: 2 }}
+                    >
+                      Optional. These are what you check off while cooking.
                     </Text>
                   </View>
+
+                  <StepsEditor steps={steps} onChange={setSteps} />
                 </View>
+              </ScrollView>
 
-                <IngredientPicker
-                  ingredients={availableIngredients}
-                  selectedIds={selectedIds}
-                  onToggle={toggleIngredient}
-                />
-              </View>
+              <View onLayout={(event) => setFooterHeight(event.nativeEvent.layout.height)}>
+                {error ? (
+                  <HelperText type="error" visible style={styles.errorText}>
+                    {error}
+                  </HelperText>
+                ) : null}
 
-              <View
-                style={[
-                  styles.ingredientsSection,
-                  { borderTopColor: colors.border },
-                ]}
-              >
-                <View>
-                  <Text
-                    variant="titleMedium"
-                    style={{ color: colors.text, fontWeight: "800" }}
+                <View style={[styles.actions, { borderTopColor: colors.border }]}>
+                  <Button
+                    mode="text"
+                    onPress={handleDismiss}
+                    disabled={saving}
+                    textColor={colors.textSecondary}
                   >
-                    Steps
-                  </Text>
-                  <Text
-                    variant="bodySmall"
-                    style={{ color: colors.textSecondary, marginTop: 2 }}
+                    Cancel
+                  </Button>
+                  <Button
+                    mode="contained"
+                    icon="check"
+                    onPress={handleCreate}
+                    loading={saving}
+                    disabled={saving}
+                    buttonColor={colors.brandStrong}
+                    textColor="#FFFFFF"
+                    style={{ borderRadius: Radius.pill }}
                   >
-                    Optional. These are what you check off while cooking.
-                  </Text>
+                    Create recipe
+                  </Button>
                 </View>
-
-                <StepsEditor steps={steps} onChange={setSteps} />
               </View>
-            </ScrollView>
-
-            {error ? (
-              <HelperText type="error" visible style={styles.errorText}>
-                {error}
-              </HelperText>
-            ) : null}
-
-            <View style={[styles.actions, { borderTopColor: colors.border }]}>
-              <Button
-                mode="text"
-                onPress={handleDismiss}
-                disabled={saving}
-                textColor={colors.textSecondary}
-              >
-                Cancel
-              </Button>
-              <Button
-                mode="contained"
-                icon="check"
-                onPress={handleCreate}
-                loading={saving}
-                disabled={saving}
-                buttonColor={colors.brandStrong}
-                textColor="#FFFFFF"
-                style={{ borderRadius: Radius.pill }}
-              >
-                Create recipe
-              </Button>
             </View>
           </View>
         </KeyboardAvoidingView>
@@ -319,18 +368,26 @@ export function AddRecipeModal({
 const styles = StyleSheet.create({
   modalOuter: {
     flex: 1,
+    justifyContent: "flex-start",
+  },
+  keyboardWrap: {
+    flex: 1,
+    width: "100%",
+  },
+  viewport: {
+    flex: 1,
+    width: "100%",
     justifyContent: "center",
+    alignItems: "center",
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.four,
   },
-  keyboardWrap: {
-    width: "100%",
-    alignItems: "center",
-  },
   sheet: {
     width: "100%",
+    height: "100%",
     maxWidth: 680,
-    maxHeight: "88%",
+    maxHeight: "100%",
+    flexShrink: 1,
     borderRadius: Radius.large,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: "hidden",
@@ -356,7 +413,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   scroll: {
-    flexGrow: 0,
+    flex: 1,
   },
   scrollContent: {
     paddingHorizontal: Spacing.four,

@@ -27,10 +27,6 @@ export default function SubpagesLayout() {
         options={{ title: "Edit Recipe", presentation: "card" }}
       />
       <Stack.Screen
-        name="edit-workout"
-        options={{ title: "Edit Plan", presentation: "card" }}
-      />
-      <Stack.Screen
         name="developer"
         options={{ title: "Performance", presentation: "card" }}
       />

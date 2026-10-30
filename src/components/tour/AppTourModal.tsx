@@ -14,6 +14,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useTour } from "@/components/context/tourContext";
+import type { AppTheme } from "@/constants/paper-theme";
 import { styles } from "@/constants/styles";
 import { BottomTabInset, Radius, Spacing } from "@/constants/theme";
 
@@ -68,7 +69,7 @@ const STEPS: TourStep[] = [
  * Moves through each tab as it goes.
  */
 export function AppTourModal() {
-  const theme = useTheme();
+  const theme = useTheme<AppTheme>();
   const insets = useSafeAreaInsets();
   const { visible, startFirstVisitTour, finishTour } = useTour();
   const pathname = usePathname();
@@ -101,6 +102,7 @@ export function AppTourModal() {
         onDismiss={close}
         dismissable={false}
         dismissableBackButton
+        theme={{ colors: { backdrop: theme.colors.tourBackdrop } }}
         style={local.wrapper}
         contentContainerStyle={[
           styles.modalContent,

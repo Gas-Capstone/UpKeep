@@ -147,31 +147,30 @@ export default function HabitsScreen() {
       }
       header={
         <View style={styles.header}>
-          <View style={styles.titleRow}>
-            <View
-              style={[styles.titleIcon, { backgroundColor: colors.brandSoft }]}
-            >
-              <Icon
-                source="check-circle-outline"
-                size={22}
-                color={colors.brand}
-              />
-            </View>
-
-            <View style={styles.titleCopy}>
+          <View style={styles.titleGroup}>
+            <View style={styles.titleRow}>
+              <View
+                style={[styles.titleIcon, { backgroundColor: colors.brandSoft }]}
+              >
+                <Icon
+                  source="check-circle-outline"
+                  size={22}
+                  color={colors.brand}
+                />
+              </View>
               <Text
                 variant="headlineMedium"
                 style={[styles.title, { color: colors.text }]}
               >
                 Habits
               </Text>
-              <Text
-                variant="bodyMedium"
-                style={{ color: colors.textSecondary }}
-              >
-                Routines and meals, scheduled through your day.
-              </Text>
             </View>
+            <Text
+              variant="bodyMedium"
+              style={{ color: colors.textSecondary }}
+            >
+              Routines and meals, scheduled through your day.
+            </Text>
           </View>
 
           <View
@@ -372,7 +371,7 @@ const styles = StyleSheet.create({
   titleRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: Spacing.three,
+    gap: Spacing.two,
   },
   titleIcon: {
     width: 44,
@@ -381,9 +380,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  titleCopy: {
-    flex: 1,
-    gap: 2,
+  titleGroup: {
+    gap: Spacing.one,
   },
   title: {
     fontWeight: "900",
