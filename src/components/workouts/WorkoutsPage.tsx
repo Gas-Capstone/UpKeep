@@ -1,13 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
-import {
-  Button,
-  Card,
-  Icon,
-  Snackbar,
-  Text,
-  useTheme,
-} from "react-native-paper";
+import { Button, Icon, Snackbar, Text } from "react-native-paper";
 import { useFocusEffect, useRouter } from "expo-router";
 
 import { useThemeMode } from "@/components/context/ThemeContext";
@@ -57,7 +50,6 @@ const SOURCES: { value: PlanSource; label: string }[] = [
 
 export default function WorkoutsPage() {
   const router = useRouter();
-  const paperTheme = useTheme();
   const { resolvedTheme } = useThemeMode();
   const colors = Colors[resolvedTheme];
   const { user } = useUserContext();
