@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
-import { Button, Icon, Snackbar, Text } from "react-native-paper";
+import { Button, Card, Icon, Snackbar, Text, useTheme } from "react-native-paper";
 import { useFocusEffect, useRouter } from "expo-router";
 
 import { useThemeMode } from "@/components/context/ThemeContext";
@@ -47,6 +47,7 @@ const SOURCES: { value: PlanSource; label: string }[] = [
 
 export default function WorkoutsPage() {
   const router = useRouter();
+  const paperTheme = useTheme();
   const { resolvedTheme } = useThemeMode();
   const colors = Colors[resolvedTheme];
   const { user } = useUserContext();
@@ -270,193 +271,160 @@ export default function WorkoutsPage() {
         </Button>
       </View>
 
-      <WeeklyProgress completedWorkouts={completedWorkouts} />
-
-      {showSource || showGoal || showDifficulty || showTarget ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={{ marginHorizontal: -Spacing.four }}
-          contentContainerStyle={styles.filterRow}
-        >
-          {showSource
-            ? SOURCES.map((source) => (
-                <WorkoutFilterChip
-                  key={source.value}
-                  tag={source.value}
-                  label={source.label}
-                  isSelected={filters.source === source.value}
-                  onSelect={() =>
-                    setFilters((current) => ({ ...current, source: source.value }))
-                  }
-                />
-              ))
-            : null}
-
-          {showSource && (showGoal || showDifficulty || showTarget) ? (
-            <View style={[styles.filterDivider, { backgroundColor: colors.border }]} />
-          ) : null}
-
-          {showGoal ? (
-            <FilterMenuChip
-              label="Goal"
-              options={goalOptions}
-              // "all" is how the filters spell no goal; the menu uses null.
-              value={filters.tag === "all" ? null : filters.tag}
-              onChange={(tag) => setFilters((current) => ({ ...current, tag: tag ?? "all" }))}
-              formatOption={sentenceCase}
-            />
-          ) : null}
-
-          {showDifficulty ? (
-            <FilterMenuChip
-              label="Difficulty"
-              options={difficultyOptions}
-              value={filters.difficulty}
-              onChange={(difficulty) =>
-                setFilters((current) => ({ ...current, difficulty }))
-              }
-              formatOption={sentenceCase}
-            />
-          ) : null}
-
-          {showTarget ? (
-            <FilterMenuChip
-              label="Target"
-              options={targetOptions}
-              value={filters.target}
-              onChange={(target) => setFilters((current) => ({ ...current, target }))}
-              formatOption={sentenceCase}
-            />
-          ) : null}
-        </ScrollView>
-      ) : null}
-
-      <View
-        style={[
-          styles.createCard,
-          {
-            backgroundColor: colors.brandSoft,
-            borderColor: colors.border,
-          },
-        ]}
-      >
-        <View style={styles.createCopy}>
-          <View
-            style={[
-              styles.createIcon,
-              { backgroundColor: colors.backgroundElement },
-            ]}
-          >
-            <Icon source="plus" size={24} color={colors.brand} />
-          </View>
-          <View style={{ flex: 1 }}>
+      <View style={styles.workoutSection}>
+        <View style={styles.sectionHeader}>
+          <View>
             <Text
-              variant="titleMedium"
+              variant="titleLarge"
               style={{ color: colors.text, fontWeight: "700" }}
             >
-              Build your own plan
+              {filters.tag === "all" ? "Your workouts" : sentenceCase(filters.tag)}
             </Text>
-            <Text
-              variant="bodySmall"
-              style={{ color: colors.textSecondary, marginTop: 2 }}
-            >
-              Choose exercises, sets, reps, and a target that works for you.
+            <Text variant="bodySmall" style={{ color: colors.textSecondary }}>
+              {loading
+                ? "Loading workouts..."
+                : `${filteredWorkouts.length} ${
+                    filteredWorkouts.length === 1 ? "plan" : "plans"
+                  }`}
             </Text>
           </View>
+          <Button
+            mode="text"
+            icon="plus"
+            onPress={() => setCreateModalVisible(true)}
+            textColor={colors.brand}
+            contentStyle={styles.createAction}
+          >
+            Create plan
+          </Button>
         </View>
 
-        <Button
-          mode="contained"
-          icon="plus"
-          onPress={() => setCreateModalVisible(true)}
-          buttonColor={colors.brandStrong}
-          textColor="#FFFFFF"
-          style={{ borderRadius: Radius.pill }}
-        >
-          Create Workout Plan
-        </Button>
-      </View>
-
-      <View style={styles.sectionHeader}>
-        <View>
-          <Text
-            variant="titleLarge"
-            style={{ color: colors.text, fontWeight: "700" }}
+        {showSource || showGoal || showDifficulty || showTarget ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={{ marginHorizontal: -Spacing.four }}
+            contentContainerStyle={styles.filterRow}
           >
-            {filters.tag === "all" ? "Your workouts" : sentenceCase(filters.tag)}
-          </Text>
-          <Text variant="bodySmall" style={{ color: colors.textSecondary }}>
-            {loading
-              ? "Loading workouts..."
-              : `${filteredWorkouts.length} ${
-                  filteredWorkouts.length === 1 ? "plan" : "plans"
-                }`}
-          </Text>
-        </View>
-      </View>
+            {showSource
+              ? SOURCES.map((source) => (
+                  <WorkoutFilterChip
+                    key={source.value}
+                    tag={source.value}
+                    label={source.label}
+                    isSelected={filters.source === source.value}
+                    onSelect={() =>
+                      setFilters((current) => ({ ...current, source: source.value }))
+                    }
+                  />
+                ))
+              : null}
 
-      <View style={styles.list}>
-        {!loading && filteredWorkouts.length === 0 ? (
-          <View
-            style={[
-              styles.emptyState,
-              {
-                backgroundColor: colors.backgroundElement,
-                borderColor: colors.border,
-              },
-            ]}
-          >
-            <View
-              style={[styles.emptyIcon, { backgroundColor: colors.brandSoft }]}
-            >
-              <Icon source="dumbbell" size={28} color={colors.brand} />
-            </View>
-            <Text
-              variant="titleMedium"
-              style={{ color: colors.text, fontWeight: "700" }}
-            >
-              No workouts here yet
-            </Text>
-            <Text
-              variant="bodyMedium"
-              style={{ color: colors.textSecondary, textAlign: "center" }}
-            >
-              Try another filter or create a workout plan of your own.
-            </Text>
-            {hasActiveFilters(filters) ? (
-              <Button
-                mode="contained-tonal"
-                icon="filter-remove-outline"
-                onPress={() => setFilters(NO_FILTERS)}
-                style={{ marginTop: Spacing.one }}
-              >
-                Clear filters
-              </Button>
+            {showSource && (showGoal || showDifficulty || showTarget) ? (
+              <View style={[styles.filterDivider, { backgroundColor: colors.border }]} />
             ) : null}
-          </View>
-        ) : (
-          filteredWorkouts.map((workout) => (
-            <WorkoutCard
-              key={workout.id}
-              workout={workout}
-              onPress={() => handleStart(workout)}
-              isFavorited={favoriteIds.has(String(workout.id))}
-              onToggleFavorite={() => toggleFavorite(String(workout.id))}
-              onSchedule={() => setScheduleTarget(workout)}
-              lastDone={lastDoneLabel(workout)}
-              equipment={formatEquipment(planEquipment.get(String(workout.id)))}
-              {...(ownsPlan(workout)
-                ? {
-                    onChangePhoto: () => changePhoto(workout),
-                    photoUploading: photoUploadingId === String(workout.id),
-                    onEdit: () => setEditTarget(workout),
-                    onDelete: () => setDeleteTarget(workout),
-                  }
-                : {})}
-            />
-          ))
-        )}
+
+            {showGoal ? (
+              <FilterMenuChip
+                label="Goal"
+                options={goalOptions}
+                // "all" is how the filters spell no goal; the menu uses null.
+                value={filters.tag === "all" ? null : filters.tag}
+                onChange={(tag) => setFilters((current) => ({ ...current, tag: tag ?? "all" }))}
+                formatOption={sentenceCase}
+              />
+            ) : null}
+
+            {showDifficulty ? (
+              <FilterMenuChip
+                label="Difficulty"
+                options={difficultyOptions}
+                value={filters.difficulty}
+                onChange={(difficulty) =>
+                  setFilters((current) => ({ ...current, difficulty }))
+                }
+                formatOption={sentenceCase}
+              />
+            ) : null}
+
+            {showTarget ? (
+              <FilterMenuChip
+                label="Target"
+                options={targetOptions}
+                value={filters.target}
+                onChange={(target) => setFilters((current) => ({ ...current, target }))}
+                formatOption={sentenceCase}
+              />
+            ) : null}
+          </ScrollView>
+        ) : null}
+
+        <View style={styles.list}>
+          {!loading && filteredWorkouts.length === 0 ? (
+            <View
+              style={[
+                styles.emptyState,
+                {
+                  backgroundColor: colors.backgroundElement,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <View
+                style={[styles.emptyIcon, { backgroundColor: colors.brandSoft }]}
+              >
+                <Icon source="dumbbell" size={28} color={colors.brand} />
+              </View>
+              <Text
+                variant="titleMedium"
+                style={{ color: colors.text, fontWeight: "700" }}
+              >
+                No workouts here yet
+              </Text>
+              <Text
+                variant="bodyMedium"
+                style={{ color: colors.textSecondary, textAlign: "center" }}
+              >
+                Try another filter or create a workout plan of your own.
+              </Text>
+              {hasActiveFilters(filters) ? (
+                <Button
+                  mode="contained-tonal"
+                  icon="filter-remove-outline"
+                  onPress={() => setFilters(NO_FILTERS)}
+                  style={{ marginTop: Spacing.one }}
+                >
+                  Clear filters
+                </Button>
+              ) : null}
+            </View>
+          ) : (
+            filteredWorkouts.map((workout) => (
+              <WorkoutCard
+                key={workout.id}
+                workout={workout}
+                onPress={() => handleStart(workout)}
+                isFavorited={favoriteIds.has(String(workout.id))}
+                onToggleFavorite={() => toggleFavorite(String(workout.id))}
+                onSchedule={() => setScheduleTarget(workout)}
+                lastDone={lastDoneLabel(workout)}
+                equipment={formatEquipment(planEquipment.get(String(workout.id)))}
+                {...(ownsPlan(workout)
+                  ? {
+                      onChangePhoto: () => changePhoto(workout),
+                      photoUploading: photoUploadingId === String(workout.id),
+                      onEdit: () => setEditTarget(workout),
+                      onDelete: () => setDeleteTarget(workout),
+                    }
+                  : {})}
+              />
+            ))
+          )}
+        </View>
+      </View>
+
+      <View style={styles.supportingSection}>
+        <WeeklyProgress completedWorkouts={completedWorkouts} />
       </View>
     </ScreenView>
   );
@@ -494,11 +462,22 @@ const styles = StyleSheet.create({
     alignSelf: "stretch",
     marginVertical: Spacing.one,
   },
-  createCard: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: Radius.large,
-    padding: Spacing.three,
+  workoutSection: {
     gap: Spacing.three,
+  },
+  supportingSection: {
+    marginTop: Spacing.two,
+    gap: Spacing.three,
+  },
+  createCard: {
+    borderRadius: Radius.medium,
+  },
+  createContent: {
+    paddingVertical: Spacing.three,
+    gap: Spacing.three,
+  },
+  createAction: {
+    minHeight: Spacing.four * 2,
   },
   createCopy: {
     flexDirection: "row",
@@ -514,8 +493,10 @@ const styles = StyleSheet.create({
   },
   sectionHeader: {
     flexDirection: "row",
-    alignItems: "flex-end",
+    alignItems: "center",
     justifyContent: "space-between",
+    flexWrap: "wrap",
+    gap: Spacing.two,
   },
   list: {
     gap: Spacing.three,
