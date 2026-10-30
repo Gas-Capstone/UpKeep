@@ -5,17 +5,21 @@ import {
   Avatar,
   Button,
   Card,
-  Modal,
   Portal,
   ProgressBar,
   Text,
   useTheme,
 } from "react-native-paper";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useTour } from "@/components/context/tourContext";
 import type { AppTheme } from "@/constants/paper-theme";
-import { styles } from "@/constants/styles";
-import { Radius, Spacing } from "@/constants/theme";
+import {
+  BottomTabInset,
+  MaxContentWidth,
+  Radius,
+  Spacing,
+} from "@/constants/theme";
 
 type TourStep = {
   href: Href;
@@ -65,10 +69,11 @@ const STEPS: TourStep[] = [
 
 /**
  * Step-by-step intro shown to each account once, the first time it opens Home.
- * Moves through each tab as it goes.
+ * Moves through each tab as it goes while keeping the screen being explained visible.
  */
 export function AppTourModal() {
   const theme = useTheme<AppTheme>();
+  const insets = useSafeAreaInsets();
   const { visible, startFirstVisitTour, finishTour } = useTour();
   const pathname = usePathname();
   const [stepIndex, setStepIndex] = useState(0);
@@ -91,20 +96,22 @@ export function AppTourModal() {
     router.navigate("/");
   }
 
+  if (!visible) return null;
+
   return (
     <Portal>
-      <Modal
-        visible={visible}
-        onDismiss={close}
-        dismissable={false}
-        dismissableBackButton
-        theme={{ colors: { backdrop: theme.colors.tourBackdrop } }}
-        contentContainerStyle={styles.modalContent}
+      <View
+        pointerEvents="box-none"
+        style={[
+          local.overlay,
+          {
+            paddingBottom: BottomTabInset + insets.bottom + Spacing.three,
+          },
+        ]}
       >
         <Card
           mode="contained"
           style={[
-            styles.modalCard,
             local.card,
             {
               backgroundColor: theme.colors.surface,
@@ -161,13 +168,21 @@ export function AppTourModal() {
             </Button>
           </Card.Actions>
         </Card>
-      </Modal>
+      </View>
     </Portal>
   );
 }
 
 const local = StyleSheet.create({
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "flex-end",
+    alignItems: "center",
+    paddingHorizontal: Spacing.three,
+  },
   card: {
+    width: "100%",
+    maxWidth: MaxContentWidth,
     borderRadius: Radius.large,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: "hidden",
