@@ -5,6 +5,7 @@ import {
   Avatar,
   Button,
   Card,
+  Modal,
   Portal,
   ProgressBar,
   Text,
@@ -14,12 +15,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useTour } from "@/components/context/tourContext";
 import type { AppTheme } from "@/constants/paper-theme";
-import {
-  BottomTabInset,
-  MaxContentWidth,
-  Radius,
-  Spacing,
-} from "@/constants/theme";
+import { styles } from "@/constants/styles";
+import { BottomTabInset, Radius, Spacing } from "@/constants/theme";
 
 type TourStep = {
   href: Href;
@@ -69,7 +66,7 @@ const STEPS: TourStep[] = [
 
 /**
  * Step-by-step intro shown to each account once, the first time it opens Home.
- * Moves through each tab as it goes while keeping the screen being explained visible.
+ * Moves through each tab as it goes.
  */
 export function AppTourModal() {
   const theme = useTheme<AppTheme>();
@@ -82,6 +79,8 @@ export function AppTourModal() {
   const isFirst = stepIndex === 0;
   const isLast = stepIndex === STEPS.length - 1;
 
+  // Re-runs when the "has this account seen it" check resolves, so a slow
+  // check still opens the tour if the user is on Home by then.
   useEffect(() => {
     if (pathname === "/") startFirstVisitTour();
   }, [pathname, startFirstVisitTour]);
@@ -96,27 +95,26 @@ export function AppTourModal() {
     router.navigate("/");
   }
 
-  if (!visible) return null;
-
   return (
     <Portal>
-      <View
-        pointerEvents="box-none"
-        style={[
-          local.overlay,
-          {
-            paddingBottom: BottomTabInset + insets.bottom + Spacing.three,
-          },
+      <Modal
+        visible={visible}
+        onDismiss={close}
+        dismissable={false}
+        dismissableBackButton
+        theme={{ colors: { backdrop: theme.colors.tourBackdrop } }}
+        style={local.wrapper}
+        contentContainerStyle={[
+          styles.modalContent,
+          { paddingBottom: BottomTabInset + insets.bottom + Spacing.three },
         ]}
       >
         <Card
-          mode="contained"
+          mode="elevated"
           style={[
+            styles.modalCard,
             local.card,
-            {
-              backgroundColor: theme.colors.surface,
-              borderColor: theme.colors.outlineVariant,
-            },
+            { backgroundColor: theme.colors.surface },
           ]}
         >
           <Card.Title
@@ -153,10 +151,7 @@ export function AppTourModal() {
               )}
             </View>
             {!isFirst && (
-              <Button
-                mode="outlined"
-                onPress={() => setStepIndex(stepIndex - 1)}
-              >
+              <Button mode="outlined" onPress={() => setStepIndex(stepIndex - 1)}>
                 Back
               </Button>
             )}
@@ -168,31 +163,23 @@ export function AppTourModal() {
             </Button>
           </Card.Actions>
         </Card>
-      </View>
+      </Modal>
     </Portal>
   );
 }
 
 const local = StyleSheet.create({
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
+  wrapper: {
     justifyContent: "flex-end",
-    alignItems: "center",
-    paddingHorizontal: Spacing.three,
   },
   card: {
-    width: "100%",
-    maxWidth: MaxContentWidth,
     borderRadius: Radius.large,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: "hidden",
   },
   content: {
     gap: Spacing.three,
   },
   progress: {
     borderRadius: Radius.pill,
-    overflow: "hidden",
   },
   spacer: {
     flex: 1,
