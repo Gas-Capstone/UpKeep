@@ -1,11 +1,12 @@
 import { useDeferredValue, useState } from "react";
-import { FlatList, ScrollView, StyleSheet, View } from "react-native";
+import { FlatList, Keyboard, ScrollView, StyleSheet, View } from "react-native";
 import { Button, Chip, Icon, Searchbar, Text, useTheme } from "react-native-paper";
 
 import type { PlanWorkout } from "@/components/context/workoutsDataContext";
 import { Radius, Spacing } from "@/constants/theme";
 import { filterExercises, exerciseFilterOptions } from "@/lib/exercisePicker";
 import { ExercisePickerRow } from "@/components/workouts/ExercisePickerRow";
+import { ExerciseDetailsModal } from "@/components/workouts/workouttimer/ExerciseDetailsModal";
 
 type ExercisePickerProps = {
   exercises: PlanWorkout[];
@@ -30,6 +31,7 @@ export function ExercisePicker({ exercises, selectedIds, onToggle }: ExercisePic
   const [equipment, setEquipment] = useState("");
   const [selectedOnly, setSelectedOnly] = useState(false);
   const [filtersVisible, setFiltersVisible] = useState(false);
+  const [detailExercise, setDetailExercise] = useState<PlanWorkout | null>(null);
   const deferredQuery = useDeferredValue(query);
   const selected = new Set(selectedIds);
   const { muscles, equipmentOptions, matchingExercises } = useExerciseCatalog(
@@ -123,6 +125,10 @@ export function ExercisePicker({ exercises, selectedIds, onToggle }: ExercisePic
             exercise={item}
             checked={selected.has(item.id)}
             onToggle={onToggle}
+            onViewDetails={(exercise) => {
+              Keyboard.dismiss();
+              setDetailExercise(exercise);
+            }}
           />
         )}
         ListEmptyComponent={
@@ -139,6 +145,15 @@ export function ExercisePicker({ exercises, selectedIds, onToggle }: ExercisePic
             {hasFilters ? <Button onPress={clearFilters}>Reset filters</Button> : null}
           </View>
         }
+      />
+      <ExerciseDetailsModal
+        exercise={detailExercise ? {
+          name: detailExercise.name,
+          muscleGroup: detailExercise.muscle_group ?? null,
+          equipment: detailExercise.equipment ?? null,
+          instructions: detailExercise.instructions ?? null,
+        } : null}
+        onDismiss={() => setDetailExercise(null)}
       />
     </View>
   );

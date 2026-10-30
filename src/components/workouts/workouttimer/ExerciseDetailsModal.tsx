@@ -5,7 +5,7 @@ import { MaxContentWidth, Radius, Spacing } from "@/constants/theme";
 import type { PlanExercise } from "@/lib/workouts";
 
 type Props = {
-  exercise: PlanExercise | null;
+  exercise: Pick<PlanExercise, "name" | "muscleGroup" | "equipment" | "instructions"> | null;
   onDismiss: () => void;
 };
 

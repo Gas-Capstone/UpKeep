@@ -76,6 +76,7 @@ export type CompletedWorkout = {
 export type PlanWorkout = {
   id: string;
   name: string;
+  instructions?: string | null;
   muscle_group?: string;
   equipment?: string;
 };
