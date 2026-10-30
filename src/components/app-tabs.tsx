@@ -179,7 +179,7 @@ function TabItem({
       <View style={styles.tabItemInner}>
         <View
           style={[
-            styles.iconButton,
+            styles.iconPill,
             isFocused && {
               backgroundColor: theme.colors.primaryContainer,
             },
@@ -246,20 +246,20 @@ const styles = StyleSheet.create({
   },
   tabItem: {
     flex: 1,
-    alignItems: "stretch",
-    justifyContent: "center",
-    borderRadius: Radius.large,
+    borderRadius: Radius.medium,
+    overflow: "hidden",
   },
   tabItemInner: {
-    width: "100%",
+    minHeight: 50,
     alignItems: "center",
     justifyContent: "center",
     gap: 2,
   },
-  iconButton: {
-    width: "100%",
-    height: Radius.large * 2,
-    borderRadius: Radius.large,
+  iconPill: {
+    minWidth: 40,
+    height: 28,
+    paddingHorizontal: 10,
+    borderRadius: Radius.pill,
     overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
