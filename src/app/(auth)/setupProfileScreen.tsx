@@ -24,24 +24,8 @@ import { ThemedView } from "@/components/themed-view";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Colors, MaxContentWidth, Radius, Spacing } from "@/constants/theme";
+import { buildHeightValue } from "@/lib/height";
 import { supabase } from "@/lib/supabaseClient";
-
-// Height is stored in the existing feet.inches format used by the app.
-// Example: 5 feet 11 inches -> 5.11
-function buildHeightValue(feetStr: string, inchesStr: string): number | null {
-  const feet = Number(feetStr);
-
-  if (!feetStr || Number.isNaN(feet)) {
-    return null;
-  }
-
-  const rawInches = Number(inchesStr);
-  const inches = Number.isNaN(rawInches)
-    ? 0
-    : Math.min(Math.max(Math.round(rawInches), 0), 11);
-
-  return Number(`${feet}.${String(inches).padStart(2, "0")}`);
-}
 
 function formatBirthday(date: Date | null) {
   if (!date) return "Choose your birthday";

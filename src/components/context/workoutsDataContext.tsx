@@ -1,6 +1,12 @@
 import React, { createContext, useCallback, useContext, useState, useEffect } from "react";
 import { CompletionsByDate, rowsToCompletionsByDate } from "@/lib/habits/habits";
 import {
+  buildHistorySummary,
+  buildSessionExercises,
+  type SessionExercise,
+  type SessionSummary,
+} from "@/lib/sessionSummary";
+import {
   addFavoriteWorkout,
   completeScheduledWorkout,
   createScheduledWorkout,
@@ -9,12 +15,20 @@ import {
   getScheduledWorkouts,
   getWorkoutScheduleCompletions,
   uncompleteScheduledWorkout,
+  deleteWorkoutSession,
   getAvailableWorkouts,
   getCompletedWorkouts,
+  getExerciseResults,
+  getSessionDetails,
   getFavoriteWorkouts,
+  getPlanExercises,
+  getPlanEquipment,
   getWorkouts,
   removeFavoriteWorkout,
+  replacePlanExercises,
+  updateWorkoutPlan,
 } from "@/lib/supabaseFunctions";
+import type { PlanExercise } from "@/lib/workouts";
 import {
   ScheduledWorkout,
   WorkoutSchedule,
@@ -49,6 +63,12 @@ export type CompletedWorkout = {
   completed_at: string;
   // null when the plan was deleted after the session was logged.
   workout_plan_id: string | null;
+  // The plan's target, e.g. "Chest, back, arms". null once the plan is deleted.
+  workout_type: string | null;
+  // Sets finished out of the plan's total. null on sessions saved before
+  // these were recorded.
+  sets_done: number | null;
+  sets_total: number | null;
 };
 
 // An individual exercise from the `workouts` table — the building blocks a
@@ -56,15 +76,18 @@ export type CompletedWorkout = {
 export type PlanWorkout = {
   id: string;
   name: string;
+  instructions?: string | null;
   muscle_group?: string;
   equipment?: string;
 };
 
-// One line of a plan being built: which exercise, and how many sets/reps.
+// One line of a plan being built: which exercise, how many sets, and either
+// reps per set or, for timed exercises, how long each set lasts.
 export type PlanWorkoutSelection = {
   workout_id: string;
   sets: number;
-  reps: number;
+  reps: number | null;
+  duration_seconds: number | null;
 };
 
 export type NewWorkoutPlan = {
@@ -75,6 +98,8 @@ export type NewWorkoutPlan = {
 };
 
 export type WorkoutsDataContextType = {
+  loadPlanExercises: (planId: string) => Promise<PlanExercise[]>;
+  updatePlan: (planId: string, plan: NewWorkoutPlan, selections: PlanWorkoutSelection[]) => Promise<boolean>;
   workoutList: Workout[];
   completedWorkouts: CompletedWorkout[];
   // Set of workout ids the current user has favorited, so a card can check
@@ -82,9 +107,21 @@ export type WorkoutsDataContextType = {
   favoriteIds: Set<string>;
   // The individual exercises available to pick from when building a plan.
   availableWorkouts: PlanWorkout[];
+  // Equipment each plan's exercises call for, keyed by plan id. Raw database
+  // values; formatEquipment() in lib/workoutList turns them into a card line.
+  planEquipment: ReadonlyMap<string, string[]>;
   loading: boolean;
   refreshWorkouts: () => void;
   refreshCompletedWorkouts: () => void;
+  // A finished session's summary, as History reopens it. Throws when it
+  // can't be loaded.
+  loadSessionSummary: (session: CompletedWorkout) => Promise<SessionSummary>;
+  // Each exercise in a session's plan with the sets done for it, for the
+  // session's row in History. Throws when it can't be loaded.
+  loadSessionExercises: (session: CompletedWorkout) => Promise<SessionExercise[]>;
+  // Removes a session, with its exercise results, from history and every
+  // stat built on it. Throws on failure so the dialog can say so.
+  deleteSession: (sessionId: string) => Promise<void>;
   refreshFavorites: () => void;
   toggleFavorite: (workoutId: string) => void;
   createPlan: (
@@ -120,6 +157,10 @@ async function loadWorkoutSchedule(user: { id: string }) {
   return { entries, completions };
 }
 
+async function loadPlanExercises(planId: string) {
+  return getPlanExercises(planId, { throwOnError: true });
+}
+
 export const WorkoutsDataProvider = ({
   children,
 }: WorkoutsDataProviderProps) => {
@@ -130,6 +171,9 @@ export const WorkoutsDataProvider = ({
   >([]);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [availableWorkouts, setAvailableWorkouts] = useState<PlanWorkout[]>([]);
+  const [planEquipment, setPlanEquipment] = useState<
+    ReadonlyMap<string, string[]>
+  >(new Map());
   const [loading, setLoading] = useState(true);
   const [scheduledWorkouts, setScheduledWorkouts] = useState<ScheduledWorkout[]>([]);
   const [workoutScheduleCompletions, setWorkoutScheduleCompletions] =
@@ -198,7 +242,16 @@ export const WorkoutsDataProvider = ({
   const refreshWorkouts = useCallback(() => {
     if (!user?.id) return;
     getWorkouts(user)
-      .then((data) => setWorkoutList(data ?? []))
+      .then((data) => {
+        const plans: Workout[] = data ?? [];
+        setWorkoutList(plans);
+        // A second query, since it needs the plans' ids. getPlanEquipment
+        // never rejects — equipment is an optional line on each card and
+        // shouldn't be able to empty the list.
+        return getPlanEquipment(plans.map((plan) => String(plan.id))).then(
+          setPlanEquipment,
+        );
+      })
       .catch((error) => {
         console.log("Error fetching workouts: ", error);
         setWorkoutList([]);
@@ -310,14 +363,69 @@ export const WorkoutsDataProvider = ({
     });
   }
 
+  const loadSessionSummary = async (session: CompletedWorkout) => {
+    if (!user?.id) throw new Error("Sign in to see your history.");
+    const { totals, results } = await getSessionDetails(session.id);
+    // Every result for the same exercises, to work out which of this
+    // session's were records at the time.
+    const allResults = await getExerciseResults(
+      user,
+      results.map((result) => result.workoutId),
+    );
+    return buildHistorySummary({
+      planName: session.name,
+      minutes: session.duration_min,
+      totals,
+      sessionId: session.id,
+      sessionResults: results,
+      allResults,
+    });
+  };
+
+  const loadSessionExercises = async (session: CompletedWorkout) => {
+    // A deleted plan leaves only what the session itself saved.
+    const [{ results }, plan] = await Promise.all([
+      getSessionDetails(session.id),
+      session.workout_plan_id
+        ? getPlanExercises(session.workout_plan_id, { throwOnError: true })
+        : Promise.resolve([]),
+    ]);
+    return buildSessionExercises(plan, results);
+  };
+
+  const deleteSession = async (sessionId: string) => {
+    await deleteWorkoutSession(sessionId);
+    // History, streaks, last-done and the progression chart all read this.
+    refreshCompletedWorkouts();
+  };
+
+  async function updatePlan(planId: string, plan: NewWorkoutPlan, selections: PlanWorkoutSelection[]) {
+    if (!user?.id || !workoutList.some((workout) => String(workout.id) === planId && workout.created_by === user.id)) return false;
+    try {
+      if (!await updateWorkoutPlan(planId, plan)) return false;
+      if (!await replacePlanExercises(planId, selections)) return false;
+      refreshWorkouts();
+      return true;
+    } catch (error) {
+      console.log("Error updating workout plan: ", error);
+      return false;
+    }
+  }
+
   const contextValue: WorkoutsDataContextType = {
+    loadPlanExercises,
+    updatePlan,
     workoutList,
     completedWorkouts,
     favoriteIds,
     availableWorkouts,
+    planEquipment,
     loading,
     refreshWorkouts,
     refreshCompletedWorkouts,
+    loadSessionSummary,
+    loadSessionExercises,
+    deleteSession,
     refreshFavorites,
     toggleFavorite,
     createPlan,

@@ -247,6 +247,7 @@ const styles = StyleSheet.create({
   tabItem: {
     flex: 1,
     borderRadius: Radius.medium,
+    overflow: "hidden",
   },
   tabItemInner: {
     minHeight: 50,
@@ -255,10 +256,11 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   iconPill: {
-    minWidth: 36,
+    minWidth: 40,
     height: 28,
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     borderRadius: Radius.pill,
+    overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
   },

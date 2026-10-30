@@ -21,7 +21,9 @@ import {
   getSummaryDays,
 } from "@/lib/dailySummary";
 import { recipeKey } from "@/lib/meals/meals";
+import { track } from "@/lib/metrics";
 import {
+  notificationPermissionGranted,
   replaceScheduled,
   requestNotificationPermission,
   sendNotificationNow,
@@ -172,42 +174,42 @@ export const NotificationsProvider = ({
       .then(async () => {
         if (run !== latestRun.current || !settingsLoaded) return;
 
-        // Logged out means nothing should stay scheduled.
-        const summaryOn = Boolean(user) && settings.enabled;
-        const habitsOn = Boolean(user) && settings.habitReminders;
-        const mealsOn = Boolean(user) && settings.mealReminders;
+        // Only runs that get as far as scheduling are recorded; one superseded
+        // by a newer run returns early and did no work worth timing.
+        const started = Date.now();
+        try {
+          // Logged out means nothing should stay scheduled.
+          const summaryOn = Boolean(user) && settings.enabled;
+          const habitsOn = Boolean(user) && settings.habitReminders;
+          const mealsOn = Boolean(user) && settings.mealReminders;
 
-        const days = getSummaryDays();
-        const summaries = await loadSummaries(days);
-        if (run !== latestRun.current) return;
+          const days = getSummaryDays();
+          const summaries = await loadSummaries(days);
+          if (run !== latestRun.current) return;
 
-        const summaryReminders = summaryOn
-          ? buildSummaryReminders(
-              summaries,
-              settings.hour,
-              settings.minute,
-            ).map((reminder) => {
-              const goalMessage = getGoalNotificationMessage(primaryGoal);
+          const summaryReminders = summaryOn
+            ? buildSummaryReminders(
+                summaries,
+                settings.hour,
+                settings.minute,
+              ).map((reminder) => {
+                const goalMessage = getGoalNotificationMessage(primaryGoal);
 
-              return {
-                ...reminder,
-                body: goalMessage
-                  ? `${goalMessage}\n\n${reminder.body}`
-                  : reminder.body,
-              };
-            })
-          : [];
+                return {
+                  ...reminder,
+                  body: goalMessage
+                    ? `${goalMessage}\n\n${reminder.body}`
+                    : reminder.body,
+                };
+              })
+            : [];
 
-        await replaceScheduled("daily-summary", summaryReminders);
-        await replaceScheduled(
-          "habit",
-          habitsOn
+          // Built up front so they can be counted. The builders are pure, so
+          // this changes nothing about what gets scheduled or in what order.
+          const habitReminders = habitsOn
             ? buildHabitReminders(days, habitArray, habitCompletions)
-            : [],
-        );
-        await replaceScheduled(
-          "meal",
-          mealsOn
+            : [];
+          const mealReminders = mealsOn
             ? buildMealReminders(
                 days,
                 mealPlanEntries,
@@ -217,8 +219,39 @@ export const NotificationsProvider = ({
                     recipeKey({ id: entry.recipeId, isCustom: entry.isCustom }),
                   ) ?? "a planned recipe",
               )
-            : [],
-        );
+            : [];
+
+          const scheduled =
+            (await replaceScheduled("daily-summary", summaryReminders)) +
+            (await replaceScheduled("habit", habitReminders)) +
+            (await replaceScheduled("meal", mealReminders));
+          const durationMs = Date.now() - started;
+
+          // built vs scheduled is the point: with permission off, reminders are
+          // built and then silently never scheduled, and the sync still
+          // "succeeds". Past-dated reminders are skipped too, so a gap alone
+          // isn't a fault — permission says which it is.
+          track("notifications_sync", {
+            durationMs,
+            ok: true,
+            props: {
+              permission: (await notificationPermissionGranted())
+                ? "granted"
+                : "denied",
+              built:
+                summaryReminders.length +
+                habitReminders.length +
+                mealReminders.length,
+              scheduled,
+            },
+          });
+        } catch (err) {
+          track("notifications_sync", {
+            durationMs: Date.now() - started,
+            ok: false,
+          });
+          throw err;
+        }
       })
       .catch((err) => console.log("Error syncing notifications: ", err));
 

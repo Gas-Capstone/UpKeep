@@ -3,7 +3,10 @@ import { Observe, ObserveRoot } from "expo-observe";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
 import { KeyboardProvider } from "react-native-keyboard-controller";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import {
+  initialWindowMetrics,
+  SafeAreaProvider,
+} from "react-native-safe-area-context";
 import { PaperProvider } from "react-native-paper";
 import { en, registerTranslation } from "react-native-paper-dates";
 
@@ -13,6 +16,7 @@ import { NotificationsProvider } from "@/components/context/notificationsContext
 import { ProfileDataProvider } from "@/components/context/profileDataContext";
 import { ThemeProvider, useThemeMode } from "@/components/context/ThemeContext";
 import { TourProvider } from "@/components/context/tourContext";
+import { UnitsProvider } from "@/components/context/UnitsContext";
 import { UserProvider } from "@/components/context/userContext";
 import { StartupContext } from "@/components/context/startupContext";
 import { WorkoutSessionProvider } from "@/components/context/workoutSessionContext";
@@ -21,6 +25,7 @@ import { BirthdayCelebration } from "@/components/profile/BirthdayCelebration";
 import { GluestackUIProvider } from "@/components/ui/gluestack-ui-provider";
 import { StartupErrorScreen } from "@/components/ui/StartupErrorScreen";
 import { paperDarkTheme, paperLightTheme } from "@/constants/paper-theme";
+import { startMetrics } from "@/lib/metrics";
 import "@/lib/notifications";
 import { supabase } from "@/lib/supabaseClient";
 import "@/global.css";
@@ -54,50 +59,59 @@ function RootContent() {
 
   return (
     <KeyboardProvider>
-      <SafeAreaProvider>
+      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
         <UserProvider>
-        <WorkoutsDataProvider>
-          <MealsDataProvider>
-            <ProfileDataProvider>
-              <HabitsProvider>
-                <NotificationsProvider>
-                  <WorkoutSessionProvider>
-                    <TourProvider>
-                      <GluestackUIProvider mode={theme}>
-                        <PaperProvider theme={curTheme}>
-                          <StartupContext.Provider value={splashHidden}>
-                            <Stack
-                              screenOptions={{
-                                headerShown: false,
-                                contentStyle: {
-                                  backgroundColor: curTheme.colors.background,
-                                },
-                              }}
-                            >
-                              <Stack.Screen name="(auth)" />
-                              <Stack.Screen name="(tabs)" />
-                              <Stack.Screen name="(subpages)" />
-                            </Stack>
+          <WorkoutsDataProvider>
+            <MealsDataProvider>
+              <ProfileDataProvider>
+                <HabitsProvider>
+                  <NotificationsProvider>
+                    <WorkoutSessionProvider>
+                      <UnitsProvider>
+                        <TourProvider>
+                          <GluestackUIProvider mode={theme}>
+                            <PaperProvider theme={curTheme}>
+                              <StartupContext.Provider value={splashHidden}>
+                                <Stack
+                                  screenOptions={{
+                                    headerShown: false,
+                                    contentStyle: {
+                                      backgroundColor: curTheme.colors.background,
+                                    },
+                                  }}
+                                >
+                                  <Stack.Screen name="(auth)" />
+                                  <Stack.Screen name="(tabs)" />
+                                  <Stack.Screen name="(subpages)" />
+                                </Stack>
 
-                            <AuthBootstrap
-                              themeReady={themeReady}
-                              onSplashHidden={setSplashHidden}
-                            />
-                            <BirthdayCelebration />
-                          </StartupContext.Provider>
-                        </PaperProvider>
-                      </GluestackUIProvider>
-                    </TourProvider>
-                  </WorkoutSessionProvider>
-                </NotificationsProvider>
-              </HabitsProvider>
-            </ProfileDataProvider>
-          </MealsDataProvider>
-        </WorkoutsDataProvider>
-      </UserProvider>
+                                <AuthBootstrap
+                                  themeReady={themeReady}
+                                  onSplashHidden={setSplashHidden}
+                                />
+                                <MetricsBootstrap />
+                                <BirthdayCelebration />
+                              </StartupContext.Provider>
+                            </PaperProvider>
+                          </GluestackUIProvider>
+                        </TourProvider>
+                      </UnitsProvider>
+                    </WorkoutSessionProvider>
+                  </NotificationsProvider>
+                </HabitsProvider>
+              </ProfileDataProvider>
+            </MealsDataProvider>
+          </WorkoutsDataProvider>
+        </UserProvider>
       </SafeAreaProvider>
     </KeyboardProvider>
   );
+}
+
+// Events are recorded from the first request; this only starts sending them.
+function MetricsBootstrap() {
+  useEffect(() => startMetrics(supabase), []);
+  return null;
 }
 
 function AuthBootstrap({

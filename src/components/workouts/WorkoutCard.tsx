@@ -21,6 +21,11 @@ type WorkoutCardProps = {
   onChangePhoto?: () => void;
   // True while this plan's photo is uploading, so the menu item can say so.
   photoUploading?: boolean;
+  // Already formatted ("Done 3 days ago"). Omitted for a plan never done,
+  // rather than saying "never", which would read as a nag.
+  lastDone?: string | null;
+  // Already formatted ("Dumbbell, Bench"). Omitted when unknown.
+  equipment?: string | null;
 };
 
 export function WorkoutCard({
@@ -33,6 +38,8 @@ export function WorkoutCard({
   onDelete,
   onChangePhoto,
   photoUploading = false,
+  lastDone,
+  equipment,
 }: WorkoutCardProps) {
   const { resolvedTheme } = useThemeMode();
   const colors = Colors[resolvedTheme];
@@ -53,7 +60,7 @@ export function WorkoutCard({
     >
       <BrandImage
         uri={workout.image_url}
-        label="Workout photo"
+        label="No photo added"
         icon="dumbbell"
         accessibilityLabel={`Photo of ${workout.name}`}
         style={styles.imageSlot}
@@ -164,7 +171,31 @@ export function WorkoutCard({
               iconColor={colors.brand}
             />
           ) : null}
+
+          {lastDone ? (
+            <MetaPill
+              icon="history"
+              label={lastDone}
+              backgroundColor={colors.brandSoft}
+              textColor={colors.text}
+              iconColor={colors.brand}
+            />
+          ) : null}
         </View>
+
+        {/* Answers "can I do this here?" before the plan is opened. */}
+        {equipment ? (
+          <View style={styles.equipmentRow}>
+            <Icon source="dumbbell" size={15} color={colors.textSecondary} />
+            <Text
+              variant="bodySmall"
+              numberOfLines={1}
+              style={{ color: colors.textSecondary, flex: 1 }}
+            >
+              {equipment}
+            </Text>
+          </View>
+        ) : null}
 
         <Button
           mode="contained"
@@ -235,6 +266,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: Spacing.two,
+  },
+  equipmentRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.one,
+    // Pulls the line up under the pills, so it reads as part of the same
+    // block rather than a separate section.
+    marginTop: -Spacing.two,
   },
   metaPill: {
     minHeight: 30,

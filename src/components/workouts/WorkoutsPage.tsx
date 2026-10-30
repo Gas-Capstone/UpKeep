@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { Button, Icon, Snackbar, Text } from "react-native-paper";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -15,15 +15,38 @@ import {
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { ScreenView } from "@/components/ui/ScreenView";
 import { Colors, Radius, Spacing } from "@/constants/theme";
-import { deleteWorkoutPlan, setWorkoutPlanImage } from "@/lib/supabaseFunctions";
+import {
+  deleteWorkoutPlan,
+  setWorkoutPlanImage,
+} from "@/lib/supabaseFunctions";
 import { pickImage, uploadUserImage } from "@/lib/userImages";
-import { getWorkoutsWithTag, sortFavoritesFirst } from "@/lib/workouts";
+import {
+  NO_FILTERS,
+  filterOptions,
+  filterWorkouts,
+  formatEquipment,
+  formatLastDone,
+  hasActiveFilters,
+  lastDoneByPlan,
+  sentenceCase,
+  type PlanSource,
+  type WorkoutFilters,
+} from "@/lib/workoutList";
+import { sortFavoritesFirst } from "@/lib/workouts";
 
 import { CompletedWorkoutsModal } from "./CompletedWorkoutsModal";
 import { CreateWorkoutPlanModal } from "./CreateWorkoutPlanModal";
-import { StartWorkoutModal } from "./StartWorkoutModal";
+import { EditWorkoutPlanModal } from "./EditWorkoutPlanModal";
+import { FilterMenuChip } from "./FilterMenuChip";
+import { WeeklyProgress } from "./WeeklyProgress";
 import { WorkoutCard } from "./WorkoutCard";
 import { WorkoutFilterChip } from "./WorkoutFilterChip";
+
+const SOURCES: { value: PlanSource; label: string }[] = [
+  { value: "all", label: "All plans" },
+  { value: "mine", label: "Mine" },
+  { value: "built-in", label: "Built-in" },
+];
 
 export default function WorkoutsPage() {
   const router = useRouter();
@@ -37,6 +60,7 @@ export default function WorkoutsPage() {
     completedWorkouts,
     favoriteIds,
     availableWorkouts,
+    planEquipment,
     loading,
     refreshWorkouts,
     refreshCompletedWorkouts,
@@ -46,26 +70,37 @@ export default function WorkoutsPage() {
   } = useWorkoutsData();
   useScreenInteractive(!loading);
 
-  const [workoutTags, setWorkoutTags] = useState<string[]>([]);
-  const [selectedTag, setSelectedTag] = useState("all");
+  const [filters, setFilters] = useState<WorkoutFilters>(NO_FILTERS);
   const [completedModalVisible, setCompletedModalVisible] = useState(false);
-  const [startModalVisible, setStartModalVisible] = useState(false);
   const [createModalVisible, setCreateModalVisible] = useState(false);
-  const [selectedWorkout, setSelectedWorkout] = useState<Workout | null>(null);
+  const [editTarget, setEditTarget] = useState<Workout | null>(null);
   // Plan being added to the Habits page schedule, or null when closed.
   const [scheduleTarget, setScheduleTarget] = useState<Workout | null>(null);
-  // Plan awaiting delete confirmation.
   const [deleteTarget, setDeleteTarget] = useState<Workout | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
-  // Plan id whose photo is uploading, so only that card's menu reads busy.
   const [photoUploadingId, setPhotoUploadingId] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState("");
 
-  // Seeded plans have a null created_by and belong to everyone, so only the
-  // author gets edit and delete.
   const ownsPlan = (workout: Workout) =>
     Boolean(user?.id) && workout.created_by === user?.id;
+
+  const showSource = workoutList.some(ownsPlan) || filters.source !== "all";
+  const goalOptions = [
+    ...new Set(workoutList.flatMap((workout) => workout.goal_tags ?? [])),
+  ].sort();
+  const showGoal = goalOptions.length > 0 || filters.tag !== "all";
+  const difficultyOptions = filterOptions(workoutList, "difficulty");
+  const targetOptions = filterOptions(workoutList, "target");
+  const showDifficulty =
+    difficultyOptions.length > 1 || filters.difficulty !== null;
+  const showTarget = targetOptions.length > 1 || filters.target !== null;
+
+  const lastDone = lastDoneByPlan(completedWorkouts);
+  const lastDoneLabel = (workout: Workout) => {
+    const at = lastDone.get(String(workout.id));
+    return at === undefined ? null : formatLastDone(at);
+  };
 
   const changePhoto = async (workout: Workout) => {
     if (!user?.id) return;
@@ -73,7 +108,6 @@ export default function WorkoutsPage() {
 
     try {
       const uri = await pickImage();
-      // Backing out of the picker is not a failure, so it says nothing.
       if (!uri) return;
 
       setPhotoUploadingId(String(workout.id));
@@ -86,8 +120,6 @@ export default function WorkoutsPage() {
       await setWorkoutPlanImage(String(workout.id), url);
       refreshWorkouts();
     } catch (error) {
-      // Only a denied permission tells the user something they can act on;
-      // anything else is a storage or network fault they cannot fix from here.
       setPhotoError(
         error instanceof Error && error.message.startsWith("Photo access")
           ? error.message
@@ -96,13 +128,6 @@ export default function WorkoutsPage() {
     } finally {
       setPhotoUploadingId(null);
     }
-  };
-
-  const openEditPlan = (workout: Workout) => {
-    router.navigate({
-      pathname: "/edit-workout",
-      params: { id: String(workout.id) },
-    });
   };
 
   const confirmDelete = async () => {
@@ -119,13 +144,6 @@ export default function WorkoutsPage() {
     refreshWorkouts();
   };
 
-  useEffect(() => {
-    const tags = [
-      ...new Set(workoutList.flatMap((workout) => workout.goal_tags ?? [])),
-    ].sort();
-    setWorkoutTags(tags);
-  }, [workoutList]);
-
   useFocusEffect(
     useCallback(() => {
       if (!user?.id) return;
@@ -136,20 +154,14 @@ export default function WorkoutsPage() {
   const filteredWorkouts = useMemo(
     () =>
       sortFavoritesFirst(
-        getWorkoutsWithTag(workoutList, selectedTag),
+        filterWorkouts(workoutList, filters, user?.id),
         favoriteIds,
       ),
-    [workoutList, selectedTag, favoriteIds],
+    [workoutList, filters, user?.id, favoriteIds],
   );
 
   const handleStart = (workout: Workout) => {
-    setSelectedWorkout(workout);
-    setStartModalVisible(true);
-  };
-
-  const handleTimer = (workout: Workout, mins: number) => {
-    startSession(workout, mins);
-    setStartModalVisible(false);
+    startSession(workout);
     router.navigate({
       pathname: "/workouttimer",
       params: { workoutId: String(workout.id) },
@@ -161,8 +173,6 @@ export default function WorkoutsPage() {
       contentContainerStyle={{ gap: Spacing.four }}
       overlay={
         <>
-          {/* Photo upload is started from a card menu, so there is no dialog
-              to report back into — a snackbar is the only surface. */}
           <Snackbar
             visible={photoError !== ""}
             onDismiss={() => setPhotoError("")}
@@ -187,21 +197,20 @@ export default function WorkoutsPage() {
             />
           ) : null}
 
-          {selectedWorkout && (
-            <StartWorkoutModal
-              visible={startModalVisible}
-              onDismiss={() => setStartModalVisible(false)}
-              workout={selectedWorkout}
-              onStart={handleTimer}
-            />
-          )}
-
           <CreateWorkoutPlanModal
             visible={createModalVisible}
             onDismiss={() => setCreateModalVisible(false)}
             availableWorkouts={availableWorkouts}
             onCreate={createPlan}
           />
+
+          {editTarget ? (
+            <EditWorkoutPlanModal
+              key={String(editTarget.id)}
+              plan={editTarget}
+              onDismiss={() => setEditTarget(null)}
+            />
+          ) : null}
 
           <ConfirmDialog
             visible={deleteTarget !== null}
@@ -251,142 +260,179 @@ export default function WorkoutsPage() {
         </Button>
       </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={{ marginHorizontal: -Spacing.four }}
-        contentContainerStyle={styles.filterRow}
-      >
-        <WorkoutFilterChip
-          tag="all"
-          isSelected={selectedTag === "all"}
-          onSelect={setSelectedTag}
-        />
-        {workoutTags.map((tag) => (
-          <WorkoutFilterChip
-            key={tag}
-            tag={tag}
-            isSelected={selectedTag === tag}
-            onSelect={setSelectedTag}
-          />
-        ))}
-      </ScrollView>
-
-      <View
-        style={[
-          styles.createCard,
-          {
-            backgroundColor: colors.brandSoft,
-            borderColor: colors.border,
-          },
-        ]}
-      >
-        <View style={styles.createCopy}>
-          <View
-            style={[
-              styles.createIcon,
-              { backgroundColor: colors.backgroundElement },
-            ]}
-          >
-            <Icon source="plus" size={24} color={colors.brand} />
-          </View>
-          <View style={{ flex: 1 }}>
+      <View style={styles.workoutSection}>
+        <View style={styles.sectionHeader}>
+          <View>
             <Text
-              variant="titleMedium"
+              variant="titleLarge"
               style={{ color: colors.text, fontWeight: "700" }}
             >
-              Build your own plan
+              {filters.tag === "all"
+                ? "Your workouts"
+                : sentenceCase(filters.tag)}
             </Text>
-            <Text
-              variant="bodySmall"
-              style={{ color: colors.textSecondary, marginTop: 2 }}
-            >
-              Choose exercises, sets, reps, and a target that works for you.
+            <Text variant="bodySmall" style={{ color: colors.textSecondary }}>
+              {loading
+                ? "Loading workouts..."
+                : `${filteredWorkouts.length} ${
+                    filteredWorkouts.length === 1 ? "plan" : "plans"
+                  }`}
             </Text>
           </View>
+          <Button
+            mode="text"
+            icon="plus"
+            onPress={() => setCreateModalVisible(true)}
+            textColor={colors.brand}
+            contentStyle={styles.createAction}
+          >
+            Create plan
+          </Button>
         </View>
 
-        <Button
-          mode="contained"
-          icon="plus"
-          onPress={() => setCreateModalVisible(true)}
-          buttonColor={colors.brandStrong}
-          textColor="#FFFFFF"
-          style={{ borderRadius: Radius.pill }}
-        >
-          Create Workout Plan
-        </Button>
-      </View>
-
-      <View style={styles.sectionHeader}>
-        <View>
-          <Text
-            variant="titleLarge"
-            style={{ color: colors.text, fontWeight: "700" }}
+        {showSource || showGoal || showDifficulty || showTarget ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={{ marginHorizontal: -Spacing.four }}
+            contentContainerStyle={styles.filterRow}
           >
-            {selectedTag === "all"
-              ? "Your workouts"
-              : `${selectedTag.charAt(0).toUpperCase()}${selectedTag.slice(1)}`}
-          </Text>
-          <Text variant="bodySmall" style={{ color: colors.textSecondary }}>
-            {loading
-              ? "Loading workouts..."
-              : `${filteredWorkouts.length} ${
-                  filteredWorkouts.length === 1 ? "plan" : "plans"
-                }`}
-          </Text>
-        </View>
-      </View>
+            {showSource
+              ? SOURCES.map((source) => (
+                  <WorkoutFilterChip
+                    key={source.value}
+                    tag={source.value}
+                    label={source.label}
+                    isSelected={filters.source === source.value}
+                    onSelect={() =>
+                      setFilters((current) => ({
+                        ...current,
+                        source: source.value,
+                      }))
+                    }
+                  />
+                ))
+              : null}
 
-      <View style={styles.list}>
-        {!loading && filteredWorkouts.length === 0 ? (
-          <View
-            style={[
-              styles.emptyState,
-              {
-                backgroundColor: colors.backgroundElement,
-                borderColor: colors.border,
-              },
-            ]}
-          >
+            {showSource && (showGoal || showDifficulty || showTarget) ? (
+              <View
+                style={[
+                  styles.filterDivider,
+                  { backgroundColor: colors.border },
+                ]}
+              />
+            ) : null}
+
+            {showGoal ? (
+              <FilterMenuChip
+                label="Goal"
+                options={goalOptions}
+                // "all" is how the filters spell no goal; the menu uses null.
+                value={filters.tag === "all" ? null : filters.tag}
+                onChange={(tag) =>
+                  setFilters((current) => ({ ...current, tag: tag ?? "all" }))
+                }
+                formatOption={sentenceCase}
+              />
+            ) : null}
+
+            {showDifficulty ? (
+              <FilterMenuChip
+                label="Difficulty"
+                options={difficultyOptions}
+                value={filters.difficulty}
+                onChange={(difficulty) =>
+                  setFilters((current) => ({ ...current, difficulty }))
+                }
+                formatOption={sentenceCase}
+              />
+            ) : null}
+
+            {showTarget ? (
+              <FilterMenuChip
+                label="Target"
+                options={targetOptions}
+                value={filters.target}
+                onChange={(target) =>
+                  setFilters((current) => ({ ...current, target }))
+                }
+                formatOption={sentenceCase}
+              />
+            ) : null}
+          </ScrollView>
+        ) : null}
+
+        <View style={styles.list}>
+          {!loading && filteredWorkouts.length === 0 ? (
             <View
-              style={[styles.emptyIcon, { backgroundColor: colors.brandSoft }]}
+              style={[
+                styles.emptyState,
+                {
+                  backgroundColor: colors.backgroundElement,
+                  borderColor: colors.border,
+                },
+              ]}
             >
-              <Icon source="dumbbell" size={28} color={colors.brand} />
+              <View
+                style={[
+                  styles.emptyIcon,
+                  { backgroundColor: colors.brandSoft },
+                ]}
+              >
+                <Icon source="dumbbell" size={28} color={colors.brand} />
+              </View>
+              <Text
+                variant="titleMedium"
+                style={{ color: colors.text, fontWeight: "700" }}
+              >
+                No workouts here yet
+              </Text>
+              <Text
+                variant="bodyMedium"
+                style={{ color: colors.textSecondary, textAlign: "center" }}
+              >
+                Try another filter or create a workout plan of your own.
+              </Text>
+              {hasActiveFilters(filters) ? (
+                <Button
+                  mode="contained-tonal"
+                  icon="filter-remove-outline"
+                  onPress={() => setFilters(NO_FILTERS)}
+                  style={{ marginTop: Spacing.one }}
+                >
+                  Clear filters
+                </Button>
+              ) : null}
             </View>
-            <Text
-              variant="titleMedium"
-              style={{ color: colors.text, fontWeight: "700" }}
-            >
-              No workouts here yet
-            </Text>
-            <Text
-              variant="bodyMedium"
-              style={{ color: colors.textSecondary, textAlign: "center" }}
-            >
-              Try another filter or create a workout plan of your own.
-            </Text>
-          </View>
-        ) : (
-          filteredWorkouts.map((workout) => (
-            <WorkoutCard
-              key={workout.id}
-              workout={workout}
-              onPress={() => handleStart(workout)}
-              isFavorited={favoriteIds.has(String(workout.id))}
-              onToggleFavorite={() => toggleFavorite(String(workout.id))}
-              onSchedule={() => setScheduleTarget(workout)}
-              {...(ownsPlan(workout)
-                ? {
-                    onChangePhoto: () => changePhoto(workout),
-                    photoUploading: photoUploadingId === String(workout.id),
-                    onEdit: () => openEditPlan(workout),
-                    onDelete: () => setDeleteTarget(workout),
-                  }
-                : {})}
-            />
-          ))
-        )}
+          ) : (
+            filteredWorkouts.map((workout) => (
+              <WorkoutCard
+                key={workout.id}
+                workout={workout}
+                onPress={() => handleStart(workout)}
+                isFavorited={favoriteIds.has(String(workout.id))}
+                onToggleFavorite={() => toggleFavorite(String(workout.id))}
+                onSchedule={() => setScheduleTarget(workout)}
+                lastDone={lastDoneLabel(workout)}
+                equipment={formatEquipment(
+                  planEquipment.get(String(workout.id)),
+                )}
+                {...(ownsPlan(workout)
+                  ? {
+                      onChangePhoto: () => changePhoto(workout),
+                      photoUploading: photoUploadingId === String(workout.id),
+                      onEdit: () => setEditTarget(workout),
+                      onDelete: () => setDeleteTarget(workout),
+                    }
+                  : {})}
+              />
+            ))
+          )}
+        </View>
+      </View>
+
+      <View style={styles.supportingSection}>
+        <WeeklyProgress completedWorkouts={completedWorkouts} />
       </View>
     </ScreenView>
   );
@@ -404,25 +450,40 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
   },
   titleIcon: {
-    width: 42,
-    height: 42,
+    width: 40,
+    height: 40,
     borderRadius: Radius.medium,
     alignItems: "center",
     justifyContent: "center",
   },
   title: {
-    fontWeight: "800",
-    letterSpacing: -0.4,
+    fontWeight: "900",
   },
   filterRow: {
     paddingHorizontal: Spacing.four,
     gap: Spacing.two,
   },
-  createCard: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: Radius.large,
-    padding: Spacing.three,
+  filterDivider: {
+    width: StyleSheet.hairlineWidth,
+    alignSelf: "stretch",
+    marginVertical: Spacing.one,
+  },
+  workoutSection: {
     gap: Spacing.three,
+  },
+  supportingSection: {
+    marginTop: Spacing.two,
+    gap: Spacing.three,
+  },
+  createCard: {
+    borderRadius: Radius.medium,
+  },
+  createContent: {
+    paddingVertical: Spacing.three,
+    gap: Spacing.three,
+  },
+  createAction: {
+    minHeight: Spacing.four * 2,
   },
   createCopy: {
     flexDirection: "row",
@@ -438,8 +499,10 @@ const styles = StyleSheet.create({
   },
   sectionHeader: {
     flexDirection: "row",
-    alignItems: "flex-end",
+    alignItems: "center",
     justifyContent: "space-between",
+    flexWrap: "wrap",
+    gap: Spacing.two,
   },
   list: {
     gap: Spacing.three,

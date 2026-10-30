@@ -1,34 +1,60 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
-  KeyboardAvoidingView,
-  Platform,
+  Keyboard,
   ScrollView,
   StyleSheet,
   View,
 } from "react-native";
 import {
+  KeyboardAvoidingView,
+} from "react-native-keyboard-controller";
+import {
   Button,
-  Chip,
   HelperText,
   Icon,
+  IconButton,
+  List,
   Modal,
   Portal,
+  RadioButton,
   Text,
   TextInput,
+  useTheme,
 } from "react-native-paper";
 
 import { useThemeMode } from "@/components/context/ThemeContext";
 import { Colors, Radius, Spacing } from "@/constants/theme";
+import {
+  draftFromPlanExercise,
+  newExerciseDraft,
+  selectionFromDraft,
+  type ExerciseAmountDraft,
+  type PlanExercise,
+} from "@/lib/workouts";
 import type {
   NewWorkoutPlan,
   PlanWorkout,
   PlanWorkoutSelection,
+  Workout,
 } from "../context/workoutsDataContext";
+import { ExercisePicker } from "./ExercisePicker";
+import { ExerciseAmountFields } from "./ExerciseAmountFields";
+import { Center } from "../ui/center";
+
+function revealFocusedInput(scroll: ScrollView | null, target: number | null, offset: number) {
+  if (!scroll || target === null) return;
+  requestAnimationFrame(() => {
+    scroll.scrollResponderScrollNativeHandleToKeyboard(target, offset, true);
+  });
+}
 
 type CreateWorkoutPlanModalProps = {
   visible: boolean;
   onDismiss: () => void;
   availableWorkouts: PlanWorkout[];
+  initialPlan?: Workout;
+  initialExercises?: PlanExercise[];
   onCreate: (
     plan: NewWorkoutPlan,
     selections: PlanWorkoutSelection[],
@@ -36,29 +62,55 @@ type CreateWorkoutPlanModalProps = {
 };
 
 const DIFFICULTIES = ["beginner", "intermediate", "advanced"];
-const DEFAULT_SETS = 3;
-const DEFAULT_REPS = 10;
 
 export function CreateWorkoutPlanModal({
   visible,
   onDismiss,
   availableWorkouts,
   onCreate,
+  initialPlan,
+  initialExercises = [],
 }: CreateWorkoutPlanModalProps) {
+  const theme = useTheme();
+  const [pickingExercises, setPickingExercises] = useState(false);
   const { resolvedTheme } = useThemeMode();
   const colors = Colors[resolvedTheme];
 
-  const [name, setName] = useState("");
-  const [difficulty, setDifficulty] = useState(DIFFICULTIES[0]);
-  const [target, setTarget] = useState("");
-  const [durationMin, setDurationMin] = useState("30");
+  const [name, setName] = useState(initialPlan?.name ?? "");
+  const [difficulty, setDifficulty] = useState(initialPlan?.difficulty || DIFFICULTIES[0]);
+  const [target, setTarget] = useState(initialPlan?.target ?? "");
+  const [durationMin, setDurationMin] = useState(String(initialPlan?.duration_min ?? 30));
   const [selections, setSelections] = useState<
-    Record<string, { sets: string; reps: string }>
-  >({});
+    Record<string, ExerciseAmountDraft>
+  >(() => Object.fromEntries(initialExercises.map((exercise) => [
+    exercise.workoutId, draftFromPlanExercise(exercise),
+  ])));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [footerHeight, setFooterHeight] = useState(0);
+  const formScroll = useRef<ScrollView>(null);
+  const focusedInput = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!visible) return;
+    const shown = Keyboard.addListener("keyboardDidShow", () => {
+      revealFocusedInput(
+        formScroll.current,
+        focusedInput.current,
+        footerHeight + Spacing.four + Spacing.three,
+      );
+    });
+    return () => shown.remove();
+  }, [footerHeight, visible]);
+  const insets = useSafeAreaInsets();
 
   const selectedIds = Object.keys(selections);
+  const workoutsById = new Map(availableWorkouts.map((workout) => [workout.id, workout]));
+
+  const finishPicking = () => {
+    Keyboard.dismiss();
+    setPickingExercises(false);
+  };
 
   const toggleWorkout = (workoutId: string) => {
     setSelections((current) => {
@@ -68,28 +120,16 @@ export function CreateWorkoutPlanModal({
         return next;
       }
 
-      return {
-        ...current,
-        [workoutId]: {
-          sets: String(DEFAULT_SETS),
-          reps: String(DEFAULT_REPS),
-        },
-      };
+      return { ...current, [workoutId]: newExerciseDraft() };
     });
   };
 
-  const updateSelection = (
-    workoutId: string,
-    field: "sets" | "reps",
-    value: string,
-  ) => {
-    setSelections((current) => ({
-      ...current,
-      [workoutId]: { ...current[workoutId], [field]: value },
-    }));
+  const updateSelection = (workoutId: string, draft: ExerciseAmountDraft) => {
+    setSelections((current) => ({ ...current, [workoutId]: draft }));
   };
 
   const resetForm = () => {
+    setPickingExercises(false);
     setName("");
     setDifficulty(DIFFICULTIES[0]);
     setTarget("");
@@ -100,18 +140,19 @@ export function CreateWorkoutPlanModal({
 
   const handleDismiss = () => {
     if (saving) return;
+    Keyboard.dismiss();
     resetForm();
     onDismiss();
   };
 
   const handleCreate = async () => {
     if (!name.trim()) {
-      setError("Give your plan a name.");
+      setError("Plan name is required.");
       return;
     }
 
     if (selectedIds.length === 0) {
-      setError("Pick at least one workout.");
+      setError("Choose at least one exercise.");
       return;
     }
 
@@ -124,35 +165,33 @@ export function CreateWorkoutPlanModal({
     setError("");
     setSaving(true);
 
-    const payload: PlanWorkoutSelection[] = selectedIds.map((workoutId) => {
-      const entry = selections[workoutId];
-      const sets = Number(entry.sets);
-      const reps = Number(entry.reps);
-
-      return {
-        workout_id: workoutId,
-        sets: Number.isFinite(sets) && sets > 0 ? sets : DEFAULT_SETS,
-        reps: Number.isFinite(reps) && reps > 0 ? reps : DEFAULT_REPS,
-      };
-    });
-
-    const ok = await onCreate(
-      {
-        name: name.trim(),
-        difficulty,
-        target: target.trim(),
-        duration_min: minutes,
-      },
-      payload,
+    const payload: PlanWorkoutSelection[] = selectedIds.map((workoutId) =>
+      selectionFromDraft(workoutId, selections[workoutId]),
     );
 
-    setSaving(false);
+    let ok = false;
+    try {
+      ok = await onCreate(
+        {
+          name: name.trim(),
+          difficulty,
+          target: target.trim(),
+          duration_min: minutes,
+        },
+        payload,
+      );
+    } catch {
+      // Keep the draft open so a failed request can be retried.
+    } finally {
+      setSaving(false);
+    }
 
     if (!ok) {
       setError("Couldn't save your plan. Please try again.");
       return;
     }
 
+    Keyboard.dismiss();
     resetForm();
     onDismiss();
   };
@@ -161,303 +200,293 @@ export function CreateWorkoutPlanModal({
     <Portal>
       <Modal
         visible={visible}
-        onDismiss={handleDismiss}
+        onDismiss={pickingExercises ? finishPicking : handleDismiss}
         contentContainerStyle={styles.modalOuter}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          behavior="height"
+          keyboardVerticalOffset={insets.top}
           style={styles.keyboardWrap}
         >
-          <View
-            style={[
-              styles.sheet,
-              {
-                backgroundColor: colors.backgroundElement,
-                borderColor: colors.border,
-              },
-            ]}
-          >
-            <View style={styles.header}>
-              <View style={styles.headerCopy}>
-                <View style={styles.titleRow}>
-                  <View
-                    style={[
-                      styles.titleIcon,
-                      { backgroundColor: colors.brandSoft },
-                    ]}
-                  >
-                    <Icon
-                      source="clipboard-text-outline"
-                      size={21}
-                      color={colors.brand}
-                    />
-                  </View>
-                  <Text
-                    variant="titleLarge"
-                    style={[styles.title, { color: colors.text }]}
-                  >
-                    New workout plan
-                  </Text>
-                </View>
-                <Text
-                  variant="bodySmall"
-                  style={{ color: colors.textSecondary }}
-                >
-                  Set the basics, then choose the exercises you want in the
-                  plan.
-                </Text>
-              </View>
-            </View>
-
-            <ScrollView
-              style={styles.scroll}
-              contentContainerStyle={styles.scrollContent}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
+          <View style={styles.viewport}>
+            <View
+              style={[
+                styles.sheet,
+                {
+                  backgroundColor: colors.backgroundElement,
+                  borderColor: colors.border,
+                },
+              ]}
             >
-              <View style={styles.section}>
-                <View style={styles.sectionHeadingRow}>
-                  <Text
-                    variant="titleMedium"
-                    style={[styles.sectionTitle, { color: colors.text }]}
-                  >
-                    Plan details
-                  </Text>
-                  <Text
-                    variant="labelSmall"
-                    style={{ color: colors.textSecondary }}
-                  >
-                    Required basics
-                  </Text>
-                </View>
-
-                <TextInput
-                  label="Plan name"
-                  mode="outlined"
-                  value={name}
-                  onChangeText={setName}
-                  outlineColor={colors.border}
-                  activeOutlineColor={colors.brand}
-                />
-
-                <TextInput
-                  label="Target (e.g. Upper body)"
-                  mode="outlined"
-                  value={target}
-                  onChangeText={setTarget}
-                  outlineColor={colors.border}
-                  activeOutlineColor={colors.brand}
-                />
-
-                <TextInput
-                  label="Expected time (minutes)"
-                  mode="outlined"
-                  keyboardType="numeric"
-                  value={durationMin}
-                  onChangeText={setDurationMin}
-                  outlineColor={colors.border}
-                  activeOutlineColor={colors.brand}
-                />
-
-                <View style={styles.fieldGroup}>
-                  <Text variant="labelLarge" style={{ color: colors.text }}>
-                    Difficulty
-                  </Text>
-                  <View style={styles.chipRow}>
-                    {DIFFICULTIES.map((level) => {
-                      const selected = difficulty === level;
-                      return (
-                        <Chip
-                          key={level}
-                          selected={selected}
-                          showSelectedCheck={false}
-                          onPress={() => setDifficulty(level)}
-                          style={{
-                            backgroundColor: selected
-                              ? colors.backgroundSelected
-                              : colors.background,
-                            borderColor: selected
-                              ? colors.brand
-                              : colors.border,
-                          }}
-                          textStyle={{
-                            color: selected ? colors.brandStrong : colors.text,
-                            fontWeight: selected ? "700" : "500",
-                          }}
-                        >
-                          {level.charAt(0).toUpperCase() + level.slice(1)}
-                        </Chip>
-                      );
-                    })}
+              <View style={styles.header}>
+                <View style={styles.headerCopy}>
+                  <View style={styles.titleRow}>
+                    <View
+                      style={[
+                        styles.titleIcon,
+                        { backgroundColor: colors.brandSoft },
+                      ]}
+                    >
+                      <Icon
+                        source="clipboard-text-outline"
+                        size={21}
+                        color={colors.brand}
+                      />
+                    </View>
+                    <Text
+                      variant="titleLarge"
+                      style={[styles.title, { color: colors.text }]}
+                    >
+                      {pickingExercises ? "Choose exercises" : initialPlan ? "Edit workout plan" : "New workout plan"}
+                    </Text>
                   </View>
+
                 </View>
               </View>
 
-              <View
-                style={[
-                  styles.section,
-                  styles.exerciseSection,
-                  { borderTopColor: colors.border },
-                ]}
-              >
-                <View style={styles.sectionHeadingRow}>
-                  <View>
-                    <Text
-                      variant="titleMedium"
-                      style={[styles.sectionTitle, { color: colors.text }]}
-                    >
-                      Exercises
-                    </Text>
-                    <Text
-                      variant="bodySmall"
-                      style={{ color: colors.textSecondary, marginTop: 2 }}
-                    >
-                      Tap an exercise to include it.
-                    </Text>
-                  </View>
+              {pickingExercises ? (
+                <ExercisePicker
+                  exercises={availableWorkouts}
+                  selectedIds={selectedIds}
+                  onToggle={toggleWorkout}
+                />
+              ) : (
+                <ScrollView
+                  ref={formScroll}
+                  automaticallyAdjustKeyboardInsets={false}
+                  contentInsetAdjustmentBehavior="never"
+                  bounces={false}
+                  overScrollMode="never"
+                  onFocus={(event) => {
+                    focusedInput.current = event.nativeEvent.target;
+                    if (Keyboard.isVisible()) {
+                      revealFocusedInput(
+                        formScroll.current,
+                        focusedInput.current,
+                        footerHeight + Spacing.four + Spacing.three,
+                      );
+                    }
+                  }}
+                  onBlur={() => {
+                    focusedInput.current = null;
+                  }}
+                  style={styles.scroll}
+                  contentContainerStyle={styles.scrollContent}
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator={false}
+                >
+                  <View style={styles.section}>
+                    <View style={styles.sectionHeadingRow}>
+                      <Text
+                        variant="titleMedium"
+                        style={[styles.sectionTitle, { color: colors.text }]}
+                      >
+                        Plan details
+                      </Text>
+                      <Text
+                        variant="labelSmall"
+                        style={{ color: colors.textSecondary }}
+                      >
+                        Required basics
+                      </Text>
+                    </View>
 
-                  <View
-                    style={[
-                      styles.countBadge,
-                      { backgroundColor: colors.brandSoft },
-                    ]}
-                  >
-                    <Text
-                      variant="labelMedium"
-                      style={{ color: colors.brandStrong, fontWeight: "800" }}
-                    >
-                      {selectedIds.length} selected
-                    </Text>
-                  </View>
-                </View>
-
-                {availableWorkouts.length === 0 ? (
-                  <View
-                    style={[
-                      styles.emptyBox,
-                      {
-                        backgroundColor: colors.background,
-                        borderColor: colors.border,
-                      },
-                    ]}
-                  >
-                    <Icon
-                      source="dumbbell"
-                      size={24}
-                      color={colors.textSecondary}
+                    <TextInput
+                      label="Plan name"
+                      accessibilityLabel="Plan name"
+                      mode="outlined"
+                      value={name}
+                      onChangeText={setName}
+                      outlineColor={colors.border}
+                      activeOutlineColor={colors.brand}
                     />
-                    <Text
-                      variant="bodyMedium"
-                      style={{ color: colors.textSecondary }}
-                    >
-                      No workouts are available to add yet.
-                    </Text>
-                  </View>
-                ) : (
-                  <View style={styles.exerciseList}>
-                    {availableWorkouts.map((workout) => {
-                      const entry = selections[workout.id];
-                      const isSelected = Boolean(entry);
 
-                      return (
-                        <View
-                          key={workout.id}
-                          style={[
-                            styles.exerciseCard,
-                            {
-                              backgroundColor: isSelected
-                                ? colors.brandSoft
-                                : colors.background,
-                              borderColor: isSelected
-                                ? colors.brand
-                                : colors.border,
-                            },
-                          ]}
+                    <TextInput
+                      label="Target (e.g. Upper body)"
+                      accessibilityLabel="Plan target"
+                      mode="outlined"
+                      value={target}
+                      onChangeText={setTarget}
+                      outlineColor={colors.border}
+                      activeOutlineColor={colors.brand}
+                    />
+
+                    <TextInput
+                      label="Expected time (minutes)"
+                      accessibilityLabel="Expected time in minutes"
+                      mode="outlined"
+                      keyboardType="numeric"
+                      value={durationMin}
+                      onChangeText={setDurationMin}
+                      outlineColor={colors.border}
+                      activeOutlineColor={colors.brand}
+                    />
+
+                    <View style={styles.fieldGroup}>
+                      <Text variant="labelLarge" style={{ color: colors.text }}>
+                        Difficulty
+                      </Text>
+                      <RadioButton.Group value={difficulty} onValueChange={setDifficulty}>
+                        {DIFFICULTIES.map((level, index) => {
+                          const selected = difficulty === level;
+                          return (
+                            <RadioButton.Item
+                              key={level}
+                              value={level}
+                              label={level.charAt(0).toUpperCase() + level.slice(1)}
+                              position="leading"
+                              color={colors.brand}
+                              uncheckedColor={colors.textSecondary}
+                              style={[styles.difficultyOption, {
+                                marginTop: index > 0 ? Spacing.one : 0,
+                                marginBottom: index < DIFFICULTIES.length - 1 ? Spacing.one : 0,
+                                backgroundColor: selected
+                                  ? colors.backgroundSelected
+                                  : colors.background,
+                              }]}
+                              labelStyle={{
+                                color: selected ? colors.brandStrong : colors.text,
+                                fontWeight: selected ? "700" : "500",
+                                textAlign: "left",
+                              }}
+                            />
+                          );
+                        })}
+                      </RadioButton.Group>
+                    </View>
+                  </View>
+
+                  <View
+                    style={[
+                      styles.section,
+                      styles.exerciseSection,
+                      { borderTopColor: colors.border },
+                    ]}
+                  >
+                    <View style={styles.sectionHeadingRow}>
+                      <View>
+                        <Text
+                          variant="titleMedium"
+                          style={[styles.sectionTitle, { color: colors.text }]}
                         >
-                          <Chip
-                            selected={isSelected}
-                            showSelectedCheck
-                            onPress={() => toggleWorkout(workout.id)}
-                            style={{
-                              alignSelf: "stretch",
-                              backgroundColor: "transparent",
-                            }}
-                            textStyle={{
-                              color: colors.text,
-                              fontWeight: isSelected ? "700" : "600",
-                            }}
-                          >
-                            {workout.name}
-                            {workout.muscle_group
-                              ? ` · ${workout.muscle_group}`
-                              : ""}
-                          </Chip>
+                          Exercises
+                        </Text>
+                      </View>
 
-                          {isSelected ? (
-                            <View style={styles.repsRow}>
-                              <TextInput
-                                label="Sets"
-                                mode="outlined"
-                                dense
-                                keyboardType="numeric"
-                                style={styles.repsInput}
-                                value={entry.sets}
-                                onChangeText={(text) =>
-                                  updateSelection(workout.id, "sets", text)
-                                }
-                                outlineColor={colors.border}
-                                activeOutlineColor={colors.brand}
+                      <View
+                        style={[
+                          styles.countBadge,
+                          { backgroundColor: colors.brandSoft },
+                        ]}
+                      >
+                        <Text
+                          variant="labelMedium"
+                          style={{ color: colors.brandStrong, fontWeight: "800" }}
+                        >
+                          {selectedIds.length} selected
+                        </Text>
+                      </View>
+                    </View>
+
+                    <Button
+                      mode="outlined"
+                      icon="magnify"
+                      onPress={() => {
+                        Keyboard.dismiss();
+                        setPickingExercises(true);
+                      }}
+                    >
+                      {selectedIds.length ? "Add or change exercises" : "Choose exercises"}
+                    </Button>
+                    {selectedIds.length === 0 ? (
+                      <Text variant="bodyMedium" style={{ color: colors.textSecondary }}>
+                        Search the catalog by name, muscle group, or equipment.
+                      </Text>
+                    ) : (
+                      <View style={styles.exerciseList}>
+                        {selectedIds.map((workoutId) => {
+                          const workout = workoutsById.get(workoutId);
+                          const entry = selections[workoutId];
+                          if (!workout || !entry) return null;
+                          return (
+                            <View
+                              key={workoutId}
+                              style={[
+                                styles.exerciseCard,
+                                { backgroundColor: colors.background, borderColor: colors.border },
+                              ]}
+                            >
+                              <List.Item
+                                title={workout.name}
+                                titleNumberOfLines={3}
+                                description={[workout.muscle_group, workout.equipment].filter(Boolean).join(" · ")}
+                                descriptionNumberOfLines={2}
+                                right={() => (
+                                  <IconButton
+                                    icon="close"
+                                    accessibilityLabel={`Remove ${workout.name}`}
+                                    onPress={() => toggleWorkout(workoutId)}
+                                  />
+                                )}
                               />
-                              <TextInput
-                                label="Reps"
-                                mode="outlined"
-                                dense
-                                keyboardType="numeric"
-                                style={styles.repsInput}
-                                value={entry.reps}
-                                onChangeText={(text) =>
-                                  updateSelection(workout.id, "reps", text)
-                                }
-                                outlineColor={colors.border}
-                                activeOutlineColor={colors.brand}
-                              />
+                              <View style={styles.amountFields}>
+                                <ExerciseAmountFields
+                                  exerciseName={workout.name}
+                                  draft={entry}
+                                  onChange={(draft) => updateSelection(workoutId, draft)}
+                                  outlineColor={colors.border}
+                                  activeOutlineColor={colors.brand}
+                                />
+                              </View>
                             </View>
-                          ) : null}
-                        </View>
-                      );
-                    })}
+                          );
+                        })}
+                      </View>
+                    )}
                   </View>
-                )}
+                </ScrollView>
+              )}
+
+              <View onLayout={(event) => setFooterHeight(event.nativeEvent.layout.height)}>
+                {error && !pickingExercises ? (
+                  <Center>
+                    <HelperText type="error" visible style={styles.errorText}>
+                      {error}
+                    </HelperText>
+                  </Center>
+                ) : null}
+
+                <View style={[styles.actions, { borderTopColor: colors.border }]}>
+                  {pickingExercises ? (
+                    <Button mode="contained" onPress={finishPicking}>
+                      Done ({selectedIds.length} selected)
+                    </Button>
+                  ) : (
+                    <>
+                      <Button
+                        mode="text"
+                        onPress={handleDismiss}
+                        disabled={saving}
+                        textColor={colors.textSecondary}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        mode="contained"
+                        icon="check"
+                        onPress={handleCreate}
+                        loading={saving}
+                        disabled={saving}
+                        buttonColor={theme.colors.primary}
+                        textColor={theme.colors.onPrimary}
+                        style={styles.createButton}
+                      >
+                        {initialPlan ? "Save changes" : "Create plan"}
+                      </Button>
+                    </>
+                  )}
+                </View>
               </View>
-            </ScrollView>
-
-            {error ? (
-              <HelperText type="error" visible style={styles.errorText}>
-                {error}
-              </HelperText>
-            ) : null}
-
-            <View style={[styles.actions, { borderTopColor: colors.border }]}>
-              <Button
-                mode="text"
-                onPress={handleDismiss}
-                disabled={saving}
-                textColor={colors.textSecondary}
-              >
-                Cancel
-              </Button>
-              <Button
-                mode="contained"
-                icon="check"
-                onPress={handleCreate}
-                loading={saving}
-                disabled={saving}
-                buttonColor={colors.brandStrong}
-                textColor="#FFFFFF"
-                style={styles.createButton}
-              >
-                Create plan
-              </Button>
             </View>
           </View>
         </KeyboardAvoidingView>
@@ -469,18 +498,26 @@ export function CreateWorkoutPlanModal({
 const styles = StyleSheet.create({
   modalOuter: {
     flex: 1,
+    justifyContent: "flex-start",
+  },
+  keyboardWrap: {
+    flex: 1,
+    width: "100%",
+  },
+  viewport: {
+    flex: 1,
+    width: "100%",
     justifyContent: "center",
+    alignItems: "center",
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.four,
   },
-  keyboardWrap: {
-    width: "100%",
-    alignItems: "center",
-  },
   sheet: {
     width: "100%",
+    height: "100%",
     maxWidth: 640,
-    maxHeight: "88%",
+    maxHeight: "100%",
+    flexShrink: 1,
     borderRadius: Radius.large,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: "hidden",
@@ -506,10 +543,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   title: {
+    flexShrink: 1,
     fontWeight: "800",
   },
   scroll: {
-    flexGrow: 0,
+    flex: 1,
   },
   scrollContent: {
     paddingHorizontal: Spacing.four,
@@ -525,6 +563,7 @@ const styles = StyleSheet.create({
   },
   sectionHeadingRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     alignItems: "center",
     gap: Spacing.three,
@@ -535,10 +574,9 @@ const styles = StyleSheet.create({
   fieldGroup: {
     gap: Spacing.two,
   },
-  chipRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: Spacing.two,
+  difficultyOption: {
+    minHeight: 48,
+    borderRadius: Radius.small,
   },
   countBadge: {
     borderRadius: Radius.pill,
@@ -553,27 +591,14 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     padding: Spacing.two,
   },
-  repsRow: {
-    flexDirection: "row",
-    gap: Spacing.two,
+  amountFields: {
     paddingHorizontal: Spacing.two,
     paddingBottom: Spacing.two,
   },
-  repsInput: {
-    flex: 1,
-  },
-  emptyBox: {
-    minHeight: 110,
-    borderRadius: Radius.medium,
-    borderWidth: StyleSheet.hairlineWidth,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: Spacing.two,
-    padding: Spacing.four,
-  },
   errorText: {
-    marginHorizontal: Spacing.four,
     marginBottom: Spacing.one,
+    fontSize: 15,
+    fontWeight: 800,
   },
   actions: {
     minHeight: 70,

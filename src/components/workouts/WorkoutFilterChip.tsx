@@ -8,16 +8,20 @@ type WorkoutFilterChipProps = {
   tag: string;
   isSelected: boolean;
   onSelect: (tag: string) => void;
+  // Overrides the label derived from `tag`, for chips whose value isn't
+  // readable on its own.
+  label?: string;
 };
 
 export function WorkoutFilterChip({
   tag,
   isSelected,
   onSelect,
+  label: labelOverride,
 }: WorkoutFilterChipProps) {
   const { resolvedTheme } = useThemeMode();
   const colors = Colors[resolvedTheme];
-  const label = tag.charAt(0).toUpperCase() + tag.slice(1);
+  const label = labelOverride ?? tag.charAt(0).toUpperCase() + tag.slice(1);
 
   return (
     <Pressable

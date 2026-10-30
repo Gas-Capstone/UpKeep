@@ -55,3 +55,12 @@ agent-server/.venv/
 # staging folders for images uploaded to Supabase Storage
 recipe-images-upload/
 workout-images-upload/
+
+# agent folders
+.claude/
+.codex/
+.impeccable/
+
+# impeccable documents
+DESIGN.md
+PRODUCT.md

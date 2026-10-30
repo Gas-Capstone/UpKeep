@@ -1,12 +1,13 @@
 import { format, parse, parseISO } from "date-fns";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
-  KeyboardAvoidingView,
-  Platform,
+  Keyboard,
   ScrollView,
   StyleSheet,
   View,
 } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import {
   Button,
   Chip,
@@ -40,6 +41,13 @@ import { getTodaysDate } from "@/lib/time_management/week";
 import type { WorkoutSchedule } from "@/lib/workoutSchedule";
 
 import { SearchSelectList } from "./SearchSelectList";
+
+function revealFocusedInput(scroll: ScrollView | null, target: number | null, offset: number) {
+  if (!scroll || target === null) return;
+  requestAnimationFrame(() => {
+    scroll.scrollResponderScrollNativeHandleToKeyboard(target, offset, true);
+  });
+}
 
 type ItemKind = "habit" | "meal" | "workout";
 type RepeatMode = "weekly" | "once";
@@ -123,6 +131,22 @@ export function AddHabitModal({
   const [weekdays, setWeekdays] = useState<Weekday[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [footerHeight, setFooterHeight] = useState(0);
+  const formScroll = useRef<ScrollView>(null);
+  const focusedInput = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!visible) return;
+    const shown = Keyboard.addListener("keyboardDidShow", () => {
+      revealFocusedInput(
+        formScroll.current,
+        focusedInput.current,
+        footerHeight + Spacing.four + Spacing.three,
+      );
+    });
+    return () => shown.remove();
+  }, [footerHeight, visible]);
+  const insets = useSafeAreaInsets();
 
   const [recipe, setRecipe] = useState<Recipe | null>(initialRecipe);
   const [mealType, setMealType] = useState<MealType>(DEFAULT_MEAL_TYPE);
@@ -163,6 +187,7 @@ export function AddHabitModal({
   };
 
   const handleDismiss = () => {
+    Keyboard.dismiss();
     resetForm();
     onDismiss();
   };
@@ -231,6 +256,7 @@ export function AddHabitModal({
       } else {
         await onSave?.({ title, time: formattedTime, weekdays });
       }
+      Keyboard.dismiss();
       resetForm();
       onDismiss();
     } catch (caught) {
@@ -256,414 +282,444 @@ export function AddHabitModal({
         contentContainerStyle={styles.modalOuter}
       >
         <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          behavior="height"
+          keyboardVerticalOffset={insets.top}
           style={styles.keyboardWrap}
         >
-          <View
-            style={[
-              styles.sheet,
-              {
-                backgroundColor: colors.backgroundElement,
-                borderColor: colors.border,
-              },
-            ]}
-          >
-            <View style={styles.header}>
-              <View style={styles.titleRow}>
-                <View
-                  style={[
-                    styles.titleIcon,
-                    { backgroundColor: colors.brandSoft },
-                  ]}
-                >
-                  <Icon
-                    source={copy.icon}
-                    size={22}
-                    color={colors.brand}
-                  />
+          <View style={styles.viewport}>
+            <View
+              style={[
+                styles.sheet,
+                {
+                  backgroundColor: colors.backgroundElement,
+                  borderColor: colors.border,
+                },
+              ]}
+            >
+              <View style={styles.header}>
+                <View style={styles.titleRow}>
+                  <View
+                    style={[
+                      styles.titleIcon,
+                      { backgroundColor: colors.brandSoft },
+                    ]}
+                  >
+                    <Icon
+                      source={copy.icon}
+                      size={22}
+                      color={colors.brand}
+                    />
+                  </View>
+
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      variant="titleLarge"
+                      style={[styles.title, { color: colors.text }]}
+                    >
+                      {copy.title}
+                    </Text>
+                    <Text
+                      variant="bodySmall"
+                      style={{ color: colors.textSecondary, marginTop: 2 }}
+                    >
+                      Choose what, when, and how often.
+                    </Text>
+                  </View>
                 </View>
 
-                <View style={{ flex: 1 }}>
-                  <Text
-                    variant="titleLarge"
-                    style={[styles.title, { color: colors.text }]}
-                  >
-                    {copy.title}
-                  </Text>
-                  <Text
-                    variant="bodySmall"
-                    style={{ color: colors.textSecondary, marginTop: 2 }}
-                  >
-                    Choose what, when, and how often.
-                  </Text>
-                </View>
+                {presetKind ? null : (
+                  <SegmentedButtons
+                    value={kind}
+                    onValueChange={(value) => changeKind(value as ItemKind)}
+                    style={styles.kindSwitch}
+                    buttons={[
+                      {
+                        value: "habit",
+                        label: "Habit",
+                        icon: "check-circle-outline",
+                      },
+                      {
+                        value: "meal",
+                        label: "Meal",
+                        icon: "silverware-fork-knife",
+                      },
+                      { value: "workout", label: "Workout", icon: "dumbbell" },
+                    ]}
+                  />
+                )}
               </View>
 
-              {presetKind ? null : (
-                <SegmentedButtons
-                  value={kind}
-                  onValueChange={(value) => changeKind(value as ItemKind)}
-                  style={styles.kindSwitch}
-                  buttons={[
-                    {
-                      value: "habit",
-                      label: "Habit",
-                      icon: "check-circle-outline",
-                    },
-                    {
-                      value: "meal",
-                      label: "Meal",
-                      icon: "silverware-fork-knife",
-                    },
-                    { value: "workout", label: "Workout", icon: "dumbbell" },
-                  ]}
-                />
-              )}
-            </View>
+              <ScrollView
+                ref={formScroll}
+                automaticallyAdjustKeyboardInsets={false}
+                contentInsetAdjustmentBehavior="never"
+                bounces={false}
+                overScrollMode="never"
+                onFocus={(event) => {
+                  focusedInput.current = event.nativeEvent.target;
+                  if (Keyboard.isVisible()) {
+                    revealFocusedInput(
+                      formScroll.current,
+                      focusedInput.current,
+                      footerHeight + Spacing.four + Spacing.three,
+                    );
+                  }
+                }}
+                onBlur={() => {
+                  focusedInput.current = null;
+                }}
+                style={styles.scroll}
+                contentContainerStyle={styles.scrollContent}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                {isMeal ? (
+                  <>
+                    <View style={styles.section}>
+                      <Text
+                        variant="titleMedium"
+                        style={{ color: colors.text, fontWeight: "800" }}
+                      >
+                        Recipe
+                      </Text>
+                      {presetKind === "meal" && recipe ? (
+                        <Text variant="bodyLarge" style={{ color: colors.text }}>
+                          {recipe.name}
+                        </Text>
+                      ) : (
+                        <SearchSelectList
+                          options={recipes.map((r) => ({
+                            key: recipeKey(r),
+                            title: r.name,
+                            description: `${r.prepTimeMin} min`,
+                          }))}
+                          selectedKey={recipe ? recipeKey(recipe) : null}
+                          onSelect={(key) =>
+                            setRecipe(
+                              recipes.find((r) => recipeKey(r) === key) ?? null,
+                            )
+                          }
+                          searchPlaceholder="Search recipes"
+                          emptyText="No recipes found."
+                        />
+                      )}
+                    </View>
 
-            <ScrollView
-              style={styles.scroll}
-              contentContainerStyle={styles.scrollContent}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-            >
-              {isMeal ? (
-                <>
+                    <View
+                      style={[
+                        styles.section,
+                        styles.dividedSection,
+                        { borderTopColor: colors.border },
+                      ]}
+                    >
+                      <Text
+                        variant="titleMedium"
+                        style={{ color: colors.text, fontWeight: "800" }}
+                      >
+                        Meal
+                      </Text>
+                      <View style={styles.weekdayRow}>
+                        {MEAL_TYPES.map((type) => {
+                          const selected = mealType === type;
+                          return (
+                            <Chip
+                              key={type}
+                              selected={selected}
+                              showSelectedCheck={false}
+                              onPress={() => changeMealType(type)}
+                              style={{
+                                backgroundColor: selected
+                                  ? colors.backgroundSelected
+                                  : colors.background,
+                                borderColor: selected
+                                  ? colors.brand
+                                  : colors.border,
+                              }}
+                              textStyle={{
+                                color: selected
+                                  ? colors.brandStrong
+                                  : colors.text,
+                                fontWeight: selected ? "800" : "600",
+                              }}
+                            >
+                              {MEAL_TYPE_LABELS[type]}
+                            </Chip>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  </>
+                ) : isWorkout ? (
                   <View style={styles.section}>
                     <Text
                       variant="titleMedium"
                       style={{ color: colors.text, fontWeight: "800" }}
                     >
-                      Recipe
+                      Workout plan
                     </Text>
-                    {presetKind === "meal" && recipe ? (
+                    {presetKind === "workout" && initialWorkout ? (
                       <Text variant="bodyLarge" style={{ color: colors.text }}>
-                        {recipe.name}
+                        {initialWorkout.name}
                       </Text>
                     ) : (
                       <SearchSelectList
-                        options={recipes.map((r) => ({
-                          key: recipeKey(r),
-                          title: r.name,
-                          description: `${r.prepTimeMin} min`,
+                        options={workoutList.map((w) => ({
+                          key: String(w.id),
+                          title: w.name,
+                          description: [`${w.duration_min} min`, w.target]
+                            .filter(Boolean)
+                            .join(" · "),
                         }))}
-                        selectedKey={recipe ? recipeKey(recipe) : null}
-                        onSelect={(key) =>
-                          setRecipe(
-                            recipes.find((r) => recipeKey(r) === key) ?? null,
-                          )
-                        }
-                        searchPlaceholder="Search recipes"
-                        emptyText="No recipes found."
+                        selectedKey={workoutPlanId}
+                        onSelect={setWorkoutPlanId}
+                        searchPlaceholder="Search workout plans"
+                        emptyText="No workout plans found."
                       />
                     )}
                   </View>
+                ) : (
+                  <View style={styles.section}>
+                    <TextInput
+                      label="Habit name"
+                      mode="outlined"
+                      value={habitTitle}
+                      onChangeText={setHabitTitle}
+                      placeholder="Drink water"
+                      outlineColor={colors.border}
+                      activeOutlineColor={colors.brand}
+                      returnKeyType="done"
+                    />
+                  </View>
+                )}
 
-                  <View
-                    style={[
-                      styles.section,
-                      styles.dividedSection,
-                      { borderTopColor: colors.border },
-                    ]}
+                <View
+                  style={[
+                    styles.section,
+                    styles.dividedSection,
+                    { borderTopColor: colors.border },
+                  ]}
+                >
+                  <View style={styles.sectionHeader}>
+                    <View>
+                      <Text
+                        variant="titleMedium"
+                        style={{ color: colors.text, fontWeight: "800" }}
+                      >
+                        Time of day
+                      </Text>
+                      <Text
+                        variant="bodySmall"
+                        style={{ color: colors.textSecondary, marginTop: 2 }}
+                      >
+                        {isMeal
+                          ? "When do you plan to eat this?"
+                          : isWorkout
+                            ? "When do you plan to train?"
+                            : "When do you want this habit on your list?"}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <Button
+                    mode="outlined"
+                    icon="clock-outline"
+                    onPress={() => {
+                      Keyboard.dismiss();
+                      setShowPicker(true);
+                    }}
+                    textColor={colors.brandStrong}
+                    style={[styles.timeButton, { borderColor: colors.border }]}
+                    contentStyle={styles.timeButtonContent}
                   >
-                    <Text
-                      variant="titleMedium"
-                      style={{ color: colors.text, fontWeight: "800" }}
-                    >
-                      Meal
-                    </Text>
+                    {format(time, "h:mm aa")}
+                  </Button>
+
+                  <TimePickerModal
+                    visible={showPicker}
+                    locale="en"
+                    use24HourClock={false}
+                    hours={time.getHours()}
+                    minutes={time.getMinutes()}
+                    onDismiss={() => setShowPicker(false)}
+                    onConfirm={confirmTime}
+                  />
+                </View>
+
+                <View
+                  style={[
+                    styles.section,
+                    styles.dividedSection,
+                    { borderTopColor: colors.border },
+                  ]}
+                >
+                  <View style={styles.sectionHeaderRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        variant="titleMedium"
+                        style={{ color: colors.text, fontWeight: "800" }}
+                      >
+                        Repeat
+                      </Text>
+                      <Text
+                        variant="bodySmall"
+                        style={{ color: colors.textSecondary, marginTop: 2 }}
+                      >
+                        {isWeekly
+                          ? scheduleSummary
+                          : format(onceDate, "EEEE, MMM d")}
+                      </Text>
+                    </View>
+
+                    {isWeekly ? (
+                      <Chip
+                        selected={isEveryDay}
+                        showSelectedCheck={false}
+                        onPress={() => setWeekdays([])}
+                        style={{
+                          backgroundColor: isEveryDay
+                            ? colors.backgroundSelected
+                            : colors.background,
+                          borderColor: isEveryDay ? colors.brand : colors.border,
+                        }}
+                        textStyle={{
+                          color: isEveryDay ? colors.brandStrong : colors.text,
+                          fontWeight: isEveryDay ? "800" : "600",
+                        }}
+                      >
+                        Every day
+                      </Chip>
+                    ) : null}
+                  </View>
+
+                  {isPlanned ? (
+                    <SegmentedButtons
+                      value={repeatMode}
+                      onValueChange={(value) => setRepeatMode(value as RepeatMode)}
+                      buttons={[
+                        { value: "once", label: "One day", icon: "calendar" },
+                        { value: "weekly", label: "Weekly", icon: "repeat" },
+                      ]}
+                    />
+                  ) : null}
+
+                  {isWeekly ? (
                     <View style={styles.weekdayRow}>
-                      {MEAL_TYPES.map((type) => {
-                        const selected = mealType === type;
+                      {WEEKDAYS.map((day) => {
+                        const selected = weekdays.includes(day.value);
                         return (
                           <Chip
-                            key={type}
+                            key={day.value}
+                            compact
                             selected={selected}
                             showSelectedCheck={false}
-                            onPress={() => changeMealType(type)}
-                            style={{
-                              backgroundColor: selected
-                                ? colors.backgroundSelected
-                                : colors.background,
-                              borderColor: selected
-                                ? colors.brand
-                                : colors.border,
-                            }}
+                            onPress={() => toggleWeekday(day.value)}
+                            style={[
+                              styles.weekdayChip,
+                              {
+                                backgroundColor: selected
+                                  ? colors.backgroundSelected
+                                  : colors.background,
+                                borderColor: selected
+                                  ? colors.brand
+                                  : colors.border,
+                              },
+                            ]}
                             textStyle={{
-                              color: selected
-                                ? colors.brandStrong
-                                : colors.text,
+                              color: selected ? colors.brandStrong : colors.text,
                               fontWeight: selected ? "800" : "600",
                             }}
                           >
-                            {MEAL_TYPE_LABELS[type]}
+                            {day.label}
                           </Chip>
                         );
                       })}
                     </View>
-                  </View>
-                </>
-              ) : isWorkout ? (
-                <View style={styles.section}>
-                  <Text
-                    variant="titleMedium"
-                    style={{ color: colors.text, fontWeight: "800" }}
-                  >
-                    Workout plan
-                  </Text>
-                  {presetKind === "workout" && initialWorkout ? (
-                    <Text variant="bodyLarge" style={{ color: colors.text }}>
-                      {initialWorkout.name}
-                    </Text>
                   ) : (
-                    <SearchSelectList
-                      options={workoutList.map((w) => ({
-                        key: String(w.id),
-                        title: w.name,
-                        description: [`${w.duration_min} min`, w.target]
-                          .filter(Boolean)
-                          .join(" · "),
-                      }))}
-                      selectedKey={workoutPlanId}
-                      onSelect={setWorkoutPlanId}
-                      searchPlaceholder="Search workout plans"
-                      emptyText="No workout plans found."
-                    />
+                    <>
+                      <Button
+                        mode="outlined"
+                        icon="calendar"
+                        onPress={() => {
+                          Keyboard.dismiss();
+                          setShowDatePicker(true);
+                        }}
+                        textColor={colors.brandStrong}
+                        style={[
+                          styles.timeButton,
+                          { borderColor: colors.border },
+                        ]}
+                        contentStyle={styles.timeButtonContent}
+                      >
+                        {format(onceDate, "EEEE, MMM d")}
+                      </Button>
+
+                      <DatePickerModal
+                        mode="single"
+                        locale="en"
+                        visible={showDatePicker}
+                        date={onceDate}
+                        validRange={{ startDate: parseISO(getTodaysDate()) }}
+                        onDismiss={() => setShowDatePicker(false)}
+                        onConfirm={({ date }) => {
+                          if (date) setOnceDate(date);
+                          setShowDatePicker(false);
+                        }}
+                      />
+                    </>
                   )}
                 </View>
-              ) : (
-                <View style={styles.section}>
-                  <TextInput
-                    label="Habit name"
-                    mode="outlined"
-                    value={habitTitle}
-                    onChangeText={setHabitTitle}
-                    placeholder="Drink water"
-                    outlineColor={colors.border}
-                    activeOutlineColor={colors.brand}
-                    returnKeyType="done"
-                  />
-                </View>
-              )}
 
-              <View
-                style={[
-                  styles.section,
-                  styles.dividedSection,
-                  { borderTopColor: colors.border },
-                ]}
-              >
-                <View style={styles.sectionHeader}>
-                  <View>
-                    <Text
-                      variant="titleMedium"
-                      style={{ color: colors.text, fontWeight: "800" }}
-                    >
-                      Time of day
-                    </Text>
-                    <Text
-                      variant="bodySmall"
-                      style={{ color: colors.textSecondary, marginTop: 2 }}
-                    >
-                      {isMeal
-                        ? "When do you plan to eat this?"
-                        : isWorkout
-                          ? "When do you plan to train?"
-                          : "When do you want this habit on your list?"}
-                    </Text>
-                  </View>
-                </View>
-
-                <Button
-                  mode="outlined"
-                  icon="clock-outline"
-                  onPress={() => setShowPicker(true)}
-                  textColor={colors.brandStrong}
-                  style={[styles.timeButton, { borderColor: colors.border }]}
-                  contentStyle={styles.timeButtonContent}
-                >
-                  {format(time, "h:mm aa")}
-                </Button>
-
-                <TimePickerModal
-                  visible={showPicker}
-                  locale="en"
-                  use24HourClock={false}
-                  hours={time.getHours()}
-                  minutes={time.getMinutes()}
-                  onDismiss={() => setShowPicker(false)}
-                  onConfirm={confirmTime}
-                />
-              </View>
-
-              <View
-                style={[
-                  styles.section,
-                  styles.dividedSection,
-                  { borderTopColor: colors.border },
-                ]}
-              >
-                <View style={styles.sectionHeaderRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      variant="titleMedium"
-                      style={{ color: colors.text, fontWeight: "800" }}
-                    >
-                      Repeat
-                    </Text>
-                    <Text
-                      variant="bodySmall"
-                      style={{ color: colors.textSecondary, marginTop: 2 }}
-                    >
-                      {isWeekly
-                        ? scheduleSummary
-                        : format(onceDate, "EEEE, MMM d")}
-                    </Text>
-                  </View>
-
-                  {isWeekly ? (
-                    <Chip
-                      selected={isEveryDay}
-                      showSelectedCheck={false}
-                      onPress={() => setWeekdays([])}
-                      style={{
-                        backgroundColor: isEveryDay
-                          ? colors.backgroundSelected
-                          : colors.background,
-                        borderColor: isEveryDay ? colors.brand : colors.border,
-                      }}
-                      textStyle={{
-                        color: isEveryDay ? colors.brandStrong : colors.text,
-                        fontWeight: isEveryDay ? "800" : "600",
-                      }}
-                    >
-                      Every day
-                    </Chip>
-                  ) : null}
-                </View>
-
-                {isPlanned ? (
-                  <SegmentedButtons
-                    value={repeatMode}
-                    onValueChange={(value) => setRepeatMode(value as RepeatMode)}
-                    buttons={[
-                      { value: "once", label: "One day", icon: "calendar" },
-                      { value: "weekly", label: "Weekly", icon: "repeat" },
+                {error ? (
+                  <View
+                    style={[
+                      styles.errorBox,
+                      {
+                        backgroundColor:
+                          resolvedTheme === "dark" ? "#3A2023" : "#FDECEE",
+                        borderColor: colors.danger,
+                      },
                     ]}
-                  />
-                ) : null}
-
-                {isWeekly ? (
-                  <View style={styles.weekdayRow}>
-                    {WEEKDAYS.map((day) => {
-                      const selected = weekdays.includes(day.value);
-                      return (
-                        <Chip
-                          key={day.value}
-                          compact
-                          selected={selected}
-                          showSelectedCheck={false}
-                          onPress={() => toggleWeekday(day.value)}
-                          style={[
-                            styles.weekdayChip,
-                            {
-                              backgroundColor: selected
-                                ? colors.backgroundSelected
-                                : colors.background,
-                              borderColor: selected
-                                ? colors.brand
-                                : colors.border,
-                            },
-                          ]}
-                          textStyle={{
-                            color: selected ? colors.brandStrong : colors.text,
-                            fontWeight: selected ? "800" : "600",
-                          }}
-                        >
-                          {day.label}
-                        </Chip>
-                      );
-                    })}
-                  </View>
-                ) : (
-                  <>
-                    <Button
-                      mode="outlined"
-                      icon="calendar"
-                      onPress={() => setShowDatePicker(true)}
-                      textColor={colors.brandStrong}
-                      style={[
-                        styles.timeButton,
-                        { borderColor: colors.border },
-                      ]}
-                      contentStyle={styles.timeButtonContent}
-                    >
-                      {format(onceDate, "EEEE, MMM d")}
-                    </Button>
-
-                    <DatePickerModal
-                      mode="single"
-                      locale="en"
-                      visible={showDatePicker}
-                      date={onceDate}
-                      validRange={{ startDate: parseISO(getTodaysDate()) }}
-                      onDismiss={() => setShowDatePicker(false)}
-                      onConfirm={({ date }) => {
-                        if (date) setOnceDate(date);
-                        setShowDatePicker(false);
-                      }}
-                    />
-                  </>
-                )}
-              </View>
-
-              {error ? (
-                <View
-                  style={[
-                    styles.errorBox,
-                    {
-                      backgroundColor:
-                        resolvedTheme === "dark" ? "#3A2023" : "#FDECEE",
-                      borderColor: colors.danger,
-                    },
-                  ]}
-                >
-                  <Icon
-                    source="alert-circle-outline"
-                    size={18}
-                    color={colors.danger}
-                  />
-                  <Text
-                    variant="bodySmall"
-                    style={{ color: colors.danger, flex: 1 }}
                   >
-                    {error}
-                  </Text>
-                </View>
-              ) : null}
-            </ScrollView>
+                    <Icon
+                      source="alert-circle-outline"
+                      size={18}
+                      color={colors.danger}
+                    />
+                    <Text
+                      variant="bodySmall"
+                      style={{ color: colors.danger, flex: 1 }}
+                    >
+                      {error}
+                    </Text>
+                  </View>
+                ) : null}
+              </ScrollView>
 
-            <View style={[styles.actions, { borderTopColor: colors.border }]}>
-              <Button
-                mode="text"
-                onPress={handleDismiss}
-                disabled={saving}
-                textColor={colors.textSecondary}
+              <View
+                onLayout={(event) => setFooterHeight(event.nativeEvent.layout.height)}
+                style={[styles.actions, { borderTopColor: colors.border }]}
               >
-                Cancel
-              </Button>
-              <Button
-                mode="contained"
-                icon="plus"
-                onPress={handleSave}
-                loading={saving}
-                disabled={saving || !canSave}
-                buttonColor={colors.brandStrong}
-                textColor="#FFFFFF"
-                style={styles.saveButton}
-              >
-                {copy.save}
-              </Button>
+                <Button
+                  mode="text"
+                  onPress={handleDismiss}
+                  disabled={saving}
+                  textColor={colors.textSecondary}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  mode="contained"
+                  icon="plus"
+                  onPress={handleSave}
+                  loading={saving}
+                  disabled={saving || !canSave}
+                  buttonColor={colors.brandStrong}
+                  textColor="#FFFFFF"
+                  style={styles.saveButton}
+                >
+                  {copy.save}
+                </Button>
+              </View>
             </View>
           </View>
         </KeyboardAvoidingView>
@@ -675,19 +731,26 @@ export function AddHabitModal({
 const styles = StyleSheet.create({
   modalOuter: {
     flex: 1,
-    justifyContent: "flex-end",
-    paddingHorizontal: Spacing.three,
-    paddingBottom: Spacing.three,
+    justifyContent: "flex-start",
   },
   keyboardWrap: {
+    flex: 1,
     width: "100%",
-    maxWidth: MaxContentWidth,
-    alignSelf: "center",
-    maxHeight: "90%",
+  },
+  viewport: {
+    flex: 1,
+    width: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.four,
   },
   sheet: {
     width: "100%",
+    height: "100%",
     maxHeight: "100%",
+    maxWidth: MaxContentWidth,
+    flexShrink: 1,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: Radius.large,
     overflow: "hidden",
@@ -717,7 +780,7 @@ const styles = StyleSheet.create({
     alignSelf: "stretch",
   },
   scroll: {
-    flexGrow: 0,
+    flex: 1,
   },
   scrollContent: {
     paddingHorizontal: Spacing.four,

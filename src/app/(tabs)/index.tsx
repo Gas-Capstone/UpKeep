@@ -30,6 +30,11 @@ import { ScreenView } from "@/components/ui/ScreenView";
 import { CircleTimer } from "@/components/ui/CircleTimer";
 import { useThemeMode } from "@/components/context/ThemeContext";
 import { Colors, Radius, Spacing } from "@/constants/theme";
+import {
+  getWorkoutStreak,
+  getWorkoutsThisWeek,
+  hasWorkoutToday,
+} from "@/lib/workoutList";
 import { estimateCalorieGoal } from "@/lib/calorieGoal";
 import {
   getHabitsForDate,
@@ -55,46 +60,6 @@ function getGreeting() {
   if (hour < 12) return "Good morning";
   if (hour < 18) return "Good afternoon";
   return "Good evening";
-}
-
-function getWorkoutStreak(completedWorkouts: CompletedWorkout[]) {
-  if (!completedWorkouts.length) return 0;
-
-  const completedDays = new Set(
-    completedWorkouts.map((workout) =>
-      new Date(workout.completed_at).toDateString(),
-    ),
-  );
-
-  let streak = 0;
-  const cursor = new Date();
-
-  while (completedDays.has(cursor.toDateString())) {
-    streak += 1;
-    cursor.setDate(cursor.getDate() - 1);
-  }
-
-  return streak;
-}
-
-function getWorkoutsThisWeek(completedWorkouts: CompletedWorkout[]) {
-  const now = new Date();
-  const startOfWeek = new Date(now);
-
-  startOfWeek.setDate(now.getDate() - now.getDay());
-  startOfWeek.setHours(0, 0, 0, 0);
-
-  return completedWorkouts.filter(
-    (workout) => new Date(workout.completed_at) >= startOfWeek,
-  ).length;
-}
-
-function hasWorkoutToday(completedWorkouts: CompletedWorkout[]) {
-  const today = new Date().toDateString();
-
-  return completedWorkouts.some(
-    (workout) => new Date(workout.completed_at).toDateString() === today,
-  );
 }
 
 function getCalorieGoal(profile: Profile | null): number | null {
