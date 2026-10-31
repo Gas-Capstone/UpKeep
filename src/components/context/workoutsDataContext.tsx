@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useState, useEffect } from "react";
 import { CompletionsByDate, rowsToCompletionsByDate } from "@/lib/habits/habits";
+import { trackDataLoad } from "@/lib/metrics";
 import {
   buildHistorySummary,
   buildSessionExercises,
@@ -231,20 +232,30 @@ export const WorkoutsDataProvider = ({
   );
 
   const refreshAvailableWorkouts = useCallback(() => {
+    const started = Date.now();
     getAvailableWorkouts()
-      .then((data) => setAvailableWorkouts((data as PlanWorkout[]) ?? []))
+      .then((data) => {
+        setAvailableWorkouts((data as PlanWorkout[]) ?? []);
+        // null is how getAvailableWorkouts reports a failed query.
+        trackDataLoad("exercise_library", started, data !== null, data?.length);
+      })
       .catch((error) => {
         console.log("Error fetching available workouts: ", error);
         setAvailableWorkouts([]);
+        trackDataLoad("exercise_library", started, false);
       });
   }, []);
 
   const refreshWorkouts = useCallback(() => {
     if (!user?.id) return;
+    const started = Date.now();
     getWorkouts(user)
       .then((data) => {
         const plans: Workout[] = data ?? [];
         setWorkoutList(plans);
+        // Timed to when the list can show, not the equipment line after it.
+        // null is how getWorkouts reports a failed query.
+        trackDataLoad("workout_plans", started, data !== null, plans.length);
         // A second query, since it needs the plans' ids. getPlanEquipment
         // never rejects — equipment is an optional line on each card and
         // shouldn't be able to empty the list.
@@ -255,6 +266,7 @@ export const WorkoutsDataProvider = ({
       .catch((error) => {
         console.log("Error fetching workouts: ", error);
         setWorkoutList([]);
+        trackDataLoad("workout_plans", started, false);
       });
   }, [user?.id]);
 
@@ -264,11 +276,16 @@ export const WorkoutsDataProvider = ({
       return;
     }
     setLoading(true);
+    const started = Date.now();
     getCompletedWorkouts(user)
-      .then((data) => setCompletedWorkouts(data ?? []))
+      .then((data) => {
+        setCompletedWorkouts(data ?? []);
+        trackDataLoad("workout_history", started, true, data?.length);
+      })
       .catch((error) => {
         console.log("Error fetching completed workouts: ", error);
         setCompletedWorkouts([]);
+        trackDataLoad("workout_history", started, false);
       })
       .finally(() => setLoading(false));
   }, [user?.id]);
