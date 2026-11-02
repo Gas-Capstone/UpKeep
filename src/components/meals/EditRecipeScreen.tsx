@@ -192,6 +192,8 @@ export default function EditRecipeScreen() {
 
   return (
     <ScreenView
+      keyboardShouldPersistTaps="handled"
+      keyboardBottomOffset={Spacing.three}
       header={
         <VStack
           style={{

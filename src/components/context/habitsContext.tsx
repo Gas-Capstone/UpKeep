@@ -8,6 +8,7 @@ import {
   removeHabitFromList,
 } from "@/lib/habits/habits";
 import { getTodaysDate } from "@/lib/time_management/week";
+import { trackDataLoad } from "@/lib/metrics";
 import { useUserContext } from "./userContext";
 import { getHabitsByUser, createHabit, deleteHabit, 
   getCompletedHabitsByUser, completeHabit, uncompleteHabit } from "@/lib/supabaseFunctions";
@@ -56,6 +57,7 @@ export const HabitsProvider = ({ children }: HabitsProviderProps) => {
   const refreshHabits = useCallback(() => {
     if (!user) return
 
+    const started = Date.now()
     Promise.all([
       getHabitsByUser(user),
       getCompletedHabitsByUser(user),
@@ -63,8 +65,13 @@ export const HabitsProvider = ({ children }: HabitsProviderProps) => {
       .then(([habits, completions]) => {
         setHabitArray(habits ?? [])
         setHabitCompletions(rowsToCompletionsByDate(completions ?? []))
+        // Both return null when their query fails.
+        trackDataLoad("habits", started, habits !== null && completions !== null, habits?.length)
       })
-      .catch((err) => console.log(err))
+      .catch((err) => {
+        console.log(err)
+        trackDataLoad("habits", started, false)
+      })
   }, [user])
 
   useEffect(() => {

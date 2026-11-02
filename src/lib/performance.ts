@@ -58,6 +58,20 @@ export type NotificationOpen = {
   opens: number;
 };
 
+// One hour or day of the timeline. Percentiles are null where nothing
+// happened in it.
+export type TimelineBucket = {
+  // Local time without an offset ("2026-10-27T14:00:00"): read as the phone's.
+  start: string;
+  requests: number;
+  request_p95_ms: number | null;
+  request_error_pct: number | null;
+  agent_turns: number;
+  agent_ok_pct: number | null;
+  agent_p95_ms: number | null;
+  workouts: number;
+};
+
 export type RecentError = {
   created_at: string;
   name: string;
@@ -74,6 +88,11 @@ export type PerformanceSummary = {
     p50_ms: number | null;
     p95_ms: number | null;
     error_pct: number | null;
+    // Split by cause (a later version of the SQL): the server failing (5xx),
+    // the app asking for something wrong (4xx), or no answer at all.
+    server_error_pct?: number | null;
+    client_error_pct?: number | null;
+    network_error_pct?: number | null;
   };
   endpoints: EndpointLatency[];
   agent: {
@@ -95,6 +114,9 @@ export type PerformanceSummary = {
     sessions: number;
     avg_minutes: number | null;
     set_completion_pct: number | null;
+    // Of sessions that report it: their exercise results and remembered
+    // sets saved too. Null until one reports.
+    details_saved_pct?: number | null;
   };
   workout_outcomes?: WorkoutOutcome[];
   notifications?: {
@@ -107,6 +129,8 @@ export type PerformanceSummary = {
     avg_scheduled: number | null;
   };
   notification_opens?: NotificationOpen[];
+  // Hourly for a day or two, daily beyond, in the phone's time zone.
+  timeline?: { unit: "hour" | "day"; buckets: TimelineBucket[] };
 };
 
 /** The signed-in account is not in public.developers. */
@@ -133,6 +157,18 @@ function isPerformanceSummary(value: unknown): value is PerformanceSummary {
 
 // Postgres insufficient_privilege, raised by get_performance_summary().
 const NOT_AUTHORIZED = "42501";
+// PostgREST: no function takes these arguments. The database still has the
+// summary from before it took a time zone.
+const NO_SUCH_FUNCTION = "PGRST202";
+
+/** The phone's time zone ("America/Chicago"), so the timeline's days are its days. */
+function deviceTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
+}
 
 export async function fetchPerformanceSummary(
   hours: number,
@@ -142,9 +178,17 @@ export async function fetchPerformanceSummary(
   // by up to a flush interval.
   await flushMetrics();
 
-  const { data, error } = await supabase.rpc("get_performance_summary", {
+  let { data, error } = await supabase.rpc("get_performance_summary", {
     p_hours: hours,
+    p_tz: deviceTimeZone(),
   });
+  // Until performance-metrics.sql is re-run, ask the way the old summary
+  // understands: the screen still works, just without the timeline.
+  if (error?.code === NO_SUCH_FUNCTION) {
+    ({ data, error } = await supabase.rpc("get_performance_summary", {
+      p_hours: hours,
+    }));
+  }
 
   if (error) {
     if (error.code === NOT_AUTHORIZED) {

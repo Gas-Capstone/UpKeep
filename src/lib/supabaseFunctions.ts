@@ -146,7 +146,9 @@ export async function getCompletedWorkouts(user: UserRef) {
     )
     .eq("user_id", user.id)
     .order("completed_at", { ascending: false });
-  if (error) console.log("Error fetching completed workouts: ", error);
+  // Thrown rather than logged, so a failed load can't pass for an empty
+  // history (refreshCompletedWorkouts catches it).
+  if (error) throw error;
 
   return (data ?? []).map((session) => {
     // A to-one embed: one plan, or null once the plan has been deleted.

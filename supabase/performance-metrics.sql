@@ -9,10 +9,13 @@
 --   agent_turn        every message to the assistant: outcome, tools, and the
 --                     server's own phase timings (auth / model / tools)
 --   image_error       a photo that failed to load: which bucket
---   data_load         the meals catalog or the fridge arriving: the whole wait
---                     the user sees, and how many rows came back
+--   data_load         a screen's data arriving (meals catalog, fridge, workout
+--                     plans and history, the exercise library, habits, a
+--                     workout's exercises and records): the whole wait the
+--                     user sees, and how many rows came back
 --   workout_session   a workout ending: how (all sets done, time up, stopped
---                     early), planned minutes, sets done of total
+--                     early), planned minutes, sets done of total, and
+--                     whether its exercise details saved
 --   notifications_sync  reminders being rebuilt: permission state, reminders
 --                     built vs actually scheduled
 --   notification_opened a reminder being tapped: which kind
@@ -491,7 +494,18 @@ revoke all on public.perf_endpoint_latency, public.perf_agent_outcomes,
 -- security definer so it can read app_events on a developer's behalf; the
 -- is_developer() check is what stops it doing so for anyone else. Returns
 -- aggregates only — raw events never leave the database.
-create or replace function public.get_performance_summary(p_hours integer default 168)
+--
+-- p_tz is the phone's time zone, so the timeline's hours and days line up
+-- with the developer's own. The one-argument version this replaces is
+-- dropped first: create or replace with a new argument list would add a
+-- second function beside it rather than replace it. Older app versions
+-- that pass only p_hours still reach this one, through p_tz's default.
+drop function if exists public.get_performance_summary(integer);
+
+create or replace function public.get_performance_summary(
+  p_hours integer default 168,
+  p_tz    text    default 'UTC'
+)
 returns jsonb
 language plpgsql
 stable
@@ -501,24 +515,102 @@ as $$
 declare
   v_hours integer := greatest(1, least(coalesce(p_hours, 168), 720));
   v_since timestamptz := now() - make_interval(hours => v_hours);
+  v_tz    text := coalesce(nullif(p_tz, ''), 'UTC');
+  -- Timeline: hours for a day or two, days beyond that. Buckets are whole
+  -- hours or days ending with the current one, so the first bar isn't a
+  -- partial period that only looks quiet.
+  v_unit        text;
+  v_buckets     integer;
+  v_start_local timestamp;
+  v_start       timestamptz;
 begin
   if not public.is_developer() then
     raise exception 'not authorized' using errcode = '42501';
   end if;
 
+  if not exists (select 1 from pg_timezone_names where name = v_tz) then
+    v_tz := 'UTC';
+  end if;
+
+  v_unit := case when v_hours <= 48 then 'hour' else 'day' end;
+  v_buckets := case when v_unit = 'hour' then v_hours else ceil(v_hours / 24.0)::integer end;
+  v_start_local := date_trunc(v_unit, now() at time zone v_tz)
+                   - (v_buckets - 1) * ('1 ' || v_unit)::interval;
+  v_start := v_start_local at time zone v_tz;
+
   return jsonb_build_object(
     'window_hours', v_hours,
     'generated_at', now(),
 
+    -- Errors split by cause, since they call for different fixes: the server
+    -- failing (5xx), the app asking for something wrong (4xx), or the phone
+    -- getting no answer at all (status 0: offline, or the request dropped).
     'requests', (
       select jsonb_build_object(
-        'count',     count(*),
-        'p50_ms',    round(percentile_cont(0.5)  within group (order by duration_ms))::integer,
-        'p95_ms',    round(percentile_cont(0.95) within group (order by duration_ms))::integer,
-        'error_pct', round(100.0 * avg(case when ok then 0 else 1 end), 1)
+        'count',             count(*),
+        'p50_ms',            round(percentile_cont(0.5)  within group (order by duration_ms))::integer,
+        'p95_ms',            round(percentile_cont(0.95) within group (order by duration_ms))::integer,
+        'error_pct',         round(100.0 * avg(case when ok then 0 else 1 end), 1),
+        'server_error_pct',  round(100.0 * avg(case when status >= 500 then 1 else 0 end), 1),
+        'client_error_pct',  round(100.0 * avg(case when status between 400 and 499 then 1 else 0 end), 1),
+        'network_error_pct', round(100.0 * avg(case when status = 0 then 1 else 0 end), 1)
       )
-      from public.app_events
-      where name = 'supabase_request' and created_at >= v_since
+      from (
+        select
+          duration_ms,
+          ok,
+          -- Guarded: one malformed status must not break the whole summary.
+          case when props->>'status' ~ '^[0-9]+$' then (props->>'status')::integer end as status
+        from public.app_events
+        where name = 'supabase_request' and created_at >= v_since
+      ) r
+    ),
+
+    'timeline', (
+      select jsonb_build_object(
+        'unit', v_unit,
+        'buckets', coalesce(jsonb_agg(jsonb_build_object(
+          -- Local time, without an offset: the phone reads it as its own.
+          'start',             to_char(t.bucket, 'YYYY-MM-DD"T"HH24:MI:SS'),
+          'requests',          t.requests,
+          'request_p95_ms',    t.request_p95_ms,
+          'request_error_pct', t.request_error_pct,
+          'agent_turns',       t.agent_turns,
+          'agent_ok_pct',      t.agent_ok_pct,
+          'agent_p95_ms',      t.agent_p95_ms,
+          'workouts',          t.workouts
+        ) order by t.bucket), '[]'::jsonb)
+      )
+      from (
+        select
+          b.bucket,
+          count(*) filter (where e.name = 'supabase_request') as requests,
+          round(percentile_cont(0.95) within group (order by e.duration_ms)
+                filter (where e.name = 'supabase_request'))::integer as request_p95_ms,
+          round(100.0 * avg(case when e.ok then 0 else 1 end)
+                filter (where e.name = 'supabase_request'), 1) as request_error_pct,
+          count(*) filter (where e.name = 'agent_turn') as agent_turns,
+          round(100.0 * avg(case when e.ok then 1 else 0 end)
+                filter (where e.name = 'agent_turn'), 1) as agent_ok_pct,
+          round(percentile_cont(0.95) within group (order by e.duration_ms)
+                filter (where e.name = 'agent_turn'))::integer as agent_p95_ms,
+          count(*) filter (where e.name = 'workout_session') as workouts
+        -- Every bucket, including empty ones, so a quiet hour shows as a gap
+        -- rather than the chart skipping it.
+        from generate_series(
+          v_start_local,
+          date_trunc(v_unit, now() at time zone v_tz),
+          ('1 ' || v_unit)::interval
+        ) as b(bucket)
+        left join (
+          select date_trunc(v_unit, created_at at time zone v_tz) as bucket,
+                 name, duration_ms, ok
+          from public.app_events
+          where created_at >= v_start
+            and name in ('supabase_request', 'agent_turn', 'workout_session')
+        ) e on e.bucket = b.bucket
+        group by b.bucket
+      ) t
     ),
 
     'endpoints', coalesce((
@@ -567,7 +659,12 @@ begin
         'sessions',           count(*),
         'avg_minutes',        round(avg(duration_ms) / 60000.0, 1),
         'set_completion_pct', round(100.0 * sum((props->>'sets_done')::numeric)
-                                    / nullif(sum((props->>'sets_total')::numeric), 0), 1)
+                                    / nullif(sum((props->>'sets_total')::numeric), 0), 1),
+        -- Of the sessions that report it (app versions from Sprint 6 on):
+        -- how many saved their exercise results and remembered sets, not
+        -- just the session itself. Null until one reports.
+        'details_saved_pct',  round(100.0 * avg(case when props->>'details_saved' = 'true' then 1 else 0 end)
+                                    filter (where props ? 'details_saved'), 1)
       )
       from public.app_events
       where name = 'workout_session' and created_at >= v_since
@@ -618,8 +715,8 @@ $$;
 
 revoke execute on function public.is_developer()                     from public, anon;
 grant  execute on function public.is_developer()                     to authenticated;
-revoke execute on function public.get_performance_summary(integer)   from public, anon;
-grant  execute on function public.get_performance_summary(integer)   to authenticated;
+revoke execute on function public.get_performance_summary(integer, text) from public, anon;
+grant  execute on function public.get_performance_summary(integer, text) to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 6. Make yourself a developer
