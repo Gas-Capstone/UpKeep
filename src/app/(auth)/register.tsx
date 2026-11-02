@@ -3,6 +3,7 @@ import { router } from "expo-router";
 import { useScreenInteractive } from "@/components/context/startupContext";
 import { useState } from "react";
 import { Image, Pressable, StyleSheet, View } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 
 import { useThemeMode } from "@/components/context/ThemeContext";
 import { ThemedText } from "@/components/themed-text";
@@ -132,7 +133,14 @@ export default function Register() {
 
   return (
     <ThemedView type="background" style={styles.screen}>
-      <View style={styles.content}>
+      <KeyboardAwareScrollView
+        style={styles.screen}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        bottomOffset={Spacing.three}
+        mode="layout"
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.brandBlock}>
           <Image
             source={require("../../../assets/images/upkeep-logo.png")}
@@ -259,7 +267,7 @@ export default function Register() {
             </Pressable>
           </View>
         </ThemedView>
-      </View>
+      </KeyboardAwareScrollView>
     </ThemedView>
   );
 }
@@ -270,10 +278,11 @@ const styles = StyleSheet.create({
   },
 
   content: {
-    flex: 1,
+    flexGrow: 1,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 24,
+    paddingVertical: Spacing.five,
   },
 
   brandBlock: {

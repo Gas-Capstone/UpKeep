@@ -552,6 +552,8 @@ export default function HomeScreen() {
 
   return (
     <ScreenView
+      keyboardShouldPersistTaps="handled"
+      keyboardBottomOffset={Spacing.three}
       header={
         <View style={homeStyles.header}>
           <View style={homeStyles.brandGroup}>

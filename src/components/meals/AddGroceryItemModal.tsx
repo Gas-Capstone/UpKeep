@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { StyleSheet, View } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import {
   Button,
   Card,
@@ -10,10 +12,12 @@ import {
   Text,
   TextInput,
 } from "react-native-paper";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { HStack } from "@/components/ui/hstack";
 import { VStack } from "@/components/ui/vstack";
 import { styles } from "@/constants/styles";
+import { Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 import { GrocerySource, Ingredient } from "@/lib/meals/meals";
 
@@ -51,6 +55,7 @@ export function AddGroceryItemModal({
   onAdd,
 }: AddGroceryItemModalProps) {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const [name, setName] = useState("");
   const [quantity, setQuantity] = useState("");
   const [unit, setUnit] = useState("");
@@ -133,101 +138,130 @@ export function AddGroceryItemModal({
       <Modal
         visible={visible}
         onDismiss={onDismiss}
-        contentContainerStyle={styles.modalContent}>
-        <Card mode="contained" style={styles.modalCard}>
-          <Card.Title title={<Text variant="titleLarge">Add item</Text>} />
-          <Card.Content>
-            <VStack space="md" style={{ alignSelf: "stretch" }}>
-              <TextInput
-                label="Item"
-                mode="outlined"
-                value={name}
-                onChangeText={(text) => {
-                  // Typing after a selection means they're naming something
-                  // else, so the catalog link is dropped.
-                  if (selected) setSelected(null);
-                  setName(text);
-                }}
-                right={
-                  selected ? (
-                    <TextInput.Icon icon="close" onPress={clearSelection} />
-                  ) : undefined
-                }
-                autoFocus
-              />
+        contentContainerStyle={localStyles.modalOuter}
+      >
+        <KeyboardAvoidingView
+          behavior="padding"
+          keyboardVerticalOffset={insets.top}
+          style={localStyles.keyboardWrap}
+        >
+          <View style={localStyles.viewport}>
+            <Card mode="contained" style={styles.modalCard}>
+              <Card.Title title={<Text variant="titleLarge">Add item</Text>} />
+              <Card.Content>
+                <VStack space="md" style={{ alignSelf: "stretch" }}>
+                  <TextInput
+                    label="Item"
+                    mode="outlined"
+                    value={name}
+                    onChangeText={(text) => {
+                      // Typing after a selection means they're naming something
+                      // else, so the catalog link is dropped.
+                      if (selected) setSelected(null);
+                      setName(text);
+                    }}
+                    right={
+                      selected ? (
+                        <TextInput.Icon icon="close" onPress={clearSelection} />
+                      ) : undefined
+                    }
+                    autoFocus
+                  />
 
-              {selected ? (
-                <Text variant="bodySmall" style={{ color: theme.textSecondary }}>
-                  Linked to {selected.name} in your ingredients — adding it
-                  again will update the amount instead of duplicating it.
-                </Text>
-              ) : (
-                suggestions.length > 0 && (
-                  <VStack space="xs" style={{ alignSelf: "stretch" }}>
-                    <Text variant="labelSmall" style={{ color: theme.textSecondary }}>
-                      Tap to link to an ingredient
+                  {selected ? (
+                    <Text variant="bodySmall" style={{ color: theme.textSecondary }}>
+                      Linked to {selected.name} in your ingredients — adding it
+                      again will update the amount instead of duplicating it.
                     </Text>
-                    <HStack space="sm" style={{ flexWrap: "wrap" }}>
-                      {suggestions.map((ing) => (
-                        <Chip key={ing.id} onPress={() => selectIngredient(ing)}>
-                          {ing.name}
-                        </Chip>
-                      ))}
-                    </HStack>
+                  ) : (
+                    suggestions.length > 0 && (
+                      <VStack space="xs" style={{ alignSelf: "stretch" }}>
+                        <Text variant="labelSmall" style={{ color: theme.textSecondary }}>
+                          Tap to link to an ingredient
+                        </Text>
+                        <HStack space="sm" style={{ flexWrap: "wrap" }}>
+                          {suggestions.map((ing) => (
+                            <Chip key={ing.id} onPress={() => selectIngredient(ing)}>
+                              {ing.name}
+                            </Chip>
+                          ))}
+                        </HStack>
+                      </VStack>
+                    )
+                  )}
+
+                  <HStack space="sm" style={{ alignSelf: "stretch" }}>
+                    <TextInput
+                      label="Quantity"
+                      mode="outlined"
+                      keyboardType="decimal-pad"
+                      style={{ flex: 1 }}
+                      value={quantity}
+                      onChangeText={setQuantity}
+                    />
+                    <TextInput
+                      label="Unit"
+                      mode="outlined"
+                      style={{ flex: 1 }}
+                      value={unit}
+                      onChangeText={setUnit}
+                    />
+                  </HStack>
+
+                  <VStack space="sm" style={{ alignSelf: "stretch" }}>
+                    <Text variant="labelLarge">Add to</Text>
+                    <SegmentedButtons
+                      value={source}
+                      onValueChange={(value) => setSource(value as GrocerySource)}
+                      buttons={SOURCES}
+                    />
                   </VStack>
-                )
-              )}
 
-              <HStack space="sm" style={{ alignSelf: "stretch" }}>
-                <TextInput
-                  label="Quantity"
-                  mode="outlined"
-                  keyboardType="decimal-pad"
-                  style={{ flex: 1 }}
-                  value={quantity}
-                  onChangeText={setQuantity}
-                />
-                <TextInput
-                  label="Unit"
-                  mode="outlined"
-                  style={{ flex: 1 }}
-                  value={unit}
-                  onChangeText={setUnit}
-                />
-              </HStack>
-
-              <VStack space="sm" style={{ alignSelf: "stretch" }}>
-                <Text variant="labelLarge">Add to</Text>
-                <SegmentedButtons
-                  value={source}
-                  onValueChange={(value) => setSource(value as GrocerySource)}
-                  buttons={SOURCES}
-                />
-              </VStack>
-
-              {error !== "" && (
-                <HelperText type="error" visible>
-                  {error}
-                </HelperText>
-              )}
-            </VStack>
-          </Card.Content>
-          <Card.Actions>
-            <HStack style={styles.rowBox}>
-              <Button onPress={onDismiss} disabled={saving}>
-                Cancel
-              </Button>
-              <Button
-                mode="contained"
-                onPress={handleAdd}
-                loading={saving}
-                disabled={saving}>
-                Add
-              </Button>
-            </HStack>
-          </Card.Actions>
-        </Card>
+                  {error !== "" && (
+                    <HelperText type="error" visible>
+                      {error}
+                    </HelperText>
+                  )}
+                </VStack>
+              </Card.Content>
+              <Card.Actions>
+                <HStack style={styles.rowBox}>
+                  <Button onPress={onDismiss} disabled={saving}>
+                    Cancel
+                  </Button>
+                  <Button
+                    mode="contained"
+                    onPress={handleAdd}
+                    loading={saving}
+                    disabled={saving}
+                  >
+                    Add
+                  </Button>
+                </HStack>
+              </Card.Actions>
+            </Card>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
     </Portal>
   );
 }
+
+const localStyles = StyleSheet.create({
+  modalOuter: {
+    flex: 1,
+    justifyContent: "flex-start",
+  },
+  keyboardWrap: {
+    flex: 1,
+    width: "100%",
+  },
+  viewport: {
+    flex: 1,
+    width: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.four,
+  },
+});

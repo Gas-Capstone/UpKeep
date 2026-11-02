@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, createContext, useContext } from "react";
-import { track } from "@/lib/metrics";
+import { track, trackDataLoad } from "@/lib/metrics";
 import {
   lastWeights,
   personalRecords as toPersonalRecords,
@@ -37,7 +37,10 @@ const NO_OVERRIDES: ReadonlyMap<string, PlanOverride> = new Map();
 // ended is read from the data, since Finish is the only way out of a session:
 // every set logged, the planned time reached, or neither.
 // The set counts are the ones saved with the session, so the two can't differ.
-function recordWorkoutSession(elapsedMs: number, totals: SessionTotals) {
+// detailsSaved: whether its exercise results and remembered sets saved too.
+// Those are allowed to fail without failing the workout, so this is the only
+// place such a failure shows up.
+function recordWorkoutSession(elapsedMs: number, totals: SessionTotals, detailsSaved: boolean) {
   const { setsDone, setsTotal, plannedMin } = totals;
   const outcome =
     setsTotal > 0 && setsDone >= setsTotal
@@ -57,6 +60,7 @@ function recordWorkoutSession(elapsedMs: number, totals: SessionTotals) {
       sets_done: setsDone,
       sets_total: setsTotal,
       exercises: totals.exercisesTotal,
+      details_saved: detailsSaved,
     },
   });
 }
@@ -161,14 +165,18 @@ const WorkoutSessionProvider = ({
             return NO_OVERRIDES;
           })
         : Promise.resolve(NO_OVERRIDES);
+    const started = Date.now();
     Promise.all([getPlanExercises(planId, { throwOnError: true }), overridesLoad])
       .then(([items, overrides]) => {
         if (cancelled) return;
         seedExerciseProgress(items, overrides);
         setExerciseList({ planId, items, error: "" });
+        trackDataLoad("workout_exercises", started, true, items.length);
         if (!userId) return;
+        const recordsStarted = Date.now();
         getExerciseResults({ id: userId }, items.map((item) => item.workoutId))
           .then((results) => {
+            trackDataLoad("personal_records", recordsStarted, true, results.length);
             if (cancelled) return;
             setRecordList({ planId, records: toPersonalRecords(results) });
 
@@ -195,9 +203,13 @@ const WorkoutSessionProvider = ({
               return changed ? next : current;
             });
           })
-          .catch((error) => console.log("Error loading personal records: ", error));
+          .catch((error) => {
+            console.log("Error loading personal records: ", error);
+            trackDataLoad("personal_records", recordsStarted, false);
+          });
       })
       .catch(() => {
+        trackDataLoad("workout_exercises", started, false);
         if (!cancelled) {
           setExerciseList({ planId, items: [], error: "Couldn't load exercises. Try again." });
         }
@@ -314,9 +326,11 @@ const WorkoutSessionProvider = ({
       );
       // Saved after the session and allowed to fail: losing one session's
       // records beats asking the user to finish again and saving it twice.
+      let detailsSaved = true;
       try {
         await saveExerciseResults(sessionId, sessionResults(exercises, exerciseProgress));
       } catch (error) {
+        detailsSaved = false;
         console.log("Error saving exercise results: ", error);
       }
       // Sets and reps changed on a built-in plan, for the user's next session
@@ -329,6 +343,7 @@ const WorkoutSessionProvider = ({
             overrideChanges(exercises, exerciseProgress),
           );
         } catch (error) {
+          detailsSaved = false;
           console.log("Error saving remembered sets and reps: ", error);
         }
       }
@@ -348,7 +363,7 @@ const WorkoutSessionProvider = ({
         ...session, status: "complete", startedAt: null, pausedAt: null,
       } : session);
       refreshCompletedWorkouts();
-      recordWorkoutSession(elapsed, totals);
+      recordWorkoutSession(elapsed, totals, detailsSaved);
       return true;
     } catch {
       setSaveError("Couldn't save your workout. Your session is paused; try finishing again.");

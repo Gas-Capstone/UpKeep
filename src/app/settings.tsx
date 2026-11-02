@@ -4,18 +4,16 @@ import { format } from "date-fns";
 import { router, useLocalSearchParams } from "expo-router";
 import * as FileSystem from "expo-file-system/legacy";
 import * as ImagePicker from "expo-image-picker";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ComponentRef } from "react";
 import {
   Image,
   InteractionManager,
   Keyboard,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   View,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { SvgXml } from "react-native-svg";
 import { ActivityIndicator, List, Switch, TextInput, Card } from "react-native-paper";
@@ -223,7 +221,7 @@ export default function SettingsScreen() {
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [sendingTest, setSendingTest] = useState(false);
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<ComponentRef<typeof KeyboardAwareScrollView>>(null);
 
   useEffect(() => {
     if (!profile) return;
@@ -726,11 +724,7 @@ export default function SettingsScreen() {
         style={styles.safeArea}
         edges={["top", "left", "right", "bottom"]}
       >
-        <KeyboardAvoidingView
-          style={styles.flex}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-        >
-          <View style={styles.header}>
+        <View style={styles.header}>
             <Pressable
               onPress={() => router.back()}
               accessibilityRole="button"
@@ -755,11 +749,13 @@ export default function SettingsScreen() {
             </View>
           </View>
 
-          <ScrollView
+          <KeyboardAwareScrollView
             ref={scrollRef}
             style={styles.flex}
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
+            bottomOffset={Spacing.three}
+            mode="layout"
             showsVerticalScrollIndicator={false}
           >
             <View style={styles.content}>
@@ -1510,8 +1506,7 @@ export default function SettingsScreen() {
                 {saving ? <ActivityIndicator size="small" /> : null}
               </Pressable>
             </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
+          </KeyboardAwareScrollView>
       </SafeAreaView>
 
       <ConfirmDialog

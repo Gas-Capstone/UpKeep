@@ -17,7 +17,6 @@
       "channel": "preview"
     },
     "production": {
-      "uploadSourceMaps": true,
       "autoIncrement": true,
       "channel": "production"
     }

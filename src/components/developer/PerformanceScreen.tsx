@@ -5,8 +5,9 @@
  * accounts listed in public.developers. The Settings entry is hidden for
  * everyone else, but the database is what actually enforces it.
  *
- * Every value is printed beside its bar, so the bars are a reading aid and
- * nothing depends on color alone. Agent outcomes carry their status with an
+ * Every value is printed beside its bar or line, so the graphics are a
+ * reading aid and nothing depends on color alone. Figures resting on too few
+ * samples to trust are drawn faded and say so. Agent outcomes carry their status with an
  * icon and a label rather than with the bar's fill: this app's success green
  * and its neutral gray are too close to tell apart side by side, even with
  * full color vision.
@@ -35,6 +36,8 @@ import {
   fetchPerformanceSummary,
   type PerformanceSummary,
 } from "@/lib/performance";
+import { FEW_SAMPLES, formatCount, formatMs, formatPct, plural } from "./format";
+import { RangeBar, Sparkline, TrendChart, markColor } from "./PerformanceCharts";
 
 const WINDOWS = [
   { hours: 24, label: "24h", phrase: "last 24 hours" },
@@ -50,30 +53,13 @@ type ThemeColors = (typeof Colors)["light"] | (typeof Colors)["dark"];
 // Formatting
 // ---------------------------------------------------------------------------
 
-function formatMs(ms: number | null): string {
-  if (ms == null) return "—";
-  if (ms < 1000) return `${Math.round(ms)} ms`;
-  return `${(ms / 1000).toFixed(ms < 10_000 ? 1 : 0)} s`;
-}
-
-function formatPct(pct: number | null): string {
-  if (pct == null) return "—";
-  return `${Number.isInteger(pct) ? pct : pct.toFixed(1)}%`;
-}
-
-/** 1,284 · 12.9K · 3.4M */
-function formatCount(n: number): string {
-  if (n < 10_000) return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  if (n < 1_000_000) return `${(n / 1000).toFixed(1).replace(/\.0$/, "")}K`;
-  return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
-}
-
 function formatMinutes(minutes: number | null): string {
   return minutes == null ? "—" : `${minutes} min`;
 }
 
-function plural(n: number, word: string): string {
-  return `${formatCount(n)} ${word}${n === 1 ? "" : "s"}`;
+/** " · few samples" when a figure rests on too little to trust. */
+function fewNote(samples: number): string {
+  return samples > 0 && samples < FEW_SAMPLES ? " · few samples, rough" : "";
 }
 
 // ---------------------------------------------------------------------------
@@ -142,6 +128,12 @@ const PHASE_LABELS: Record<string, string> = {
 const SOURCE_LABELS: Record<string, string> = {
   meals_catalog: "Meals catalog",
   fridge: "Fridge",
+  workout_plans: "Workout plans",
+  workout_history: "Workout history",
+  exercise_library: "Exercise library",
+  habits: "Habits",
+  workout_exercises: "A workout's exercises",
+  personal_records: "Personal records",
 };
 
 // How a workout ended. Only finishing every set is shown as "good"; running
@@ -322,6 +314,17 @@ function Summary({
   }
 
   const slowest = Math.max(1, ...summary.endpoints.map((e) => e.p95_ms ?? 0));
+  const buckets = summary.timeline?.buckets ?? [];
+  const trend = (pick: (b: (typeof buckets)[number]) => number | null) =>
+    buckets.length > 1 ? buckets.map(pick) : undefined;
+  const failures = [
+    { label: "Server errors (5xx)", pct: requests.server_error_pct, detail: "The database or API failed. Check Supabase." },
+    { label: "App errors (4xx)", pct: requests.client_error_pct, detail: "The app asked for something wrong or wasn't allowed. Check the endpoint below." },
+    { label: "No response", pct: requests.network_error_pct, detail: "Offline or dropped: usually the phone's connection, not the app." },
+  ];
+  const showFailures =
+    (requests.error_pct ?? 0) > 0 && failures.some((f) => f.pct != null);
+  const mostFailures = Math.max(0.1, ...failures.map((f) => f.pct ?? 0));
   const longestPhase = Math.max(1, ...summary.agent_phases.map((p) => p.avg_ms ?? 0));
   const dataLoads = summary.data_loads ?? [];
   const slowestLoad = Math.max(1, ...dataLoads.map((d) => d.p95_ms ?? 0));
@@ -334,33 +337,69 @@ function Summary({
         <StatTile
           label="Request latency, p95"
           value={formatMs(requests.p95_ms)}
-          detail={`p50 ${formatMs(requests.p50_ms)} · ${plural(requests.count, "request")}`}
+          detail={`p50 ${formatMs(requests.p50_ms)} · ${plural(requests.count, "request")}${fewNote(requests.count)}`}
+          trend={trend((b) => b.request_p95_ms)}
           colors={colors}
         />
         <StatTile
           label="Request errors"
           value={formatPct(requests.error_pct)}
-          detail={windowPhrase}
+          detail={`${plural(requests.count, "request")}${fewNote(requests.count)}`}
+          trend={trend((b) => b.request_error_pct)}
           colors={colors}
         />
         <StatTile
           label="Assistant success"
           value={formatPct(agent.ok_pct)}
-          detail={plural(agent.turns, "turn")}
+          detail={`${plural(agent.turns, "turn")}${fewNote(agent.turns)}`}
+          trend={trend((b) => b.agent_ok_pct)}
           colors={colors}
         />
         <StatTile
           label="Assistant latency, p95"
           value={formatMs(agent.p95_ms)}
-          detail={`p50 ${formatMs(agent.p50_ms)}`}
+          detail={`p50 ${formatMs(agent.p50_ms)}${fewNote(agent.turns)}`}
+          trend={trend((b) => b.agent_p95_ms)}
           colors={colors}
         />
       </View>
 
+      {summary.timeline && buckets.length > 1 && (
+        <Section
+          title="Over time"
+          subtitle={`By ${summary.timeline.unit}, ${windowPhrase}, in your time zone. Tap a bar to read it.`}
+          colors={colors}
+        >
+          <TrendChart unit={summary.timeline.unit} buckets={buckets} colors={colors} />
+        </Section>
+      )}
+
+      {showFailures && (
+        <Section
+          title="Request failures"
+          subtitle={`Share of all ${plural(requests.count, "request")}, by cause`}
+          colors={colors}
+        >
+          {failures.map((failure, index) => (
+            <BarRow
+              key={failure.label}
+              first={index === 0}
+              title={failure.label}
+              value={formatPct(failure.pct ?? null)}
+              // Against the largest cause, for resolution: these are small
+              // numbers, and the printed share is what's read.
+              fraction={(failure.pct ?? 0) / mostFailures}
+              detail={failure.detail}
+              colors={colors}
+            />
+          ))}
+        </Section>
+      )}
+
       {summary.endpoints.length > 0 && (
         <Section
           title="Slowest endpoints"
-          subtitle={`95th-percentile latency, ${windowPhrase}`}
+          subtitle={`Typical (p50, hollow dot) to slow (p95, filled dot), ${windowPhrase}. A long line means usually fast but sometimes slow.`}
           colors={colors}
         >
           {summary.endpoints.map((endpoint, index) => (
@@ -370,8 +409,16 @@ function Summary({
               title={`${endpoint.method} ${endpoint.path}`}
               mono
               value={formatMs(endpoint.p95_ms)}
-              fraction={(endpoint.p95_ms ?? 0) / slowest}
-              detail={`${plural(endpoint.requests, "request")} · p50 ${formatMs(endpoint.p50_ms)} · ${formatPct(endpoint.error_pct)} errors`}
+              graphic={
+                <RangeBar
+                  p50={endpoint.p50_ms}
+                  p95={endpoint.p95_ms}
+                  scale={slowest}
+                  faded={endpoint.requests < FEW_SAMPLES}
+                  colors={colors}
+                />
+              }
+              detail={`p50 ${formatMs(endpoint.p50_ms)} · ${plural(endpoint.requests, "request")} · ${formatPct(endpoint.error_pct)} errors${fewNote(endpoint.requests)}`}
               colors={colors}
             />
           ))}
@@ -392,9 +439,10 @@ function Summary({
               title={SOURCE_LABELS[load.source] ?? load.source}
               value={formatMs(load.p95_ms)}
               fraction={(load.p95_ms ?? 0) / slowestLoad}
+              uncertain={load.loads < FEW_SAMPLES}
               detail={`${plural(load.loads, "load")} · p50 ${formatMs(load.p50_ms)}${
                 load.avg_rows != null ? ` · ~${formatCount(load.avg_rows)} rows` : ""
-              } · ${formatPct(load.error_pct)} failed`}
+              } · ${formatPct(load.error_pct)} failed${fewNote(load.loads)}`}
               colors={colors}
             />
           ))}
@@ -442,7 +490,8 @@ function Summary({
               title={PHASE_LABELS[phase.phase] ?? phase.phase}
               value={formatMs(phase.avg_ms)}
               fraction={(phase.avg_ms ?? 0) / longestPhase}
-              detail={`p95 ${formatMs(phase.p95_ms)} · ${plural(phase.turns, "turn")}`}
+              uncertain={phase.turns < FEW_SAMPLES}
+              detail={`p95 ${formatMs(phase.p95_ms)} · ${plural(phase.turns, "turn")}${fewNote(phase.turns)}`}
               colors={colors}
             />
           ))}
@@ -475,26 +524,62 @@ function Summary({
               />
             );
           })}
+
+          {/* Results and remembered sets may fail without failing the
+              workout, so this is where such a failure shows. */}
+          {summary.workouts?.details_saved_pct != null && (
+            <BarRow
+              first={false}
+              leadingIcon={
+                summary.workouts.details_saved_pct >= 100 ? STATUS_ICON.good : STATUS_ICON.bad
+              }
+              leadingColor={statusColor(
+                summary.workouts.details_saved_pct >= 100 ? "good" : "bad",
+                colors,
+              )}
+              title="Details saved"
+              value={formatPct(summary.workouts.details_saved_pct)}
+              fraction={summary.workouts.details_saved_pct / 100}
+              detail="Sessions whose exercise results (for PRs) and remembered sets saved, not just the session."
+              colors={colors}
+            />
+          )}
         </Section>
       )}
 
       {(syncs > 0 || opens.length > 0) && (
         <Section
           title="Notifications"
-          subtitle={`Reminder scheduling and taps, ${windowPhrase}`}
+          subtitle={
+            notifications && syncs > 0
+              ? `${plural(syncs, "sync")} · p95 ${formatMs(notifications.p95_ms)} · ${formatPct(notifications.error_pct)} failed${fewNote(syncs)}`
+              : `Reminder scheduling and taps, ${windowPhrase}`
+          }
           colors={colors}
         >
+          {/* Reminders built vs actually scheduled, per sync: a gap means
+              some never reach the phone's schedule. */}
           {notifications && syncs > 0 && (
-            <BarRow
-              first
-              leadingIcon="bell-outline"
-              leadingColor={colors.textSecondary}
-              title="Reminder sync, p95"
-              value={formatMs(notifications.p95_ms)}
-              fraction={0}
-              detail={`${plural(syncs, "sync")} · on average ${notifications.avg_scheduled ?? "—"} scheduled of ${notifications.avg_built ?? "—"} built · ${formatPct(notifications.error_pct)} failed`}
-              colors={colors}
-            />
+            <>
+              <BarRow
+                first
+                leadingIcon="bell-outline"
+                leadingColor={colors.textSecondary}
+                title="Reminders built, per sync"
+                value={String(notifications.avg_built ?? "—")}
+                fraction={(notifications.avg_built ?? 0) / Math.max(1, notifications.avg_built ?? 0)}
+                colors={colors}
+              />
+              <BarRow
+                first={false}
+                leadingIcon="bell-ring-outline"
+                leadingColor={colors.textSecondary}
+                title="Scheduled on the phone"
+                value={String(notifications.avg_scheduled ?? "—")}
+                fraction={(notifications.avg_scheduled ?? 0) / Math.max(1, notifications.avg_built ?? 0)}
+                colors={colors}
+              />
+            </>
           )}
 
           {/* The silent failure: toggles on, permission off, every sync
@@ -506,7 +591,7 @@ function Summary({
               leadingColor={colors.danger}
               title="Notifications blocked"
               value={formatPct(notifications.denied_pct)}
-              fraction={0}
+              fraction={(notifications.denied_pct ?? 0) / 100}
               detail="Share of syncs that built reminders but couldn't schedule any, because notifications are off for UpKeep on the device."
               colors={colors}
             />
@@ -594,15 +679,20 @@ function StatTile({
   label,
   value,
   detail,
+  trend,
   colors,
 }: {
   label: string;
   value: string;
   detail: string;
+  // The same figure per hour or day, for a sparkline under it.
+  trend?: (number | null)[];
   colors: ThemeColors;
 }) {
   return (
     <View
+      accessible
+      accessibilityLabel={`${label}: ${value}. ${detail}`}
       style={[
         styles.tile,
         { backgroundColor: colors.backgroundElement, borderColor: colors.border },
@@ -615,11 +705,10 @@ function StatTile({
       <Text variant="headlineSmall" style={[styles.tileValue, { color: colors.text }]}>
         {value}
       </Text>
-      <Text
-        variant="bodySmall"
-        numberOfLines={1}
-        style={{ color: colors.textSecondary }}
-      >
+      {trend ? <Sparkline values={trend} color={markColor(colors)} /> : null}
+      {/* Wraps rather than truncating: the "few samples" note is the part
+          that matters most when it's there. */}
+      <Text variant="bodySmall" style={{ color: colors.textSecondary }}>
         {detail}
       </Text>
     </View>
@@ -675,7 +764,9 @@ function Section({
 function BarRow({
   title,
   value,
-  fraction,
+  fraction = 0,
+  graphic,
+  uncertain = false,
   detail,
   first,
   mono = false,
@@ -685,7 +776,11 @@ function BarRow({
 }: {
   title: string;
   value: string;
-  fraction: number;
+  fraction?: number;
+  // Drawn in place of the bar (the endpoints' p50-to-p95 range).
+  graphic?: React.ReactNode;
+  // Rests on too few samples to trust: the bar is drawn faded.
+  uncertain?: boolean;
   detail?: string;
   first: boolean;
   mono?: boolean;
@@ -725,22 +820,25 @@ function BarRow({
         </Text>
       </View>
 
-      <View style={styles.barLane}>
-        {clamped > 0 ? (
-          <View
-            style={[
-              styles.bar,
-              {
-                // Never thinner than 2px, so a real but tiny value is still
-                // visible rather than reading as zero.
-                width: `${clamped * 100}%`,
-                minWidth: 2,
-                backgroundColor: colors.brand,
-              },
-            ]}
-          />
-        ) : null}
-      </View>
+      {graphic ?? (
+        <View style={styles.barLane}>
+          {clamped > 0 ? (
+            <View
+              style={[
+                styles.bar,
+                {
+                  // Never thinner than 2px, so a real but tiny value is still
+                  // visible rather than reading as zero.
+                  width: `${clamped * 100}%`,
+                  minWidth: 2,
+                  backgroundColor: markColor(colors),
+                  opacity: uncertain ? 0.4 : 1,
+                },
+              ]}
+            />
+          ) : null}
+        </View>
+      )}
 
       {detail ? (
         <Text variant="bodySmall" style={{ color: colors.textSecondary }}>
