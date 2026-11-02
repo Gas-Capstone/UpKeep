@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { ScrollView, View } from "react-native";
+import { ScrollView, StyleSheet, View } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import {
   Button,
   Card,
@@ -11,6 +12,7 @@ import {
   Text,
   TextInput,
 } from "react-native-paper";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useMealsData } from "@/components/context/mealsDataContext";
 import { HStack } from "@/components/ui/hstack";
@@ -48,6 +50,7 @@ type Row = {
  */
 export function UpdateFridgeModal({ recipe, onDismiss, onFinished }: UpdateFridgeModalProps) {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const { ingredients, fridgeEntries, saveFridge } = useMealsData();
   const nameById = new Map(ingredients.map((ing) => [ing.id, ing.name]));
   const nameOf = (id: string) => nameById.get(id) ?? "Unknown ingredient";
@@ -112,125 +115,152 @@ export function UpdateFridgeModal({ recipe, onDismiss, onFinished }: UpdateFridg
         visible
         dismissable={!saving}
         onDismiss={onDismiss}
-        contentContainerStyle={styles.modalContent}
+        contentContainerStyle={localStyles.modalOuter}
       >
-        <Card mode="contained" style={styles.modalCard}>
-          <Card.Title title={<Text variant="titleLarge">Update your fridge</Text>} />
-          <Card.Content>
-            <Text style={{ color: theme.textSecondary, marginBottom: Spacing.three }}>
-              Here&apos;s what {recipe.name} used. Change any amount that&apos;s different, or
-              clear it to leave that item alone.
-            </Text>
+        <KeyboardAvoidingView
+          behavior="padding"
+          keyboardVerticalOffset={insets.top}
+          style={localStyles.keyboardWrap}
+        >
+          <View style={localStyles.viewport}>
+            <Card mode="contained" style={styles.modalCard}>
+              <Card.Title title={<Text variant="titleLarge">Update your fridge</Text>} />
+              <Card.Content>
+                <Text style={{ color: theme.textSecondary, marginBottom: Spacing.three }}>
+                  Here&apos;s what {recipe.name} used. Change any amount that&apos;s different, or
+                  clear it to leave that item alone.
+                </Text>
 
-            <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
-              <VStack style={{ alignSelf: "stretch" }}>
-                {rows.map((row, index) => {
-                  const entry = row.sourceId ? fridgeEntries.get(row.sourceId) : undefined;
-                  const swapped = row.sourceId !== null && row.sourceId !== row.ingredientId;
-                  const swapOptions = [...fridgeEntries.keys()].filter((id) => id !== row.sourceId);
-                  const uses =
-                    row.quantity === null
-                      ? "Recipe doesn't say how much"
-                      : `Recipe uses ${formatAmount({ quantity: row.quantity, unit: row.unit ?? "" })}`;
+                <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
+                  <VStack style={{ alignSelf: "stretch" }}>
+                    {rows.map((row, index) => {
+                      const entry = row.sourceId ? fridgeEntries.get(row.sourceId) : undefined;
+                      const swapped = row.sourceId !== null && row.sourceId !== row.ingredientId;
+                      const swapOptions = [...fridgeEntries.keys()].filter((id) => id !== row.sourceId);
+                      const uses =
+                        row.quantity === null
+                          ? "Recipe doesn't say how much"
+                          : `Recipe uses ${formatAmount({ quantity: row.quantity, unit: row.unit ?? "" })}`;
 
-                  return (
-                    <View key={row.ingredientId}>
-                      {index > 0 && <Divider />}
-                      <VStack space="xs" style={{ paddingVertical: Spacing.two }}>
-                        <Text variant="titleSmall">
-                          {swapped && row.sourceId
-                            ? `${nameOf(row.sourceId)} (instead of ${nameOf(row.ingredientId)})`
-                            : nameOf(row.ingredientId)}
-                        </Text>
-                        <Text variant="bodySmall" style={{ color: theme.textSecondary }}>
-                          {uses} · {entry ? `You have ${formatAmount(entry)}` : "Not in your fridge"}
-                        </Text>
+                      return (
+                        <View key={row.ingredientId}>
+                          {index > 0 && <Divider />}
+                          <VStack space="xs" style={{ paddingVertical: Spacing.two }}>
+                            <Text variant="titleSmall">
+                              {swapped && row.sourceId
+                                ? `${nameOf(row.sourceId)} (instead of ${nameOf(row.ingredientId)})`
+                                : nameOf(row.ingredientId)}
+                            </Text>
+                            <Text variant="bodySmall" style={{ color: theme.textSecondary }}>
+                              {uses} · {entry ? `You have ${formatAmount(entry)}` : "Not in your fridge"}
+                            </Text>
 
-                        {entry && row.quantity !== null && !sameUnit(row.unit, entry.unit) && (
-                          <Text variant="bodySmall" style={{ color: theme.warning }}>
-                            Different units, so enter how much you used.
-                          </Text>
-                        )}
+                            {entry && row.quantity !== null && !sameUnit(row.unit, entry.unit) && (
+                              <Text variant="bodySmall" style={{ color: theme.warning }}>
+                                Different units, so enter how much you used.
+                              </Text>
+                            )}
 
-                        <HStack space="sm" style={{ alignItems: "center", flexWrap: "wrap" }}>
-                          {entry && (
-                            <>
-                              <TextInput
-                                mode="outlined"
-                                dense
-                                keyboardType="decimal-pad"
-                                label={`Used${entry.unit ? ` (${entry.unit})` : ""}`}
-                                placeholder="None"
-                                value={row.amountText}
-                                onChangeText={(text) =>
-                                  updateRow(row.ingredientId, { amountText: sanitizeDecimal(text) })
-                                }
-                                style={{ width: 120 }}
-                                accessibilityLabel={`Amount of ${nameOf(row.sourceId ?? row.ingredientId)} used`}
-                              />
-                              <Button
-                                compact
-                                onPress={() =>
-                                  updateRow(row.ingredientId, { amountText: String(entry.quantity) })
-                                }
-                              >
-                                All
-                              </Button>
-                            </>
-                          )}
-
-                          {(swapOptions.length > 0 || swapped) && (
-                            <Menu
-                              visible={swapMenuFor === row.ingredientId}
-                              onDismiss={() => setSwapMenuFor(null)}
-                              anchor={
-                                <Button
-                                  compact
-                                  icon="swap-horizontal"
-                                  onPress={() => setSwapMenuFor(row.ingredientId)}
-                                >
-                                  Swap
-                                </Button>
-                              }
-                            >
-                              {swapped && fridgeEntries.has(row.ingredientId) && (
-                                <Menu.Item
-                                  leadingIcon="undo"
-                                  title={`Back to ${nameOf(row.ingredientId)}`}
-                                  onPress={() => swapTo(row, row.ingredientId)}
-                                />
+                            <HStack space="sm" style={{ alignItems: "center", flexWrap: "wrap" }}>
+                              {entry && (
+                                <>
+                                  <TextInput
+                                    mode="outlined"
+                                    dense
+                                    keyboardType="decimal-pad"
+                                    label={`Used${entry.unit ? ` (${entry.unit})` : ""}`}
+                                    placeholder="None"
+                                    value={row.amountText}
+                                    onChangeText={(text) =>
+                                      updateRow(row.ingredientId, { amountText: sanitizeDecimal(text) })
+                                    }
+                                    style={{ width: 120 }}
+                                    accessibilityLabel={`Amount of ${nameOf(row.sourceId ?? row.ingredientId)} used`}
+                                  />
+                                  <Button
+                                    compact
+                                    onPress={() =>
+                                      updateRow(row.ingredientId, { amountText: String(entry.quantity) })
+                                    }
+                                  >
+                                    All
+                                  </Button>
+                                </>
                               )}
-                              {swapOptions.map((id) => (
-                                <Menu.Item key={id} title={nameOf(id)} onPress={() => swapTo(row, id)} />
-                              ))}
-                            </Menu>
-                          )}
-                        </HStack>
-                      </VStack>
-                    </View>
-                  );
-                })}
-              </VStack>
-            </ScrollView>
 
-            {error !== "" && (
-              <HelperText type="error" visible>
-                {error}
-              </HelperText>
-            )}
-          </Card.Content>
-          <Card.Actions>
-            <HStack style={styles.rowBox}>
-              <Button onPress={onFinished} disabled={saving}>
-                Skip
-              </Button>
-              <Button mode="contained" onPress={saveAndFinish} loading={saving} disabled={saving}>
-                Update fridge
-              </Button>
-            </HStack>
-          </Card.Actions>
-        </Card>
+                              {(swapOptions.length > 0 || swapped) && (
+                                <Menu
+                                  visible={swapMenuFor === row.ingredientId}
+                                  onDismiss={() => setSwapMenuFor(null)}
+                                  anchor={
+                                    <Button
+                                      compact
+                                      icon="swap-horizontal"
+                                      onPress={() => setSwapMenuFor(row.ingredientId)}
+                                    >
+                                      Swap
+                                    </Button>
+                                  }
+                                >
+                                  {swapped && fridgeEntries.has(row.ingredientId) && (
+                                    <Menu.Item
+                                      leadingIcon="undo"
+                                      title={`Back to ${nameOf(row.ingredientId)}`}
+                                      onPress={() => swapTo(row, row.ingredientId)}
+                                    />
+                                  )}
+                                  {swapOptions.map((id) => (
+                                    <Menu.Item key={id} title={nameOf(id)} onPress={() => swapTo(row, id)} />
+                                  ))}
+                                </Menu>
+                              )}
+                            </HStack>
+                          </VStack>
+                        </View>
+                      );
+                    })}
+                  </VStack>
+                </ScrollView>
+
+                {error !== "" && (
+                  <HelperText type="error" visible>
+                    {error}
+                  </HelperText>
+                )}
+              </Card.Content>
+              <Card.Actions>
+                <HStack style={styles.rowBox}>
+                  <Button onPress={onFinished} disabled={saving}>
+                    Skip
+                  </Button>
+                  <Button mode="contained" onPress={saveAndFinish} loading={saving} disabled={saving}>
+                    Update fridge
+                  </Button>
+                </HStack>
+              </Card.Actions>
+            </Card>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
     </Portal>
   );
 }
+
+const localStyles = StyleSheet.create({
+  modalOuter: {
+    flex: 1,
+    justifyContent: "flex-start",
+  },
+  keyboardWrap: {
+    flex: 1,
+    width: "100%",
+  },
+  viewport: {
+    flex: 1,
+    width: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.four,
+  },
+});
