@@ -285,7 +285,7 @@ function DetailTile({
       <ThemedText type="small" themeColor="textSecondary">
         {label}
       </ThemedText>
-      <ThemedText type="smallBold" numberOfLines={1}>
+      <ThemedText type="smallBold" numberOfLines={2}>
         {value}
       </ThemedText>
     </View>
@@ -453,12 +453,13 @@ const styles = StyleSheet.create({
     alignSelf: "stretch",
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: Spacing.three,
+    gap: Spacing.two,
   },
+  // Two to a row at any phone width. No minimum width: inside the padded
+  // profile card, a fixed one stops two tiles fitting and stacks them all.
   detailTile: {
     width: "47%",
     flexGrow: 1,
-    minWidth: 140,
     borderWidth: 1,
     borderRadius: Radius.medium,
     padding: Spacing.three,

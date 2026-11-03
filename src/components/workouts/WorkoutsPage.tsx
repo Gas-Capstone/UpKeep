@@ -260,6 +260,8 @@ export default function WorkoutsPage() {
         </Button>
       </View>
 
+      <WeeklyProgress completedWorkouts={completedWorkouts} />
+
       <View style={styles.workoutSection}>
         <View style={styles.sectionHeader}>
           <View>
@@ -430,10 +432,6 @@ export default function WorkoutsPage() {
           )}
         </View>
       </View>
-
-      <View style={styles.supportingSection}>
-        <WeeklyProgress completedWorkouts={completedWorkouts} />
-      </View>
     </ScreenView>
   );
 }
@@ -469,10 +467,6 @@ const styles = StyleSheet.create({
     marginVertical: Spacing.one,
   },
   workoutSection: {
-    gap: Spacing.three,
-  },
-  supportingSection: {
-    marginTop: Spacing.two,
     gap: Spacing.three,
   },
   createCard: {
