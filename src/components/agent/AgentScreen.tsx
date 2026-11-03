@@ -29,7 +29,7 @@ import { useHabitsContext } from "@/components/context/habitsContext";
 import { useMealsData } from "@/components/context/mealsDataContext";
 import { useWorkoutsData } from "@/components/context/workoutsDataContext";
 import { ThemedView } from "@/components/themed-view";
-import { BottomTabInset, Colors, Radius, Spacing } from "@/constants/theme";
+import { Colors, Radius, Spacing } from "@/constants/theme";
 import { useAgent } from "@/lib/useAgent";
 
 const COMPOSER_HEIGHT = 44;
@@ -83,9 +83,9 @@ export default function AgentScreen() {
       ? lastTurn.options
       : [];
 
-  // The tab bar floats over this screen, so the composer clears it — but only
-  // while the keyboard is down. With the keyboard up the bar is hidden behind
-  // it, and keeping the gap would strand the input mid-screen.
+  // The composer clears the system navigation bar, but only while the keyboard
+  // is down. With the keyboard up that inset is hidden behind it, and keeping
+  // the gap would leave the input floating above the keyboard.
   const [keyboardOpen, setKeyboardOpen] = useState(false);
 
   useEffect(() => {
@@ -101,9 +101,7 @@ export default function AgentScreen() {
     };
   }, []);
 
-  const composerClearance = keyboardOpen
-    ? Spacing.two
-    : BottomTabInset + insets.bottom;
+  const composerClearance = keyboardOpen ? Spacing.two : insets.bottom;
 
   return (
     <ThemedView style={{ flex: 1 }}>

@@ -1,3 +1,4 @@
+import { usePathname } from "expo-router";
 import {
   TabList,
   TabListProps,
@@ -121,6 +122,7 @@ export default function AppTabs() {
 function BottomBar(props: TabListProps) {
   const insets = useSafeAreaInsets();
   const theme = useTheme();
+  const pathname = usePathname();
 
   return (
     <View
@@ -131,6 +133,9 @@ function BottomBar(props: TabListProps) {
           paddingBottom:
             Math.max(insets.bottom, Spacing.two) + TabBarFloatMargin,
         },
+        // The assistant is a full-screen chat. Hide the bar instead of not
+        // rendering it, because the triggers inside it define the tabs.
+        pathname === "/agent" && { display: "none" },
       ]}
     >
       <Surface
