@@ -49,14 +49,7 @@ npx expo start
 	- Meal reminders at each planned meal's time, on the days it's scheduled, skipping meals already checked off that day
 	- Habit and meal reminders pop up as a banner but are silent, like the daily summary
 	- Reminders are scheduled a week ahead and refreshed whenever the app is opened or your habits/meal plan change
-### Planned features
-- Integrate habits page with backend
-- Add more features to profile page such as name change, profile picture
-- Add multiple themes
 
-## Known Issues
-- Meals page may fail to load after login 
-- Meals page rendering may break when you've gathered enough ingredients for a meal
 
 ### Tools used
 - Built using [React Native](https://reactnative.dev/) and [Expo](https://docs.expo.dev/)
